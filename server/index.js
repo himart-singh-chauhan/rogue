@@ -21,16 +21,24 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS: restrict to the site's own domains when CLIENT_URLS is set (comma separated),
 // otherwise allow all origins (local development).
-const allowedOrigins = (process.env.CLIENT_URLS || '')
+// Entries may be written with or without "https://" and a trailing slash; compare by host.
+const allowedHosts = (process.env.CLIENT_URLS || '')
   .split(',')
-  .map((o) => o.trim().replace(/\/$/, ''))
+  .map((o) => o.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
   .filter(Boolean);
+const hostOf = (origin) => {
+  try {
+    return new URL(origin).host.toLowerCase();
+  } catch {
+    return '';
+  }
+};
 app.use(
   cors(
-    allowedOrigins.length
+    allowedHosts.length
       ? {
           origin: (origin, cb) => {
-            if (!origin || allowedOrigins.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+            if (!origin || allowedHosts.includes(hostOf(origin)) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
               return cb(null, true);
             }
             return cb(new Error('Not allowed by CORS'));

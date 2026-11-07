@@ -3,7 +3,7 @@
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 export const API_URL = (import.meta.env.VITE_API_URL || (isLocalHost
   ? 'http://localhost:5000/api'
-  : 'https://rogue-7rnu.onrender.com/api')).replace(/\/$/, '');
+  : 'https://rogue-api.vercel.app/api')).replace(/\/$/, '');
 
 export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {
   const headers = {
