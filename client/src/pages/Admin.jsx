@@ -2628,12 +2628,12 @@ const Admin = () => {
 
                           const bgImages = [
                             "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1552674605-1e16977fb794?q=80&w=1472&auto=format&fit=crop",
+                            "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?q=80&w=1472&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1563823251-4045f09623e1?q=80&w=1470&auto=format&fit=crop",
+                            "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?q=80&w=1470&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1461896836934-bd45ba8fcfdb?q=80&w=1470&auto=format&fit=crop",
+                            "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=1470&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1470&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1598387993441-a364f854c3e1?q=80&w=1470&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1470&auto=format&fit=crop"
@@ -3365,8 +3365,8 @@ const Admin = () => {
                 const mappedEvents = events.map((item, originalIndex) => {
                   const fallbackImages = [
                     "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1552674605-1e16977fb794?q=80&w=1472&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1563823251-4045f09623e1?q=80&w=1470&auto=format&fit=crop"
+                    "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?q=80&w=1472&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop"
                   ];
                   const bgImg = item.image_url || item.imageUrl || fallbackImages[originalIndex % fallbackImages.length];
 

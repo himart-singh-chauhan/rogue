@@ -973,7 +973,7 @@ const Home = () => {
                 link: "/leaderboard", text: "2–9", label: "Youth",
                 images: [
                   "https://static.vecteezy.com/system/resources/thumbnails/076/981/260/small/young-asian-boy-with-glasses-studying-at-his-desk-for-back-to-school-free-photo.jpeg",
-                  "https://images.unsplash.com/photo-1502086223501-7ea244bce1e0?auto=format&fit=crop&w=400&q=80",
+                  "https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?auto=format&fit=crop&w=400&q=80",
                   {
                     backgroundImage: "url('https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80')",
                     backgroundSize: 'cover',
@@ -985,7 +985,7 @@ const Home = () => {
                 link: "/leaderboard", text: "10–12", label: "Pre-Teen",
                 images: [
                   "https://media.istockphoto.com/id/498211233/photo/young-children-with-bikes-and-scooters-in-park.jpg?s=612x612&w=0&k=20&c=3XXhIYQ3-BeBbcpGLyoWz6JugQUrrR6LmTDisAM78sM=",
-                  "https://images.unsplash.com/photo-1503917988258-f19782f11b6e?auto=format&fit=crop&w=400&q=80",
+                  "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?auto=format&fit=crop&w=400&q=80",
                   "https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&w=400&q=80"
                 ]
               },
@@ -1018,7 +1018,7 @@ const Home = () => {
                 images: [
                   "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=400&q=80",
                   "https://images.unsplash.com/photo-1441123100240-f9f3f77ed41b?auto=format&fit=crop&w=400&q=80",
-                  "https://images.unsplash.com/photo-1444464666168-49d633b867ad?auto=format&fit=crop&w=400&q=80"
+                  "https://images.unsplash.com/photo-1447005497901-b3e9ee359928?auto=format&fit=crop&w=400&q=80"
                 ]
               },
             ]}

@@ -49,7 +49,7 @@ const ProductDetail = () => {
       title: "OFFICIAL RECORD CERTIFICATE",
       price: "$45.00",
       desc: "Personalized heavy stock parchment with embossed authentication seal and archival ink.",
-      img: "https://images.unsplash.com/photo-1589330694653-976414ef5ca8?auto=format&fit=crop&w=600&q=80",
+      img: "/images/athlete-certificate.webp",
       badge: "AUTHENTICATED",
       category: "CERTIFICATES",
       fullDesc: "Commemorate your historic achievement with our premium, high-quality Official Record Certificate. Crafted using heavy-stock archival linen parchment, this document features a high-density embossed authentication seal, customized calligraphic lettering, and official signatures of rogue network adjudicators. Perfect for framing and high-end showcases.",

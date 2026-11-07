@@ -24,7 +24,7 @@ const Cart = () => {
         id: 1,
         title: "OFFICIAL RECORD CERTIFICATE",
         price: 45.00,
-        img: "https://images.unsplash.com/photo-1589330694653-976414ef5ca8?auto=format&fit=crop&w=600&q=80",
+        img: "/images/athlete-certificate.webp",
         qty: 1
       }
     ];

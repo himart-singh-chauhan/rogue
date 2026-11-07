@@ -236,7 +236,7 @@ const Profile = () => {
       <section style={{ position: "relative", height: "300px", width: "100%", overflow: "hidden" }}>
         <img loading="lazy" decoding="async"
           src={isOwnProfile 
-            ? "https://images.unsplash.com/photo-1517838357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80" 
+            ? "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80" 
             : athlete.cover
           }
           alt="Cover Background"
