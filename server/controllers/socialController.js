@@ -1,152 +1,140 @@
-const fs = require('fs');
-const path = require('path');
+const supabase = require('../config/supabase');
 
-const dataPath = path.join(__dirname, '../data/social.json');
+// Likes, comments and views now live in the database (record_likes, record_comments and
+// counter columns on records maintained by triggers). They used to live in data/social.json,
+// which was wiped on every Render deploy.
 
-// Helper to read and write social data
-const readSocialData = () => {
-  if (!fs.existsSync(dataPath)) {
-    fs.writeFileSync(dataPath, JSON.stringify({}), 'utf-8');
-  }
-  try {
-    return JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-  } catch (err) {
-    return {};
-  }
-};
+const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 
-const writeSocialData = (data) => {
-  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8');
-};
+const formatComment = (c) => ({
+  id: c.id,
+  userId: c.user_id,
+  userName: c.users?.name || c.users?.username || 'Athlete',
+  userAvatar: c.users?.profile_image || '',
+  text: c.text,
+  createdAt: c.created_at,
+});
 
 // Toggle like for a record
-exports.toggleLike = (req, res) => {
+exports.toggleLike = async (req, res) => {
   try {
     const { recordId } = req.params;
+    if (!isUUID(recordId)) return res.status(404).json({ message: 'Record not found' });
     const userId = req.user.id;
 
-    const data = readSocialData();
-    if (!data[recordId]) {
-      data[recordId] = { views: 0, likes: [], comments: [] };
-    }
+    const { data: existing, error: findError } = await supabase
+      .from('record_likes')
+      .select('record_id')
+      .eq('record_id', recordId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (findError) throw findError;
 
-    const likes = data[recordId].likes;
-    const index = likes.indexOf(userId);
-
-    let isLiked = false;
-    if (index === -1) {
-      likes.push(userId); // Like
-      isLiked = true;
+    let isLiked;
+    if (existing) {
+      const { error } = await supabase.from('record_likes').delete().eq('record_id', recordId).eq('user_id', userId);
+      if (error) throw error;
+      isLiked = false;
     } else {
-      likes.splice(index, 1); // Unlike
+      const { error } = await supabase.from('record_likes').insert([{ record_id: recordId, user_id: userId }]);
+      if (error && error.code !== '23505') throw error; // 23505 = already liked (double click)
+      isLiked = true;
     }
 
-    writeSocialData(data);
-    res.json({ success: true, likes: likes.length, isLiked });
+    const { data: rec } = await supabase.from('records').select('likes_count').eq('id', recordId).maybeSingle();
+    res.json({ success: true, likes: rec?.likes_count || 0, isLiked });
   } catch (error) {
     console.error('Toggle like error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ message: 'Could not update like' });
   }
 };
 
-// Increment views for a record
-exports.incrementView = (req, res) => {
+// Increment views for a record (atomic SQL function)
+exports.incrementView = async (req, res) => {
   try {
     const { recordId } = req.params;
-
-    const data = readSocialData();
-    if (!data[recordId]) {
-      data[recordId] = { views: 0, likes: [], comments: [] };
-    }
-
-    data[recordId].views += 1;
-
-    writeSocialData(data);
-    res.json({ success: true, views: data[recordId].views });
+    if (!isUUID(recordId)) return res.status(404).json({ message: 'Record not found' });
+    const { data, error } = await supabase.rpc('increment_record_view', { p_record_id: recordId });
+    if (error) throw error;
+    res.json({ success: true, views: data || 0 });
   } catch (error) {
     console.error('Increment view error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ message: 'Could not record view' });
   }
 };
 
 // Add a comment to a record
-exports.addComment = (req, res) => {
+exports.addComment = async (req, res) => {
   try {
     const { recordId } = req.params;
-    const { text } = req.body;
-    
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: 'Comment text is required' });
+    if (!isUUID(recordId)) return res.status(404).json({ message: 'Record not found' });
+    const text = typeof req.body.text === 'string' ? req.body.text.trim() : '';
+
+    if (!text) {
+      return res.status(400).json({ message: 'Comment text is required' });
+    }
+    if (text.length > 1000) {
+      return res.status(400).json({ message: 'Comments are limited to 1000 characters' });
     }
 
-    const data = readSocialData();
-    if (!data[recordId]) {
-      data[recordId] = { views: 0, likes: [], comments: [] };
-    }
+    const { data, error } = await supabase
+      .from('record_comments')
+      .insert([{ record_id: recordId, user_id: req.user.id, text }])
+      .select('id, user_id, text, created_at, users(name, username, profile_image)')
+      .single();
+    if (error) throw error;
 
-    const newComment = {
-      id: Date.now().toString(),
-      userId: req.user.id,
-      userName: req.user.name || req.user.username,
-      userAvatar: req.user.profile_image,
-      text: text.trim(),
-      createdAt: new Date().toISOString()
-    };
-
-    data[recordId].comments.push(newComment);
-    writeSocialData(data);
-    
-    res.status(201).json({ success: true, comment: newComment });
+    res.status(201).json({ success: true, comment: formatComment(data) });
   } catch (error) {
     console.error('Add comment error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ message: 'Could not add comment' });
   }
 };
 
 // Get social stats for a single record
-exports.getSocialStats = (req, res) => {
+exports.getSocialStats = async (req, res) => {
   try {
     const { recordId } = req.params;
-    // user ID might be optional if called without token
+    if (!isUUID(recordId)) return res.json({ views: 0, likes: 0, isLiked: false, comments: [] });
     const userId = req.user ? req.user.id : null;
 
-    const data = readSocialData();
-    const stats = data[recordId] || { views: 0, likes: [], comments: [] };
+    const [{ data: rec }, { data: comments }, likeResult] = await Promise.all([
+      supabase.from('records').select('views, likes_count').eq('id', recordId).maybeSingle(),
+      supabase
+        .from('record_comments')
+        .select('id, user_id, text, created_at, users(name, username, profile_image)')
+        .eq('record_id', recordId)
+        .order('created_at', { ascending: true })
+        .limit(200),
+      userId
+        ? supabase.from('record_likes').select('record_id').eq('record_id', recordId).eq('user_id', userId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
     res.json({
-      views: stats.views || 0,
-      likes: (stats.likes || []).length,
-      isLiked: userId ? (stats.likes || []).includes(userId) : false,
-      comments: stats.comments || []
+      views: rec?.views || 0,
+      likes: rec?.likes_count || 0,
+      isLiked: !!likeResult?.data,
+      comments: (comments || []).map(formatComment),
     });
   } catch (error) {
     console.error('Get stats error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ message: 'Could not load social stats' });
   }
 };
 
-// Used by other controllers to merge stats
-exports.mergeSocialStats = (records) => {
-  const data = readSocialData();
-  return records.map(r => {
-    const stats = data[r.id] || {};
-    return {
-      ...r,
-      views: stats.views || 0,
-      likes: (stats.likes || []).length,
-      commentsCount: (stats.comments || []).length
-    };
-  });
-};
+// Used by other controllers: counters are columns on records, so this is a cheap mapping.
+exports.mergeSocialStats = (records) =>
+  (records || []).map((r) => ({
+    ...r,
+    views: r.views || 0,
+    likes: r.likes_count || 0,
+    commentsCount: r.comments_count || 0,
+  }));
 
-exports.mergeSingleSocialStats = (record, userId) => {
-  const data = readSocialData();
-  const stats = data[record.id] || {};
-  return {
-    ...record,
-    views: stats.views || 0,
-    likes: (stats.likes || []).length,
-    commentsCount: (stats.comments || []).length,
-    isLiked: userId ? (stats.likes || []).includes(userId) : false
-  };
-};
+exports.mergeSingleSocialStats = (record) => ({
+  ...record,
+  views: record.views || 0,
+  likes: record.likes_count || 0,
+  commentsCount: record.comments_count || 0,
+});

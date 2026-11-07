@@ -8,11 +8,34 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null');
+    let userInfo = null;
+    try {
+      userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null');
+    } catch {
+      localStorage.removeItem('userInfo');
+    }
     if (userInfo) {
       setUser(userInfo);
     }
     setLoading(false);
+
+    // Re-validate the stored session in the background: drop it if the account no longer
+    // exists, is banned/suspended, or the token expired; otherwise refresh the profile fields.
+    if (userInfo?.token) {
+      apiCall('/auth/profile', 'GET', null, userInfo.token)
+        .then((fresh) => {
+          const merged = { ...userInfo, ...fresh, token: userInfo.token };
+          setUser(merged);
+          localStorage.setItem('userInfo', JSON.stringify(merged));
+        })
+        .catch((err) => {
+          if (/not authorized|token failed|banned|suspended|user not found/i.test(err.message || '')) {
+            setUser(null);
+            localStorage.removeItem('userInfo');
+          }
+          // Network / server errors keep the session (e.g. API cold start).
+        });
+    }
   }, []);
 
   const login = async (email, password) => {

@@ -23,7 +23,7 @@ import {
   LayoutGrid,
   Sparkles
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";

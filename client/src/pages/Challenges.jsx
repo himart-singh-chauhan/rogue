@@ -167,7 +167,7 @@ const Challenges = () => {
         {/* HERO SECTION - FEATURED CHALLENGE */}
         {featuredChallenge && (
           <div style={{ position: "relative", height: "600px", margin: "0 5%", borderRadius: "40px", overflow: "hidden", display: "flex", alignItems: "center" }}>
-            <img 
+            <img loading="lazy" decoding="async" 
               src={featuredChallenge.img} 
               alt="Featured Challenge" 
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.6)" }}
@@ -252,7 +252,7 @@ const Challenges = () => {
               onClick={() => { setSelectedChallenge(card); setHasWatched(false); }}
               style={{ position: "relative", height: "300px", borderRadius: "24px", overflow: "hidden", cursor: "pointer" }}
             >
-              <img src={card.img} alt={card.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img loading="lazy" decoding="async" src={card.img} alt={card.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(10,10,10,0.9), transparent)" }} />
               
               <div style={{ position: "absolute", top: "16px", left: "16px", display: "flex", gap: "8px" }}>
@@ -667,7 +667,7 @@ const Challenges = () => {
                       >
                         {/* Thumbnail */}
                         <div style={{ position: "relative", height: "100px" }}>
-                          <img src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img loading="lazy" decoding="async" src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
                               <Play fill="white" size={12} />
@@ -747,7 +747,7 @@ const Challenges = () => {
                     >
                     {/* Thumbnail */}
                     <div style={{ position: "relative", height: "180px" }}>
-                      <img src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img loading="lazy" decoding="async" src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
                           <Play fill="white" size={24} />
@@ -854,7 +854,7 @@ const Challenges = () => {
                       <div>
                         <h4 style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>ATTEMPT THUMBNAIL</h4>
                         <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
-                          <img src={selectedAttempt.img} alt={selectedAttempt.name} style={{ width: "100%", height: "auto", display: "block" }} />
+                          <img loading="lazy" decoding="async" src={selectedAttempt.img} alt={selectedAttempt.name} style={{ width: "100%", height: "auto", display: "block" }} />
                         </div>
                       </div>
                     )}

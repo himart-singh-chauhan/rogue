@@ -123,7 +123,7 @@ const Streams = () => {
                 <Link key={stream.id} to={`/stream/${stream.id}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <div style={{ background: "#161616", borderRadius: "32px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", transition: "all 0.3s ease" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-10px)"; e.currentTarget.style.borderColor = "rgba(255,106,0,0.3)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; }}>
                     <div style={{ position: "relative", height: "240px" }}>
-                      <img src={stream.img} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img loading="lazy" decoding="async" src={stream.img} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       <div style={{ position: "absolute", top: "20px", left: "20px", background: stream.streamType === 'schedule' ? "#FF5500" : "#ef4444", color: "white", padding: "6px 14px", borderRadius: "8px", fontWeight: "900", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", boxShadow: stream.streamType === 'schedule' ? "0 4px 12px rgba(255,85,0,0.4)" : "0 4px 12px rgba(239,68,68,0.4)" }}>
                         {stream.streamType === 'schedule' ? <Timer size={12} /> : <Play size={12} fill="white" />} 
                         {stream.streamType === 'schedule' ? "SCHEDULED" : "LIVE"}

@@ -4,10 +4,10 @@ const supabase = require('../config/supabase');
 const createDeterministicMockScan = (record) => {
   // Use character code sum of record ID to seed mock data
   const seed = (record.id || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  
+
   // Decide score: 55 to 98
   const score = parseFloat((55 + (seed % 44) + (seed % 10) / 10).toFixed(2));
-  
+
   let faceCheck = 'passed';
   let deepfakeCheck = 'passed';
   let videoTamper = 'passed';
@@ -72,7 +72,7 @@ const getAIScans = async (req, res) => {
     // 1. First fetch all records and their associated user details
     const { data: records, error: recordsError } = await supabase
       .from('records')
-      .select('*, user:users(name, email)')
+      .select('*, user:users!records_user_id_fkey(name, email)')
       .order('created_at', { ascending: false });
 
     if (recordsError) throw recordsError;
@@ -104,13 +104,13 @@ const getAIScans = async (req, res) => {
       } else {
         // Procedurally generate and attempt to seed in background (or just return locally)
         const mockScan = createDeterministicMockScan(record);
-        
+
         // Quietly attempt to insert it to database in background
         if (!scansError) {
           const { id, record: _, ...insertData } = mockScan;
           supabase
             .from('ai_verification_scans')
-            .insert([insertData])
+            .upsert([insertData], { onConflict: 'record_id', ignoreDuplicates: true })
             .then(({ error }) => {
               if (error) console.error(`[AI Seeder] Failed to auto-seed scan for Record ${record.id}:`, error.message);
             });
@@ -179,7 +179,7 @@ const updateAIScanOverride = async (req, res) => {
 
       const { data, error } = await supabase
         .from('ai_verification_scans')
-        .insert([insertData])
+        .upsert([insertData], { onConflict: 'record_id' })
         .select()
         .single();
 
@@ -201,7 +201,7 @@ const updateAIScanOverride = async (req, res) => {
 
     await supabase
       .from('records')
-      .update({ 
+      .update({
         status: recordStatus,
         verification_status: vqStatus,
         updated_at: new Date()
@@ -232,7 +232,7 @@ const flagSuspiciousActivity = async (req, res) => {
 
     if (existingScan) {
       const notes = existingScan.scan_notes + `\n[${new Date().toLocaleTimeString()}] ADMIN ACTION: Record flagged as highly suspicious for audit review.`;
-      
+
       const { data, error } = await supabase
         .from('ai_verification_scans')
         .update({
@@ -262,7 +262,7 @@ const flagSuspiciousActivity = async (req, res) => {
 
       const { data, error } = await supabase
         .from('ai_verification_scans')
-        .insert([insertData])
+        .upsert([insertData], { onConflict: 'record_id' })
         .select()
         .single();
 
@@ -274,7 +274,7 @@ const flagSuspiciousActivity = async (req, res) => {
     if (suspiciousFlagged) {
       await supabase
         .from('records')
-        .update({ 
+        .update({
           verification_status: 'priority',
           updated_at: new Date()
         })
@@ -333,12 +333,12 @@ const updateAISettings = async (req, res) => {
   try {
     const promises = Object.keys(configs).map(async (key) => {
       const value = String(configs[key]);
-      
+
       const { data, error } = await supabase
         .from('system_settings')
         .upsert([{ key, value, updated_at: new Date() }])
         .select();
-        
+
       if (error) throw error;
       return data;
     });

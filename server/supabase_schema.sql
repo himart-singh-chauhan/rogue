@@ -1,3 +1,5 @@
+-- ⚠️ SUPERSEDED — DO NOT RUN. Use server/database/schema.sql instead (complete, up to date, RLS enabled).
+
 -- 1. Users Table
 CREATE TABLE IF NOT EXISTS users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

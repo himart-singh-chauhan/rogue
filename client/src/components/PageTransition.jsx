@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { useLocation } from "react-router-dom";
 
 function spiralIndices(cols, rows) {

@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { awardPoints, pointsForVerifiedRecord } = require('../utils/rankings');
 
 // ==========================================
 // 👥 USERS MANAGEMENT
@@ -47,10 +48,10 @@ const updateUserByAdmin = async (req, res) => {
         account_status: finalAccountStatus,
         membership_type: finalMembershipType,
         admin_notes,
-        username,
+        username: username === undefined ? undefined : (String(username).trim() || null),
         phone,
         gender,
-        dob: dob || null,
+        dob: dob === undefined ? undefined : (dob || null),
         weight,
         weight_unit,
         height,
@@ -95,9 +96,9 @@ const deleteUserByAdmin = async (req, res) => {
 // @route   POST /api/admin/records
 // @access  Private/Admin
 const createRecordByAdmin = async (req, res) => {
-  const { 
-    userId, title, category, description, value, unit, 
-    status, evidenceUrl, venueName, city, recordType 
+  const {
+    userId, title, category, description, value, unit,
+    status, evidenceUrl, venueName, city, recordType
   } = req.body;
 
   try {
@@ -105,7 +106,7 @@ const createRecordByAdmin = async (req, res) => {
       .from('records')
       .insert([
         {
-          user_id: userId,
+          user_id: userId || null,
           title,
           category,
           description,
@@ -201,24 +202,34 @@ const getAllEventsByAdmin = async (req, res) => {
 // @desc    Create a new live sporting event
 // @route   POST /api/admin/events
 // @access  Private/Admin
+const priceOrZero = (v) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
 const createEventByAdmin = async (req, res) => {
-  const { title, description, date, location, imageUrl, videoUrl, ticketLink, sponsors, rules, status, category } = req.body;
+  const { title, description, date, location, imageUrl, videoUrl, ticketLink, sponsors, rules, status, category, isPaid, ticketPrice, streamUrl, isLive, isFeatured } = req.body;
   try {
     const { data: createdEvent, error } = await supabase
       .from('events')
       .insert([
-        { 
-          title, 
-          description, 
-          date, 
-          location, 
+        {
+          title,
+          description,
+          date,
+          location,
           image_url: imageUrl,
           video_url: videoUrl || '',
           ticket_link: ticketLink || '',
           sponsors: sponsors || '',
           rules: rules || '',
           status: status || 'upcoming',
-          category: category || 'WORLD RECORD'
+          category: category || 'WORLD RECORD',
+          is_paid: !!isPaid,
+          ticket_price: isPaid ? priceOrZero(ticketPrice) : 0,
+          stream_url: streamUrl || null,
+          is_live: !!isLive,
+          is_featured: !!isFeatured
         }
       ])
       .select()
@@ -235,7 +246,7 @@ const createEventByAdmin = async (req, res) => {
 // @route   PUT /api/admin/events/:id
 // @access  Private/Admin
 const updateEventByAdmin = async (req, res) => {
-  const { title, description, date, location, imageUrl, videoUrl, ticketLink, sponsors, rules, status, category } = req.body;
+  const { title, description, date, location, imageUrl, videoUrl, ticketLink, sponsors, rules, status, category, isPaid, ticketPrice, streamUrl, isLive, isFeatured } = req.body;
   try {
     const { data: updatedEvent, error } = await supabase
       .from('events')
@@ -251,6 +262,11 @@ const updateEventByAdmin = async (req, res) => {
         rules: rules,
         status: status,
         category: category,
+        is_paid: isPaid === undefined ? undefined : !!isPaid,
+        ticket_price: ticketPrice === undefined ? undefined : priceOrZero(ticketPrice),
+        stream_url: streamUrl,
+        is_live: isLive === undefined ? undefined : !!isLive,
+        is_featured: isFeatured === undefined ? undefined : !!isFeatured,
         updated_at: new Date()
       })
       .eq('id', req.params.id)
@@ -431,7 +447,7 @@ const getAllOrdersByAdmin = async (req, res) => {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (ordersError) throw ordersError;
+    if (ordersError) console.error('Ledger: orders source failed:', ordersError.message);
 
     const ordersWithItems = [];
     for (const order of (orders || [])) {
@@ -439,7 +455,7 @@ const getAllOrdersByAdmin = async (req, res) => {
         .from('order_items')
         .select('*')
         .eq('order_id', order.id);
-      
+
       ordersWithItems.push({
         ...order,
         items: items || []
@@ -504,7 +520,7 @@ const getCustomerPurchaseHistoryByAdmin = async (req, res) => {
       .eq('customer_email', req.params.email)
       .order('created_at', { ascending: false });
 
-    if (ordersError) throw ordersError;
+    if (ordersError) console.error('Ledger: orders source failed:', ordersError.message);
 
     const ordersWithItems = [];
     for (const order of (orders || [])) {
@@ -512,7 +528,7 @@ const getCustomerPurchaseHistoryByAdmin = async (req, res) => {
         .from('order_items')
         .select('*')
         .eq('order_id', order.id);
-      
+
       ordersWithItems.push({
         ...order,
         items: items || []
@@ -535,7 +551,7 @@ const getPaymentsLedger = async (req, res) => {
       .from('orders')
       .select('*');
 
-    if (ordersError) throw ordersError;
+    if (ordersError) console.error('Ledger: orders source failed:', ordersError.message);
 
     const shopItems = (orders || []).map(o => ({
       id: `TXN-SHOP-${o.id.substring(0, 8).toUpperCase()}`,
@@ -553,7 +569,7 @@ const getPaymentsLedger = async (req, res) => {
       .from('memberships')
       .select('*, user:users(name, email)');
 
-    if (membershipsError) throw membershipsError;
+    if (membershipsError) console.error('Ledger: memberships source failed:', membershipsError.message);
 
     const membershipItems = [];
     (memberships || []).forEach(m => {
@@ -613,29 +629,22 @@ const getPaymentsLedger = async (req, res) => {
       .from('record_meta')
       .select('*, record:records(*, user:users!records_user_id_fkey(name, email))');
 
-    if (metasError) throw metasError;
+    if (metasError) console.error('Ledger: record_meta source failed:', metasError.message);
 
     const feeItems = [];
     (recordMetas || []).forEach(rm => {
       const rec = rm.record || {};
       const userObj = rec.user || {};
-      const isPaid = rm.admin_notes && rm.admin_notes.includes('payment_status:paid');
-      const isRefunded = rm.admin_notes && rm.admin_notes.includes('payment_status:refunded');
-      const isPending = rm.admin_notes && rm.admin_notes.includes('payment_status:pending');
-      const isFailed = rm.admin_notes && rm.admin_notes.includes('payment_status:failed');
-
-      let status = 'pending';
-      if (isPaid) status = 'paid';
-      else if (isRefunded) status = 'refunded';
-      else if (isFailed) status = 'failed';
-      else if (isPending) status = 'pending';
+      const legacy = (rm.admin_notes || '').match(/payment_status:(\w+)/);
+      const raw = rm.payment_status || (legacy && legacy[1]) || 'pending';
+      const status = ['paid', 'refunded', 'failed'].includes(raw) ? raw : 'pending';
 
       feeItems.push({
         id: rm.tracking_number || `TXN-FEE-${rm.id.substring(0, 8).toUpperCase()}`,
         customerName: userObj.name || 'Adjudication Applicant',
         customerEmail: userObj.email || '',
         paymentType: rec.record_type === 'challenge' ? 'challenge' : 'submission',
-        amount: parseFloat(rm.submission_fee) || 3.50,
+        amount: rm.submission_fee !== null && rm.submission_fee !== undefined ? parseFloat(rm.submission_fee) : 3.50,
         status,
         referenceId: rm.id,
         createdAt: rm.created_at
@@ -651,10 +660,10 @@ const getPaymentsLedger = async (req, res) => {
       if (!manualError && manualData) {
         manualRevenues = manualData;
       } else {
-        manualRevenues = global.inMemoryManualRevenues || [];
+        console.error('Ledger: manual_revenues source failed');
       }
     } catch (err) {
-      manualRevenues = global.inMemoryManualRevenues || [];
+      console.error('Ledger: manual_revenues source failed');
     }
 
     const manualItems = manualRevenues.map(r => ({
@@ -663,7 +672,7 @@ const getPaymentsLedger = async (req, res) => {
       customerEmail: r.customer_email || '',
       paymentType: 'manual',
       amount: parseFloat(r.amount) || 0.00,
-      status: 'paid',
+      status: r.status || 'paid',
       referenceId: r.id,
       createdAt: r.date_received || r.created_at || new Date().toISOString(),
       category: r.category,
@@ -835,10 +844,22 @@ const updatePaymentStatus = async (req, res) => {
       const { data, error } = await supabase
         .from('record_meta')
         .update({
-          admin_notes: `payment_status:${status}`,
+          payment_status: status,
           submission_fee: status === 'refunded' ? 0.00 : 3.50,
           updated_at: new Date()
         })
+        .eq('id', referenceId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return res.json({ success: true, data });
+    }
+
+    if (paymentType === 'manual') {
+      const { data, error } = await supabase
+        .from('manual_revenues')
+        .update({ status, updated_at: new Date() })
         .eq('id', referenceId)
         .select()
         .single();
@@ -907,10 +928,6 @@ const createManualRevenue = async (req, res) => {
 
     if (error) throw error;
 
-    // Synchronize global in-memory backup
-    global.inMemoryManualRevenues = global.inMemoryManualRevenues || [];
-    global.inMemoryManualRevenues.push(data);
-
     // Add activity log to audit_logs
     try {
       await supabase.from("audit_logs").insert({
@@ -934,40 +951,8 @@ const createManualRevenue = async (req, res) => {
       data
     });
   } catch (err) {
-    console.error("Database save failed, using memory fallback:", err.message);
-    
-    // In memory fallback if database table not available or fails
-    const fallbackId = `manual-${Math.random().toString(36).substr(2, 9)}`;
-    const fallbackRecord = {
-      id: fallbackId,
-      ...payload,
-      created_at: new Date().toISOString()
-    };
-
-    global.inMemoryManualRevenues = global.inMemoryManualRevenues || [];
-    global.inMemoryManualRevenues.push(fallbackRecord);
-
-    // Attempt to add activity log even during fallback
-    try {
-      await supabase.from("audit_logs").insert({
-        actor_id: req.user ? req.user.id : null,
-        action_type: "create_manual_revenue_fallback",
-        metadata: {
-          title,
-          category,
-          amount: numericAmount,
-          customer_name: customerName,
-          customer_email: customerEmail
-        }
-      });
-    } catch (auditErr) {
-      // ignore
-    }
-
-    return res.status(201).json({
-      message: "Revenue entry added successfully.",
-      data: fallbackRecord
-    });
+    console.error("Manual revenue save failed:", err.message);
+    return res.status(500).json({ message: `Could not save revenue entry: ${err.message}` });
   }
 };
 
@@ -1042,7 +1027,7 @@ const getJudgesRoster = async (req, res) => {
           countedTime++;
         }
       });
-      const averageSpeed = countedTime > 0 
+      const averageSpeed = countedTime > 0
         ? (totalTime / countedTime / (1000 * 60 * 60 * 24)).toFixed(1) + ' days'
         : (1.2 + (Math.abs(judge.name.charCodeAt(0) % 5) * 0.3)).toFixed(1) + ' days';
 
@@ -1137,7 +1122,7 @@ const approveFinalDecision = async (req, res) => {
       .from('records')
       .update({
         status: record.judge_decision,
-        judge_decision: null,
+        verification_status: record.judge_decision === 'verified' ? 'approved' : 'denied',
         updated_at: new Date()
       })
       .eq('id', req.params.id)
@@ -1146,11 +1131,27 @@ const approveFinalDecision = async (req, res) => {
 
     if (updateError) throw updateError;
 
+    if (record.judge_decision === 'verified' && record.status !== 'verified' && updatedRecord.user_id) {
+      try {
+        await awardPoints({
+          userId: updatedRecord.user_id,
+          points: await pointsForVerifiedRecord(updatedRecord),
+          source: 'record_verified',
+          referenceId: updatedRecord.id,
+          reason: `Record verified: ${updatedRecord.title}`,
+          adminId: req.user.id,
+          counters: { verified_records_count: 1, world_records_count: updatedRecord.record_type === 'world_record' ? 1 : 0 },
+        });
+      } catch (pointsErr) {
+        console.warn('[Rankings Warning] Could not award points:', pointsErr.message);
+      }
+    }
+
     const { data: meta } = await supabase
       .from('record_meta')
       .select('*')
       .eq('record_id', req.params.id)
-      .single();
+      .maybeSingle();
 
     const history = meta && meta.history ? meta.history : [];
     const updatedHistory = [
@@ -1164,13 +1165,15 @@ const approveFinalDecision = async (req, res) => {
       }
     ];
 
-    await supabase
+    const { error: metaSaveError } = await supabase
       .from('record_meta')
-      .update({
+      .upsert([{
+        record_id: req.params.id,
         history: updatedHistory,
-        admin_notes: `published_status:${record.judge_decision}`
-      })
-      .eq('record_id', req.params.id);
+        admin_notes: `published_status:${record.judge_decision}`,
+        updated_at: new Date()
+      }], { onConflict: 'record_id' });
+    if (metaSaveError) console.error('approveFinalDecision: history save failed:', metaSaveError.message);
 
     res.json(updatedRecord);
   } catch (error) {
@@ -1200,7 +1203,7 @@ const revertJudgeDecision = async (req, res) => {
       .from('record_meta')
       .select('*')
       .eq('record_id', req.params.id)
-      .single();
+      .maybeSingle();
 
     const history = meta && meta.history ? meta.history : [];
     const updatedHistory = [
@@ -1212,13 +1215,15 @@ const revertJudgeDecision = async (req, res) => {
       }
     ];
 
-    await supabase
+    const { error: metaSaveError } = await supabase
       .from('record_meta')
-      .update({
+      .upsert([{
+        record_id: req.params.id,
         history: updatedHistory,
-        admin_notes: `feedback:${adminFeedback || 'Sent back to judge.'}`
-      })
-      .eq('record_id', req.params.id);
+        admin_notes: `feedback:${adminFeedback || 'Sent back to judge.'}`,
+        updated_at: new Date()
+      }], { onConflict: 'record_id' });
+    if (metaSaveError) console.error('revertJudgeDecision: history save failed:', metaSaveError.message);
 
     res.json(updatedRecord);
   } catch (error) {
@@ -1301,8 +1306,10 @@ const getHomepageRecords = async (req, res) => {
   try {
     const { data: allVerified, error } = await supabase
       .from('records')
-      .select('id, title, category, value, unit, thumbnail_url, evidence_url, created_at, user_id, status')
-      .eq('status', 'verified');
+      .select('id, title, category, value, unit, thumbnail_url, evidence_url, created_at, user_id, status, homepage_section, homepage_order')
+      .eq('status', 'verified')
+      .order('homepage_order', { ascending: true })
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
@@ -1333,10 +1340,16 @@ const getHomepageRecords = async (req, res) => {
 // @access  Private/Admin
 const updateRecordHomepageSection = async (req, res) => {
   const { homepageSection, homepageOrder } = req.body;
+  const allowed = ['featured', 'newly_verified', 'recent_uploads', 'top_ranked'];
   try {
+    if (homepageSection && !allowed.includes(homepageSection)) {
+      return res.status(400).json({ message: `homepageSection must be one of: ${allowed.join(', ')}` });
+    }
     const { data: updatedRecord, error } = await supabase
       .from('records')
       .update({
+        homepage_section: homepageSection || null,
+        homepage_order: parseInt(homepageOrder, 10) || 0,
         updated_at: new Date()
       })
       .eq('id', req.params.id)
@@ -1358,6 +1371,8 @@ const removeRecordFromHomepage = async (req, res) => {
     const { data: updatedRecord, error } = await supabase
       .from('records')
       .update({
+        homepage_section: null,
+        homepage_order: 0,
         updated_at: new Date()
       })
       .eq('id', req.params.id)

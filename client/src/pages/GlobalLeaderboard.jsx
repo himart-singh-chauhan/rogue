@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { apiCall, formatProductImage } from "../utils/api";
 import { 
   Trophy, 
   Globe, 
@@ -19,7 +20,7 @@ import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 const CustomSelect = ({ value, onChange, options, label }) => (
   <div style={{ position: "relative", flex: "1", minWidth: "200px" }}>
@@ -73,8 +74,7 @@ const GlobalLeaderboard = () => {
     const fetchRankings = async () => {
       try {
         setLoading(true);
-        // Using apiCall from utils/api.js (must import it at the top)
-        const data = await window.apiCall("/rankings/global", "GET");
+        const data = await apiCall("/rankings/global", "GET");
         if (data && data.rankings) {
           const mapped = data.rankings.map(r => ({
             rank: r.global_rank ? `#${String(r.global_rank).padStart(2, '0')}` : "-",
@@ -83,7 +83,7 @@ const GlobalLeaderboard = () => {
             country: r.country || "N/A",
             records: r.verified_records_count || 0,
             avatar: r.users?.profile_image 
-              ? (r.users.profile_image.includes('http') ? r.users.profile_image : `http://localhost:5002/uploads/${r.users.profile_image}`)
+              ? (r.users.profile_image.includes('http') ? r.users.profile_image : formatProductImage(`/uploads/${r.users.profile_image}`))
               : `https://ui-avatars.com/api/?name=${encodeURIComponent(r.users?.name || "Athlete")}&background=FF6A00&color=fff`,
             category: r.category_id ? "Ranked" : "Global",
             ageGroup: "All Ages", // Add age groups if stored in users later
@@ -102,15 +102,7 @@ const GlobalLeaderboard = () => {
       }
     };
     
-    // Quick hack since we don't have apiCall imported in this file directly
-    if (!window.apiCall) {
-      import('../utils/api.js').then(module => {
-        window.apiCall = module.apiCall;
-        fetchRankings();
-      });
-    } else {
-      fetchRankings();
-    }
+    fetchRankings();
   }, []);
 
   const getFilteredData = () => {
@@ -324,7 +316,7 @@ const GlobalLeaderboard = () => {
                       }}
                     >
                       <div style={{ position: "relative" }}>
-                        <img src={r.avatar} alt={r.name} style={{ width: "48px", height: "48px", borderRadius: "12px", border: i < 3 && activeSort === "Highest Score" ? "2px solid #FF6A00" : "1px solid rgba(255,255,255,0.1)", objectFit: "cover" }} />
+                        <img loading="lazy" decoding="async" src={r.avatar} alt={r.name} style={{ width: "48px", height: "48px", borderRadius: "12px", border: i < 3 && activeSort === "Highest Score" ? "2px solid #FF6A00" : "1px solid rgba(255,255,255,0.1)", objectFit: "cover" }} />
                         {i < 3 && activeSort === "Highest Score" && <div style={{ position: "absolute", top: -5, right: -5, background: "#FF6A00", color: "white", padding: "4px", borderRadius: "50%" }}><Star size={8} fill="white" /></div>}
                       </div>
                       <div>

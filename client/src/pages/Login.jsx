@@ -48,7 +48,7 @@ const Login = () => {
           justifyContent: "flex-start",
           padding: "60px 60px 120px 60px"
         }}>
-          <img
+          <img loading="lazy" decoding="async"
             src="https://images.unsplash.com/photo-1594381898411-846e7d193883?auto=format&fit=crop&w=1200&q=80"
             alt="Athlete"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.7)" }}

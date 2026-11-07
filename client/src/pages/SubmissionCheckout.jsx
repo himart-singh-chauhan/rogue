@@ -164,14 +164,6 @@ const SubmissionCheckout = () => {
     return null;
   };
 
-  if (!submissionData) {
-    return (
-      <div style={{ padding: "200px 20px", textAlign: "center", color: "white", background: "#0A0A0A", minHeight: "100vh" }}>
-        <h2>NO SUBMISSION DATA FOUND</h2>
-        <button onClick={() => navigate(-1)} style={{ padding: "10px 20px", background: "#FF6A00", border: "none", color: "white", borderRadius: "100px", marginTop: "20px", cursor: "pointer", fontWeight: "900" }}>GO BACK</button>
-      </div>
-    );
-  }
 
   const [successMessages, setSuccessMessages] = useState({
     msg_record: 'Thank you! Your order has been processed securely. Our adjudication team will get back to you with the results using the email you provided.',
@@ -223,22 +215,9 @@ const SubmissionCheckout = () => {
       }
     } catch (err) {
       console.error("Error applying submission coupon:", err);
-      // Hardcoded fallback
-      if (coupon.toUpperCase() === "ELITE20" || coupon.toUpperCase() === "ROGUE20") {
-        const fallbackDiscount = baseFee * 0.20;
-        setAppliedCoupon({
-          code: coupon.toUpperCase(),
-          discountType: "percentage",
-          discountValue: 20,
-          discountAmount: fallbackDiscount
-        });
-        setDiscount(fallbackDiscount);
-        setCouponMessage("✓ 20% OFFLINE FALLBACK DISCOUNT APPLIED!");
-      } else {
-        setAppliedCoupon(null);
-        setDiscount(0);
-        setCouponMessage("✗ Validation failed. Coupon database offline.");
-      }
+      setAppliedCoupon(null);
+      setDiscount(0);
+      setCouponMessage(`✗ ${err.message && err.message !== "Something went wrong" ? err.message : "Could not validate this coupon right now."}`);
     }
   };
 
@@ -272,6 +251,15 @@ const SubmissionCheckout = () => {
       setLoading(false);
     }
   };
+
+  if (!submissionData) {
+    return (
+      <div style={{ padding: "200px 20px", textAlign: "center", color: "white", background: "#0A0A0A", minHeight: "100vh" }}>
+        <h2>NO SUBMISSION DATA FOUND</h2>
+        <button onClick={() => navigate(-1)} style={{ padding: "10px 20px", background: "#FF6A00", border: "none", color: "white", borderRadius: "100px", marginTop: "20px", cursor: "pointer", fontWeight: "900" }}>GO BACK</button>
+      </div>
+    );
+  }
 
   if (success) {
     return (

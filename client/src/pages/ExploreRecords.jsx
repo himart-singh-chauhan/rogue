@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Eye, Heart, Zap, Trophy, Play, User } from 'lucide-react';
+import { Search, Eye, Heart, Zap, Trophy, Play, User, AlertCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiCall, formatProductImage } from '../utils/api';
 import Navbar from '../components/Navbar';
@@ -260,7 +260,7 @@ export default function ExploreRecords() {
                     <Trophy size={48} color="white" opacity={0.3} />
                   </div>
                   {record.thumbnail_url && record.thumbnail_url !== "pending_upload" && (
-                    <img 
+                    <img loading="lazy" decoding="async" 
                       src={formatProductImage(record.thumbnail_url)} 
                       alt={record.title} 
                       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} 

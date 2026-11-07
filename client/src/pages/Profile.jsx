@@ -234,7 +234,7 @@ const Profile = () => {
 
       {/* 1. Cover Photo Section */}
       <section style={{ position: "relative", height: "300px", width: "100%", overflow: "hidden" }}>
-        <img
+        <img loading="lazy" decoding="async"
           src={isOwnProfile 
             ? "https://images.unsplash.com/photo-1517838357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80" 
             : athlete.cover
@@ -278,7 +278,7 @@ const Profile = () => {
             
             {isOwnProfile ? (
               user.profileImage ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={formatProductImage(user.profileImage)}
                   alt="User Avatar"
                   style={{ width: "160px", height: "160px", borderRadius: "24px", border: "4px solid #030303", objectFit: "cover", background: "#111" }}
@@ -326,7 +326,7 @@ const Profile = () => {
               )
             ) : (
               athlete.img ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={formatProductImage(athlete.img)}
                   alt="Athlete Avatar"
                   style={{ width: "160px", height: "160px", borderRadius: "24px", border: "4px solid #030303", objectFit: "cover", background: "#111" }}
@@ -1281,7 +1281,7 @@ const Profile = () => {
                       {isUploading ? (
                         <Loader2 size={20} className="animate-spin" color="#FF5500" />
                       ) : editForm.profileImage ? (
-                        <img src={formatProductImage(editForm.profileImage)} alt="Avatar Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.style.display = 'none'; }} />
+                        <img loading="lazy" decoding="async" src={formatProductImage(editForm.profileImage)} alt="Avatar Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.style.display = 'none'; }} />
                       ) : (
                         <Image size={20} color="#555" />
                       )}

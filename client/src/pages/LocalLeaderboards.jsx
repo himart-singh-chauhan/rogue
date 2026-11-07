@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiCall } from "../utils/api";
+import { apiCall, formatProductImage } from "../utils/api";
 import { 
   Trophy, 
   MapPin, 
@@ -18,7 +18,7 @@ import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 
 const CustomSelect = ({ value, onChange, options, label }) => (
   <div style={{ position: "relative", flex: "1", minWidth: "180px" }}>
@@ -136,7 +136,7 @@ const LocalLeaderboards = () => {
             event: r.title || "Record Event",
             state: r.city || "Local Area", // Using city as fallback
             avatar: r.user?.profile_image 
-              ? (r.user.profile_image.includes('http') ? r.user.profile_image : `http://localhost:5002/uploads/${r.user.profile_image}`)
+              ? (r.user.profile_image.includes('http') ? r.user.profile_image : formatProductImage(`/uploads/${r.user.profile_image}`))
               : `https://ui-avatars.com/api/?name=${encodeURIComponent(r.user?.name || "Athlete")}&background=FF6A00&color=fff`,
             ageGroup: "Adult Division (18–49)", // Defaulting
             recordId: r.id,
@@ -364,7 +364,7 @@ const LocalLeaderboards = () => {
                             if (nameEl) nameEl.style.color = "white";
                           }}
                         >
-                          <img src={r.avatar} alt={r.name} style={{ width: "48px", height: "48px", borderRadius: "14px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)" }} />
+                          <img loading="lazy" decoding="async" src={r.avatar} alt={r.name} style={{ width: "48px", height: "48px", borderRadius: "14px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)" }} />
                           <div>
                             <div className="athlete-hover-name" style={{ fontSize: "16px", fontWeight: "800", transition: "color 0.2s", textAlign: "left" }}>{r.name}</div>
                             <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>

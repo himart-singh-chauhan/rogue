@@ -1,50 +1,50 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ReactLenis } from 'lenis/react'
 import Home from './pages/Home'
-import Login from './pages/Login'
-import Signup from './pages/Signup'
-import Leaderboard from './pages/Leaderboard'
-import About from './pages/About'
-import Contact from './pages/Contact'
-import Shop from './pages/Shop'
-import ProductDetail from './pages/ProductDetail'
-import Challenges from './pages/Challenges'
-import Verify from './pages/Verify'
-import ChallengeVerify from './pages/ChallengeVerify'
-import VerificationProcess from './pages/VerificationProcess'
-import FAQ from './pages/FAQ'
-import Events from './pages/Events'
-import Privacy from './pages/Privacy'
-import RecordDetail from './pages/RecordDetail'
-import StreamDetail from './pages/StreamDetail'
-import Schedule from './pages/Schedule'
-import Cart from './pages/Cart'
-import EliteMembership from './pages/EliteMembership'
-import Streams from './pages/Streams'
-import Categories from './pages/Categories'
-import Profile from './pages/Profile'
-import Rules from './pages/Rules'
-import Appeals from './pages/Appeals'
-import SubmitEvidenceLearnMore from './pages/SubmitEvidenceLearnMore'
-import GlobalRecognitionLearnMore from './pages/GlobalRecognitionLearnMore'
-import ExpertAdjudicationLearnMore from './pages/ExpertAdjudicationLearnMore'
-import VerificationProtocolLearnMore from './pages/VerificationProtocolLearnMore'
-import Terms from './pages/Terms'
-import Cookies from './pages/Cookies'
-import GlobalLeaderboard from './pages/GlobalLeaderboard'
-import LocalLeaderboards from './pages/LocalLeaderboards'
-import GlobalRankings from './pages/GlobalRankings'
-import GlobalRankingsPage from './pages/GlobalRankingsPage'
-import MemberProfilePage from './pages/MemberProfilePage'
-import ExploreRecords from './pages/ExploreRecords'
-import RecordDetailPage from './pages/RecordDetailPage'
 import LoadingScreen from './components/LoadingScreen'
 import ScrollToTop from './components/ScrollToTop'
-import Admin from './pages/Admin'
-import SubmissionCheckout from './pages/SubmissionCheckout'
 import ProtectedRoute from './components/ProtectedRoute'
 import './App.css'
+
+const Login = lazy(() => import('./pages/Login'))
+const Signup = lazy(() => import('./pages/Signup'))
+const Leaderboard = lazy(() => import('./pages/Leaderboard'))
+const About = lazy(() => import('./pages/About'))
+const Contact = lazy(() => import('./pages/Contact'))
+const Shop = lazy(() => import('./pages/Shop'))
+const ProductDetail = lazy(() => import('./pages/ProductDetail'))
+const Challenges = lazy(() => import('./pages/Challenges'))
+const Verify = lazy(() => import('./pages/Verify'))
+const ChallengeVerify = lazy(() => import('./pages/ChallengeVerify'))
+const VerificationProcess = lazy(() => import('./pages/VerificationProcess'))
+const FAQ = lazy(() => import('./pages/FAQ'))
+const Events = lazy(() => import('./pages/Events'))
+const Privacy = lazy(() => import('./pages/Privacy'))
+const RecordDetail = lazy(() => import('./pages/RecordDetail'))
+const StreamDetail = lazy(() => import('./pages/StreamDetail'))
+const Schedule = lazy(() => import('./pages/Schedule'))
+const Cart = lazy(() => import('./pages/Cart'))
+const EliteMembership = lazy(() => import('./pages/EliteMembership'))
+const Streams = lazy(() => import('./pages/Streams'))
+const Categories = lazy(() => import('./pages/Categories'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Rules = lazy(() => import('./pages/Rules'))
+const Appeals = lazy(() => import('./pages/Appeals'))
+const SubmitEvidenceLearnMore = lazy(() => import('./pages/SubmitEvidenceLearnMore'))
+const GlobalRecognitionLearnMore = lazy(() => import('./pages/GlobalRecognitionLearnMore'))
+const ExpertAdjudicationLearnMore = lazy(() => import('./pages/ExpertAdjudicationLearnMore'))
+const VerificationProtocolLearnMore = lazy(() => import('./pages/VerificationProtocolLearnMore'))
+const Terms = lazy(() => import('./pages/Terms'))
+const Cookies = lazy(() => import('./pages/Cookies'))
+const GlobalLeaderboard = lazy(() => import('./pages/GlobalLeaderboard'))
+const LocalLeaderboards = lazy(() => import('./pages/LocalLeaderboards'))
+const GlobalRankingsPage = lazy(() => import('./pages/GlobalRankingsPage'))
+const MemberProfilePage = lazy(() => import('./pages/MemberProfilePage'))
+const ExploreRecords = lazy(() => import('./pages/ExploreRecords'))
+const RecordDetailPage = lazy(() => import('./pages/RecordDetailPage'))
+const Admin = lazy(() => import('./pages/Admin'))
+const SubmissionCheckout = lazy(() => import('./pages/SubmissionCheckout'))
 
 function App() {
   const [loading, setLoading] = useState(true)
@@ -59,6 +59,7 @@ function App() {
       <ReactLenis root>
         <BrowserRouter>
           <ScrollToTop />
+          <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000' }} />}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
@@ -106,6 +107,7 @@ function App() {
             <Route path="/terms" element={<Terms />} />
             <Route path="/cookies" element={<Cookies />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </ReactLenis>
     </>

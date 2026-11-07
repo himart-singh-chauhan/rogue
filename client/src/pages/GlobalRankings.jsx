@@ -16,7 +16,7 @@ import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 const GlobalRankings = () => {
   const navigate = useNavigate();
@@ -224,7 +224,7 @@ const GlobalRankings = () => {
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                      <img src={c.avatar} alt={c.name} style={{ width: "48px", height: "48px", borderRadius: "14px", border: c.rank <= 3 ? "1.5px solid #FF6A00" : "1px solid rgba(255,255,255,0.1)", objectFit: "cover" }} />
+                      <img loading="lazy" decoding="async" src={c.avatar} alt={c.name} style={{ width: "48px", height: "48px", borderRadius: "14px", border: c.rank <= 3 ? "1.5px solid #FF6A00" : "1px solid rgba(255,255,255,0.1)", objectFit: "cover" }} />
                       <div>
                         <div className="athlete-hover-name" style={{ fontSize: "16px", fontWeight: "800", color: "white", transition: "color 0.2s" }}>{c.name}</div>
                         <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>

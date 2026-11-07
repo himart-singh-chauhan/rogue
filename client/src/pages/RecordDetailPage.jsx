@@ -36,11 +36,12 @@ export default function RecordDetailPage() {
     try {
       setLoading(true);
       setVideoError(false);
-      const data = await apiCall(`/records/${recordId}`, 'GET');
+      const data = await apiCall(`/records/${recordId}`, 'GET', null, JSON.parse(localStorage.getItem('userInfo') || 'null')?.token);
       setRecord(data);
       
       // Fetch social stats
-      const stats = await apiCall(`/social/${recordId}`, 'GET');
+      const sessionToken = JSON.parse(localStorage.getItem('userInfo') || 'null')?.token;
+      const stats = await apiCall(`/social/${recordId}`, 'GET', null, sessionToken);
       setSocialStats(stats);
       
       // Increment view only once
@@ -467,7 +468,7 @@ export default function RecordDetailPage() {
                   socialStats.comments.map(c => (
                     <div key={c.id} style={{ display: 'flex', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                         {c.userAvatar ? <img src={c.userAvatar} style={{width:'100%', height:'100%', objectFit:'cover'}} /> : <User size={20} color="#fff" />}
+                         {c.userAvatar ? <img loading="lazy" decoding="async" src={c.userAvatar} style={{width:'100%', height:'100%', objectFit:'cover'}} /> : <User size={20} color="#fff" />}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
@@ -494,7 +495,7 @@ export default function RecordDetailPage() {
               <div style={{ textAlign: 'center', marginBottom: '16px' }}>
                 <div style={{ width: '80px', height: '80px', borderRadius: '12px', background: '#FF5500', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '32px', fontWeight: '900', overflow: 'hidden' }}>
                   {record.user?.profile_image ? (
-                    <img src={formatProductImage(record.user.profile_image)} alt="Athlete" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img loading="lazy" decoding="async" src={formatProductImage(record.user.profile_image)} alt="Athlete" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     record.user?.display_name?.charAt(0) || record.user?.name?.charAt(0) || 'A'
                   )}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { ArrowRight, Camera, ShieldCheck, Zap, Quote, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import PageTransition from "../components/PageTransition";
@@ -19,7 +19,7 @@ const About = () => {
 
         {/* HERO SECTION */}
         <header style={{ position: "relative", height: "90vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", paddingTop: "80px" }}>
-          <img 
+          <img loading="lazy" decoding="async" 
             src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80" 
             alt="Athlete Lifting" 
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.4, filter: "grayscale(100%) brightness(0.7)" }}

@@ -35,7 +35,7 @@ const NewestCard = ({ img, cat, title, avatar, name, value, slug }) => {
           e.currentTarget.style.boxShadow = 'none';
         }}
       >
-        <img src={img} alt={title} className="holder-card-img" />
+        <img loading="lazy" decoding="async" src={img} alt={title} className="holder-card-img" />
         <div className="holder-card-gradient" />
         <div className="holder-side-strip" />
         <div className="holder-card-top">
@@ -46,7 +46,7 @@ const NewestCard = ({ img, cat, title, avatar, name, value, slug }) => {
           <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'white', marginBottom: '12px', lineHeight: '1.2', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{title}</h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <img src={avatar} alt={name} style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1.5px solid #FF6A00' }} />
+              <img loading="lazy" decoding="async" src={avatar} alt={name} style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1.5px solid #FF6A00' }} />
               <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>{name}</span>
             </div>
             <div style={{ color: '#FF6A00', fontWeight: '900', fontSize: '15px' }}>{value}</div>
@@ -59,7 +59,7 @@ const NewestCard = ({ img, cat, title, avatar, name, value, slug }) => {
 
 const RecCard = ({ img, cat, title, by }) => (
   <div className="rec-card">
-    <img src={img} alt={title} className="rec-card-img" />
+    <img loading="lazy" decoding="async" src={img} alt={title} className="rec-card-img" />
     <div className="rec-card-overlay" />
     <div className="rec-card-top">
       <span className="rec-card-cat">{cat}</span>
@@ -77,7 +77,7 @@ const HolderCard = ({ img, badge, name, records, rank, slug, username }) => {
   return (
     <div className="holder-card" style={{ position: "relative" }}>
       {/* Full-card background image */}
-      <img src={img} alt={name} className="holder-card-img" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease", zIndex: 0 }} />
+      <img loading="lazy" decoding="async" src={img} alt={name} className="holder-card-img" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease", zIndex: 0 }} />
 
       {/* Full-card dark gradient overlay */}
       <div style={{
@@ -282,7 +282,7 @@ const Home = () => {
               img: r.thumbnail_url !== "pending_upload" ? formatProductImage(r.thumbnail_url) : "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=600&q=80",
               cat: (r.category || "RECORD").toUpperCase(),
               title: r.title,
-              avatar: r.user?.profile_image ? (r.user.profile_image.includes('http') ? r.user.profile_image : `http://localhost:5001/uploads/${r.user.profile_image}`) : "https://ui-avatars.com/api/?name=" + encodeURIComponent(r.user?.name || "Athlete") + "&background=FF6A00&color=fff",
+              avatar: r.user?.profile_image ? (r.user.profile_image.includes('http') ? r.user.profile_image : formatProductImage(`/uploads/${r.user.profile_image}`)) : "https://ui-avatars.com/api/?name=" + encodeURIComponent(r.user?.name || "Athlete") + "&background=FF6A00&color=fff",
               name: r.user?.display_name || r.user?.name || "Verified Athlete",
               username: r.user?.username || r.user?.name,
               value: `${r.value} ${r.unit}`,
@@ -352,11 +352,11 @@ const Home = () => {
     // Fetch featured videos for sidebar
     const fetchFeaturedVideos = async () => {
       try {
-        const videos = await apiCall("/admin/videos/featured", "GET");
+        const videos = await apiCall("/videos/featured", "GET");
         if (videos && videos.length > 0) {
           setSidebarVideos(videos.slice(0, 6).map(v => ({
             time: v.duration ? `${Math.floor(v.duration / 60)}:${String(v.duration % 60).padStart(2, '0')}` : "0:30",
-            img: v.thumbnail_url !== "pending_upload" ? formatProductImage(v.thumbnail_url) : "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=400&q=80",
+            img: v.thumbnail_url && v.thumbnail_url !== "pending_upload" ? formatProductImage(v.thumbnail_url) : "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=400&q=80",
             videoUrl: v.video_url,
             title: v.title,
             slug: v.id
@@ -383,7 +383,7 @@ const Home = () => {
     };
 
     fetchHomepageData();
-    // fetchFeaturedVideos(); // TODO: Fix the /api/admin/videos/featured 401 error
+    fetchFeaturedVideos(); // public list (route order fixed on the server)
     fetchFeaturedStream();
   }, []);
 
@@ -585,7 +585,7 @@ const Home = () => {
 
             {/* Middle: Video Frame */}
             <article ref={videoContainerRef} style={{ width: "100%", height: "550px", marginBottom: "32px", position: "relative", borderRadius: "20px", overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)", background: "#000" }}>
-              <video
+              <video preload="none"
                 ref={videoRef}
                 src="https://www.w3schools.com/html/mov_bbb.mp4"
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer", opacity: isPlaying ? 1 : 0, transition: "opacity 0.3s ease" }}
@@ -596,7 +596,7 @@ const Home = () => {
               />
               
               {!isPlaying && (
-                <img
+                <img loading="lazy" decoding="async"
                   src={featuredStream ? (featuredStream.imageUrl || featuredStream.image || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80") : "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"}
                   alt="Video Thumbnail"
                   onClick={togglePlay}
@@ -731,7 +731,7 @@ const Home = () => {
                         if(overlay) overlay.style.background = "rgba(0,0,0,0.3)";
                       }}
                     >
-                      <img src={video.img} alt={video.title || "Live Stream"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      <img loading="lazy" decoding="async" src={video.img} alt={video.title || "Live Stream"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       <div className="video-overlay" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", transition: "background 0.3s ease" }} />
                       <div style={{ position: "absolute", bottom: "8px", left: "12px", color: "white", fontSize: "12px", fontWeight: "700" }}>{video.time}</div>
                       <Play style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#FF6A00", fill: "#FF6A00", width: 40, height: 40, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }} />
@@ -768,9 +768,9 @@ const Home = () => {
           {/* Right: Stats Boxes */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             {[
-              { label: "Records Set", value: 1, suffix: " k+", icon: <Trophy style={{ width: 16, height: 16 }} />, bg: "/assets/stats/records_set_bg.png" },
-              { label: "Countries", value: 1, suffix: "+", icon: <Target style={{ width: 16, height: 16 }} />, bg: "/assets/stats/countries_bg.png" },
-              { label: "Categories", value: 20, suffix: "+", icon: <Zap style={{ width: 16, height: 16 }} />, bg: "/assets/stats/categories_bg.png" }
+              { label: "Records Set", value: 1, suffix: " k+", icon: <Trophy style={{ width: 16, height: 16 }} />, bg: "/assets/stats/records_set_bg.webp" },
+              { label: "Countries", value: 1, suffix: "+", icon: <Target style={{ width: 16, height: 16 }} />, bg: "/assets/stats/countries_bg.webp" },
+              { label: "Categories", value: 20, suffix: "+", icon: <Zap style={{ width: 16, height: 16 }} />, bg: "/assets/stats/categories_bg.webp" }
             ].map((stat, idx) => (
               <div key={idx} style={{ 
                 background: "#222", 
@@ -1034,7 +1034,7 @@ const Home = () => {
         <div className="container">
           <div className="dark-cta">
             <div className="dark-cta-bg">
-              <img src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80" alt="" />
+              <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80" alt="" />
             </div>
             <div className="dark-cta-overlay" />
 

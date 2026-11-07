@@ -15,7 +15,7 @@ const Footer = () => {
           {/* Brand */}
           <div className="footer-brand">
             <div style={{ marginBottom: 5, marginTop: -30 }}>
-              <img src="/image copy 6.png" alt="ROGUE Logo" style={{ height: 150, width: "auto", display: 'block', mixBlendMode: 'screen' }} />
+              <img loading="lazy" decoding="async" src="/images/logo-light.webp" alt="ROGUE Logo" width={450} height={300} style={{ height: 150, width: "auto", display: 'block', mixBlendMode: 'screen' }} />
             </div>
             <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px", maxWidth: "260px" }}>
               Structured divisions ensure fairness, increase participation, and scale record categories globally.
@@ -74,10 +74,12 @@ const Footer = () => {
         </div>
 
         {/* Large Branding Image - Positioned at bottom right, partially off-screen for cool effect */}
-        <img 
-          src="/image copy 5.png" 
-          alt="Rogue Branding" 
-          style={{ 
+        <img loading="lazy" decoding="async" 
+          src="/images/athlete-certificate.webp" 
+          alt="Rogue Branding"
+          width={467}
+          height={700}
+          style={{
             position: 'absolute', 
             right: "0", 
             bottom: "0",

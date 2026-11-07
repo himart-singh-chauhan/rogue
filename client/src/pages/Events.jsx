@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Play, 
-  Eye, 
-  Activity, 
-  Clock, 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Zap, 
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Play,
+  Eye,
+  Activity,
+  Clock,
+  Calendar,
+  MapPin,
+  Users,
+  Zap,
   ArrowRight,
   BarChart3,
   Edit3,
@@ -235,9 +235,9 @@ const Events = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState("create"); // "create" | "edit"
   const [selectedEventId, setSelectedEventId] = useState(null);
-  
+
   const [viewingEvent, setViewingEvent] = useState(null);
-  
+
   const [reminders, setReminders] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("awr_event_reminders") || "[]");
@@ -388,7 +388,7 @@ const Events = () => {
           // Success scan (verify VIP access)
           const ticketObj = res.ticket || res;
           const isVip = ticketObj.ticketType === "vip";
-          
+
           setScanResult({
             type: isVip ? "vip" : "success",
             message: isVip ? "⭐ VIP PASS VERIFIED - ACCESS GRANTED!" : "🎫 PASS VERIFIED - ADMISSION GRANTED!",
@@ -454,7 +454,7 @@ const Events = () => {
 
   const fetchEvents = async () => {
     try {
-      const data = await apiCall("/events", "GET");
+      const data = await apiCall("/events", "GET", null, user?.token);
       if (data && data.length > 0) {
         const formatted = data.map(item => {
           const isPast = new Date(item.date) < new Date();
@@ -523,7 +523,7 @@ const Events = () => {
     setModalType(type);
     if (type === "edit" && event) {
       setSelectedEventId(event.id);
-      
+
       // Convert rawDate to datetime-local format
       let formattedDate = "";
       if (event.rawDate) {
@@ -638,7 +638,7 @@ const Events = () => {
   return (
     <PageTransition>
       <div style={{ background: "#0A0A0A", color: "white", fontFamily: "'Inter', sans-serif", minHeight: "100vh", paddingTop: "120px", display: "flex", flexDirection: "column" }}>
-        
+
         {/* NAVBAR */}
         <Navbar />
 
@@ -701,8 +701,8 @@ const Events = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>EVENT TITLE</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={formFields.title}
                       onChange={e => setFormFields({...formFields, title: e.target.value})}
@@ -712,8 +712,8 @@ const Events = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>EVENT CATEGORY</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.category}
                       onChange={e => setFormFields({...formFields, category: e.target.value})}
                       placeholder="e.g. STRENGTH"
@@ -724,7 +724,7 @@ const Events = () => {
 
                 <div>
                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>DESCRIPTION</label>
-                  <textarea 
+                  <textarea
                     required
                     value={formFields.description}
                     onChange={e => setFormFields({...formFields, description: e.target.value})}
@@ -736,8 +736,8 @@ const Events = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>DATE & START TIME</label>
-                    <input 
-                      type="datetime-local" 
+                    <input
+                      type="datetime-local"
                       required
                       value={formFields.date}
                       onChange={e => setFormFields({...formFields, date: e.target.value})}
@@ -746,8 +746,8 @@ const Events = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>LOCATION</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={formFields.location}
                       onChange={e => setFormFields({...formFields, location: e.target.value})}
@@ -760,8 +760,8 @@ const Events = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>COMPETITORS SUMMARY</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.competitors}
                       onChange={e => setFormFields({...formFields, competitors: e.target.value})}
                       placeholder="e.g. 12 HEAVYWEIGHT ATHLETES"
@@ -770,8 +770,8 @@ const Events = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>JUDGING OFFICIALS</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.judges}
                       onChange={e => setFormFields({...formFields, judges: e.target.value})}
                       placeholder="e.g. Rogue Official Marshal Team"
@@ -783,8 +783,8 @@ const Events = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>BANNER / THUMBNAIL URL</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.imageUrl}
                       onChange={e => setFormFields({...formFields, imageUrl: e.target.value})}
                       placeholder="https://images.unsplash.com/..."
@@ -793,8 +793,8 @@ const Events = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>STREAM VIDEO SOURCE URL</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.streamUrl}
                       onChange={e => setFormFields({...formFields, streamUrl: e.target.value})}
                       placeholder="e.g. https://example.com/stream"
@@ -806,8 +806,8 @@ const Events = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>TEASER / PROMO VIDEO URL</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.videoUrl}
                       onChange={e => setFormFields({...formFields, videoUrl: e.target.value})}
                       placeholder="e.g. https://example.com/teaser.mp4"
@@ -816,8 +816,8 @@ const Events = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>EXTERNAL TICKET PURCHASE LINK</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.ticketLink}
                       onChange={e => setFormFields({...formFields, ticketLink: e.target.value})}
                       placeholder="e.g. https://tickets.example.com"
@@ -829,8 +829,8 @@ const Events = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>EVENT SPONSORS (COMMA SEPARATED)</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={formFields.sponsors}
                       onChange={e => setFormFields({...formFields, sponsors: e.target.value})}
                       placeholder="e.g. Rogue Fitness, Thorne Nutrition, Red Bull"
@@ -839,7 +839,7 @@ const Events = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>EVENT STATUS OVERRIDE</label>
-                    <select 
+                    <select
                       value={formFields.status}
                       onChange={e => setFormFields({...formFields, status: e.target.value})}
                       style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none", cursor: "pointer" }}
@@ -854,7 +854,7 @@ const Events = () => {
 
                 <div>
                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>OFFICIAL EVENT RULES & RULES (NEWLINES OK)</label>
-                  <textarea 
+                  <textarea
                     value={formFields.rules}
                     onChange={e => setFormFields({...formFields, rules: e.target.value})}
                     placeholder="Enter official rules or guidelines, one per line..."
@@ -864,8 +864,8 @@ const Events = () => {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       id="isLive"
                       checked={formFields.isLive}
                       onChange={e => setFormFields({...formFields, isLive: e.target.checked})}
@@ -875,8 +875,8 @@ const Events = () => {
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       id="isPaid"
                       checked={formFields.isPaid}
                       onChange={e => setFormFields({...formFields, isPaid: e.target.checked})}
@@ -886,8 +886,8 @@ const Events = () => {
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       id="isFeatured"
                       checked={formFields.isFeatured}
                       onChange={e => setFormFields({...formFields, isFeatured: e.target.checked})}
@@ -901,8 +901,8 @@ const Events = () => {
                   {formFields.isPaid && (
                     <div>
                       <label style={{ display: "block", fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "4px" }}>TICKET PRICE ($ USD)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         step="0.01"
                         required={formFields.isPaid}
                         value={formFields.ticketPrice}
@@ -914,13 +914,13 @@ const Events = () => {
                 </div>
 
                 <div style={{ display: "flex", gap: "16px", marginTop: "16px" }}>
-                  <button 
+                  <button
                     type="submit"
                     style={{ flex: 1, background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}
                   >
                     ⚡ SAVE CONFIGURATION
                   </button>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     style={{ background: "rgba(255, 255, 255, 0.05)", color: "rgba(255, 255, 255, 0.6)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", cursor: "pointer" }}
@@ -1003,7 +1003,7 @@ const Events = () => {
                     )}
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setViewingEvent(null)}
                   style={{
                     background: "rgba(255,255,255,0.05)",
@@ -1047,7 +1047,7 @@ const Events = () => {
                     border: "1px solid rgba(255,255,255,0.08)",
                     boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
                   }}>
-                    <img src={viewingEvent.img} alt={viewingEvent.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img loading="lazy" decoding="async" src={viewingEvent.img} alt={viewingEvent.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)" }} />
                   </div>
 
@@ -1062,12 +1062,12 @@ const Events = () => {
                       <Play size={12} fill="#FF6A00" /> EVENT TEASER & HIGHLIGHT TRAILER
                     </div>
                     <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255, 106, 0, 0.3)", background: "#000", boxShadow: "0 10px 30px rgba(0,0,0,0.6)" }}>
-                      <video 
-                        src={viewingEvent.videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"} 
-                        controls 
+                      <video preload="metadata"
+                        src={viewingEvent.videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"}
+                        controls
                         playsInline
                         webkit-playsinline="true"
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
                     </div>
                   </div>
@@ -1297,26 +1297,26 @@ const Events = () => {
         )}
 
         <div style={{ padding: "60px 5% 60px", flex: 1 }}>
-        
+
         {/* HEADER */}
         <div style={{ marginBottom: "60px", maxWidth: "1400px", margin: "0 auto 60px" }}>
           <h1 style={{ fontSize: "clamp(40px, 8vw, 80px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", lineHeight: "0.8", marginBottom: "32px" }}>
             <ScrollReveal>LIVE EVENTS</ScrollReveal>
           </h1>
-          
+
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
             {["LIVE", "UPCOMING", "PAST"].map((tab) => (
-              <button 
+              <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                style={{ 
-                  padding: "10px 24px", 
-                  borderRadius: "100px", 
-                  background: activeTab === tab ? "#FF6A00" : "rgba(255, 255, 255, 0.05)", 
-                  color: activeTab === tab ? "white" : "rgba(255, 255, 255, 0.5)", 
-                  border: "none", 
-                  fontSize: "11px", 
-                  fontWeight: "900", 
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: "100px",
+                  background: activeTab === tab ? "#FF6A00" : "rgba(255, 255, 255, 0.05)",
+                  color: activeTab === tab ? "white" : "rgba(255, 255, 255, 0.5)",
+                  border: "none",
+                  fontSize: "11px",
+                  fontWeight: "900",
                   cursor: "pointer",
                   textTransform: "uppercase",
                   transition: "all 0.2s"
@@ -1406,14 +1406,14 @@ const Events = () => {
 
             {/* Split Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: "32px" }}>
-              
+
               {/* Left Pane: Holographic Laser Scanner Simulator */}
               <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                
+
                 {/* Select Attendee Ticket Widget */}
                 <div>
                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px", letterSpacing: "0.05em" }}>SELECT ATTENDEE PASS FOR SIMULATION</label>
-                  <select 
+                  <select
                     value={selectedAdminTicket ? selectedAdminTicket.id : ""}
                     onChange={e => {
                       const t = adminTickets.find(x => x.id === e.target.value);
@@ -1449,7 +1449,7 @@ const Events = () => {
                 }}>
                   {/* Grid overlay for camera matrix look */}
                   <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)", backgroundSize: "16px 16px", pointerEvents: "none" }} />
-                  
+
                   {/* Corner Targets */}
                   <div style={{ position: "absolute", top: "16px", left: "16px", width: "16px", height: "16px", borderTop: "2px solid #FF6A00", borderLeft: "2px solid #FF6A00" }} />
                   <div style={{ position: "absolute", top: "16px", right: "16px", width: "16px", height: "16px", borderTop: "2px solid #FF6A00", borderRight: "2px solid #FF6A00" }} />
@@ -1487,16 +1487,16 @@ const Events = () => {
                         <rect x="10" y="100" width="10" height="10" fill="black" />
 
                         {Array.from({ length: 12 }).map((_, i) => (
-                          <rect 
-                            key={i} 
-                            x={40 + (i % 4) * 12} 
-                            y={40 + Math.floor(i / 4) * 16} 
+                          <rect
+                            key={i}
+                            x={40 + (i % 4) * 12}
+                            y={40 + Math.floor(i / 4) * 16}
                             width={(selectedAdminTicket.accessCode.charCodeAt(i % selectedAdminTicket.accessCode.length) % 2 === 0) ? "8" : "4"}
-                            height={(selectedAdminTicket.accessCode.charCodeAt((i + 2) % selectedAdminTicket.accessCode.length) % 2 === 0) ? "8" : "4"} 
-                            fill="black" 
+                            height={(selectedAdminTicket.accessCode.charCodeAt((i + 2) % selectedAdminTicket.accessCode.length) % 2 === 0) ? "8" : "4"}
+                            fill="black"
                           />
                         ))}
-                        
+
                         <rect x="90" y="90" width="15" height="15" fill="black" />
                         <rect x="105" y="105" width="15" height="15" fill="black" />
                       </svg>
@@ -1540,7 +1540,7 @@ const Events = () => {
                   >
                     {scannerActive ? "SCANNING PASSPORT..." : "⚡ SCAN PRESENTED QR PASS"}
                   </button>
-                  
+
                   {selectedAdminTicket && (
                     <button
                       onClick={() => handleResetTicket(selectedAdminTicket)}
@@ -1568,19 +1568,19 @@ const Events = () => {
 
               {/* Right & Center Pane: Scan Verification Engine & Logs */}
               <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                
+
                 {/* Manual Code entry panel */}
                 <div style={{ display: "flex", gap: "12px" }}>
                   <div style={{ flex: 1, position: "relative" }}>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={manualCode}
                       onChange={e => setManualCode(e.target.value)}
                       placeholder="Paste or type access code (e.g. usr-1-evt-1-98247)"
                       style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "100px", padding: "14px 24px", color: "white", fontSize: "13px", outline: "none" }}
                     />
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleScanTicket(manualCode)}
                     disabled={scannerActive}
                     style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "white", borderRadius: "100px", padding: "0 28px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}
@@ -1608,7 +1608,7 @@ const Events = () => {
                 {/* Outcome Display card */}
                 <div style={{ minHeight: "130px", display: "flex", alignItems: "stretch" }}>
                   {scanResult ? (
-                    <div 
+                    <div
                       style={{
                         flex: 1,
                         borderRadius: "20px",
@@ -1616,17 +1616,17 @@ const Events = () => {
                         display: "flex",
                         gap: "20px",
                         alignItems: "center",
-                        background: 
+                        background:
                           scanResult.type === "success" ? "rgba(34, 197, 94, 0.05)" :
                           scanResult.type === "vip" ? "linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.05) 100%)" :
                           scanResult.type === "duplicate" ? "rgba(239, 68, 68, 0.05)" :
                           "rgba(255, 255, 255, 0.03)",
-                        border: 
+                        border:
                           scanResult.type === "success" ? "1px solid rgba(34, 197, 94, 0.3)" :
                           scanResult.type === "vip" ? "1px solid rgba(168, 85, 247, 0.4)" :
                           scanResult.type === "duplicate" ? "1px solid rgba(239, 68, 68, 0.4)" :
                           "1px solid rgba(255, 255, 255, 0.1)",
-                        boxShadow: 
+                        boxShadow:
                           scanResult.type === "success" ? "0 0 20px rgba(34, 197, 94, 0.1)" :
                           scanResult.type === "vip" ? "0 0 25px rgba(168, 85, 247, 0.2)" :
                           scanResult.type === "duplicate" ? "0 0 20px rgba(239, 68, 68, 0.1)" :
@@ -1634,15 +1634,15 @@ const Events = () => {
                       }}
                     >
                       {/* Icon */}
-                      <div style={{ 
-                        width: "56px", 
-                        height: "56px", 
-                        borderRadius: "50%", 
-                        display: "flex", 
-                        alignItems: "center", 
+                      <div style={{
+                        width: "56px",
+                        height: "56px",
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
                         justifyContent: "center",
                         fontSize: "24px",
-                        background: 
+                        background:
                           scanResult.type === "success" ? "rgba(34, 197, 94, 0.15)" :
                           scanResult.type === "vip" ? "rgba(168, 85, 247, 0.25)" :
                           scanResult.type === "duplicate" ? "rgba(239, 68, 68, 0.15)" :
@@ -1661,10 +1661,10 @@ const Events = () => {
 
                       {/* Metadata */}
                       <div style={{ flex: 1 }}>
-                        <div style={{ 
-                          fontSize: "12px", 
-                          fontWeight: "900", 
-                          letterSpacing: "1px", 
+                        <div style={{
+                          fontSize: "12px",
+                          fontWeight: "900",
+                          letterSpacing: "1px",
                           textTransform: "uppercase",
                           color:
                             scanResult.type === "success" ? "#22C55E" :
@@ -1739,7 +1739,7 @@ const Events = () => {
                               fontWeight: "900",
                               padding: "2px 8px",
                               borderRadius: "4px",
-                              background: 
+                              background:
                                 log.status.includes("APPROVED") ? "rgba(34, 197, 94, 0.15)" :
                                 log.status.includes("DUPLICATE") ? "rgba(239, 68, 68, 0.15)" :
                                 "rgba(255,255,255,0.08)",
@@ -1779,22 +1779,22 @@ const Events = () => {
           >
             {/* FEATURED EVENT */}
             {featuredEvent && (
-              <div 
+              <div
                 onClick={(e) => {
                   if (e.target.closest("button") || e.target.closest("a")) return;
                   setViewingEvent(featuredEvent);
                 }}
-                style={{ 
-                  position: "relative", 
-                  width: "100%", 
-                  height: "550px", 
-                  borderRadius: "32px", 
-                  overflow: "hidden", 
-                  marginBottom: "60px", 
-                  boxShadow: "0 40px 80px rgba(0,0,0,0.5)", 
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "550px",
+                  borderRadius: "32px",
+                  overflow: "hidden",
+                  marginBottom: "60px",
+                  boxShadow: "0 40px 80px rgba(0,0,0,0.5)",
                   border: "1px solid rgba(255,255,255,0.05)",
                   cursor: "pointer",
-                  transition: "all 0.3s ease-in-out" 
+                  transition: "all 0.3s ease-in-out"
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = "rgba(255, 106, 0, 0.5)";
@@ -1805,22 +1805,22 @@ const Events = () => {
                   e.currentTarget.style.boxShadow = "0 40px 80px rgba(0,0,0,0.5)";
                 }}
               >
-                <img src={featuredEvent.img} alt={featuredEvent.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.65)" }} />
+                <img loading="lazy" decoding="async" src={featuredEvent.img} alt={featuredEvent.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.65)" }} />
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 60%)" }}></div>
-                
+
                 {/* Status Badge */}
                 <div style={{ position: "absolute", left: "32px", top: "32px" }}>
-                  <div style={{ 
-                    background: featuredEvent.status === "LIVE" ? "rgba(255, 106, 0, 0.15)" : "rgba(255, 255, 255, 0.08)", 
-                    border: featuredEvent.status === "LIVE" ? "1px solid rgba(255, 106, 0, 0.3)" : "1px solid rgba(255, 255, 255, 0.15)", 
-                    color: featuredEvent.status === "LIVE" ? "#FF6A00" : "white", 
-                    padding: "8px 20px", 
-                    borderRadius: "100px", 
-                    fontWeight: "900", 
-                    fontSize: "11px", 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "8px", 
+                  <div style={{
+                    background: featuredEvent.status === "LIVE" ? "rgba(255, 106, 0, 0.15)" : "rgba(255, 255, 255, 0.08)",
+                    border: featuredEvent.status === "LIVE" ? "1px solid rgba(255, 106, 0, 0.3)" : "1px solid rgba(255, 255, 255, 0.15)",
+                    color: featuredEvent.status === "LIVE" ? "#FF6A00" : "white",
+                    padding: "8px 20px",
+                    borderRadius: "100px",
+                    fontWeight: "900",
+                    fontSize: "11px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
                     backdropFilter: "blur(10px)",
                     textTransform: "uppercase"
                   }}>
@@ -1859,7 +1859,7 @@ const Events = () => {
                       {featuredEvent.desc}
                     </p>
                   )}
-                  
+
                   <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
                     {featuredEvent.status === "LIVE" ? (
                       <div style={{ display: "flex", gap: "12px" }}>
@@ -1868,7 +1868,7 @@ const Events = () => {
                             WATCH STREAM <Play size={16} fill="white" />
                           </button>
                         </Link>
-                        <button 
+                        <button
                           onClick={() => setViewingEvent(featuredEvent)}
                           style={{ background: "rgba(255, 255, 255, 0.08)", border: "1px solid rgba(255, 255, 255, 0.2)", color: "white", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}
                         >
@@ -1877,13 +1877,13 @@ const Events = () => {
                       </div>
                     ) : featuredEvent.status === "UPCOMING" || featuredEvent.status === "CANCELLED" ? (
                       <div style={{ display: "flex", gap: "12px" }}>
-                        <button 
+                        <button
                           onClick={() => setViewingEvent(featuredEvent)}
                           style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", boxShadow: "0 20px 40px rgba(255, 106, 0, 0.3)" }}
                         >
                           WATCH PROMO <Play size={16} fill="white" />
                         </button>
-                        <button 
+                        <button
                           onClick={() => setViewingEvent(featuredEvent)}
                           style={{ background: "rgba(255, 255, 255, 0.08)", border: "1px solid rgba(255, 255, 255, 0.2)", color: "white", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}
                         >
@@ -1891,7 +1891,7 @@ const Events = () => {
                         </button>
                       </div>
                     ) : (
-                      <button 
+                      <button
                         onClick={() => setViewingEvent(featuredEvent)}
                         style={{ background: "rgba(255, 255, 255, 0.08)", border: "1px solid rgba(255, 255, 255, 0.2)", color: "white", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}
                       >
@@ -1929,20 +1929,20 @@ const Events = () => {
                 </h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "24px" }}>
                   {otherEvents.map((item) => (
-                    <div 
-                      key={item.id} 
+                    <div
+                      key={item.id}
                       onClick={(e) => {
                         if (e.target.closest("button") || e.target.closest("a")) return;
                         setViewingEvent(item);
                       }}
-                      style={{ 
-                        position: "relative", 
-                        borderRadius: "24px", 
-                        overflow: "hidden", 
-                        height: "260px", 
+                      style={{
+                        position: "relative",
+                        borderRadius: "24px",
+                        overflow: "hidden",
+                        height: "260px",
                         border: "1px solid rgba(255,255,255,0.05)",
                         cursor: "pointer",
-                        transition: "all 0.3s ease-in-out" 
+                        transition: "all 0.3s ease-in-out"
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.borderColor = "rgba(255, 106, 0, 0.6)";
@@ -1953,9 +1953,9 @@ const Events = () => {
                         e.currentTarget.style.boxShadow = "none";
                       }}
                     >
-                      <img src={item.img} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.4 }} />
+                      <img loading="lazy" decoding="async" src={item.img} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.4 }} />
                       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.95), transparent 70%)" }} />
-                      
+
                       {/* ADMIN ROW CONTROL DOTS ON OTHER CARDS */}
                       {user && user.isAdmin && dbEvents.length > 0 && (
                         <div style={{ position: "absolute", top: "16px", right: "16px", display: "flex", gap: "8px", zIndex: 10 }}>
@@ -2000,20 +2000,20 @@ const Events = () => {
                               </button>
                             </Link>
                           ) : (
-                            <button 
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setViewingEvent(item);
                               }}
-                              style={{ 
-                                background: "rgba(255, 106, 0, 0.1)", 
-                                border: "1px solid rgba(255, 106, 0, 0.3)", 
-                                borderRadius: "100px", 
-                                padding: "6px 14px", 
-                                fontSize: "9px", 
-                                fontWeight: "950", 
-                                color: "#FF6A00", 
-                                cursor: "pointer", 
+                              style={{
+                                background: "rgba(255, 106, 0, 0.1)",
+                                border: "1px solid rgba(255, 106, 0, 0.3)",
+                                borderRadius: "100px",
+                                padding: "6px 14px",
+                                fontSize: "9px",
+                                fontWeight: "950",
+                                color: "#FF6A00",
+                                cursor: "pointer",
                                 textTransform: "uppercase",
                                 transition: "all 0.2s"
                               }}
@@ -2055,43 +2055,43 @@ const Events = () => {
                 <Activity size={14} /> +12.4% YEARLY GROWTH
               </div>
             </div>
-            
+
             <div style={{ display: "flex", alignItems: "flex-end", gap: "16px", height: "160px", marginBottom: "32px", position: "relative" }}>
                {/* Vertical grid lines */}
                <div style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "space-between", pointerEvents: "none", opacity: 0.1 }}>
                  {[1,2,3,4,5,6].map(i => <div key={i} style={{ width: "1px", height: "100%", background: "white" }} />)}
                </div>
-               
+
                {[30, 45, 35, 55, 40, 95, 65].map((h, idx) => (
                 <div key={idx} style={{ flex: 1, position: "relative" }}>
-                   <motion.div 
+                   <motion.div
                     initial={{ height: 0 }}
                     animate={{ height: `${h}%` }}
                     transition={{ duration: 1, delay: idx * 0.1 }}
-                    style={{ 
-                      background: idx === 5 ? "linear-gradient(to top, #FF6A00, #FF8C3B)" : "rgba(255,255,255,0.05)", 
+                    style={{
+                      background: idx === 5 ? "linear-gradient(to top, #FF6A00, #FF8C3B)" : "rgba(255,255,255,0.05)",
                       borderRadius: "8px 8px 0 0",
                       width: "100%",
                       boxShadow: idx === 5 ? "0 0 30px rgba(255, 106, 0, 0.4)" : "none"
-                    }} 
+                    }}
                    />
                 </div>
               ))}
             </div>
-            
+
             <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.2)", fontSize: "10px", fontWeight: "900" }}>
               <span>JAN</span><span>MAR</span><span>MAY</span><span>JUL</span><span style={{ color: "rgba(255,255,255,0.4)" }}>AUG (NOW)</span><span>OCT</span><span>DEC</span>
             </div>
           </div>
 
           {/* SPECTATOR PASS CARD */}
-          <div style={{ 
-            background: "linear-gradient(135deg, #FF6A00 0%, #FF8C3B 100%)", 
-            borderRadius: "32px", 
-            padding: "48px", 
-            color: "white", 
-            display: "flex", 
-            flexDirection: "column", 
+          <div style={{
+            background: "linear-gradient(135deg, #FF6A00 0%, #FF8C3B 100%)",
+            borderRadius: "32px",
+            padding: "48px",
+            color: "white",
+            display: "flex",
+            flexDirection: "column",
             justifyContent: "center",
             position: "relative",
             overflow: "hidden",

@@ -83,9 +83,12 @@ const Navbar = () => {
         <div className="nav-logo-wrap">
           <Link to="/" className="nav-logo-link-main">
             <img 
-              src={location.pathname === "/" ? "/image copy.png" : "/image copy 6.png"} 
-              alt="ROGUE Logo" 
-              className="nav-logo-img" 
+              src={location.pathname === "/" ? "/images/logo-dark.webp" : "/images/logo-light.webp"} 
+              alt="ROGUE Logo"
+              width={450}
+              height={300}
+              fetchPriority="high"
+              className="nav-logo-img"
             />
           </Link>
         </div>

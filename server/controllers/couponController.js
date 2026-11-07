@@ -39,7 +39,9 @@ const validateCoupon = async (req, res) => {
 
     // 2. Check expiration date
     if (coupon.expiration_date) {
+      // A coupon stays valid through the END of its expiration day (date-only values mean midnight UTC).
       const expirationDate = new Date(coupon.expiration_date);
+      expirationDate.setUTCHours(23, 59, 59, 999);
       const now = new Date();
       if (expirationDate < now) {
         return res.status(400).json({ valid: false, message: 'This coupon has expired' });
@@ -56,18 +58,18 @@ const validateCoupon = async (req, res) => {
     // 4. Check minimum purchase amount
     const parsedSubtotal = parseFloat(subtotal) || 0;
     if (coupon.min_purchase && parsedSubtotal < parseFloat(coupon.min_purchase)) {
-      return res.status(400).json({ 
-        valid: false, 
-        message: `Minimum purchase of $${parseFloat(coupon.min_purchase).toFixed(2)} required for this coupon` 
+      return res.status(400).json({
+        valid: false,
+        message: `Minimum purchase of $${parseFloat(coupon.min_purchase).toFixed(2)} required for this coupon`
       });
     }
 
     // 5. Check restricted country
     if (coupon.restricted_country && country) {
       if (coupon.restricted_country.trim().toLowerCase() !== country.trim().toLowerCase()) {
-        return res.status(400).json({ 
-          valid: false, 
-          message: `This coupon is not valid in your country` 
+        return res.status(400).json({
+          valid: false,
+          message: `This coupon is not valid in your country`
         });
       }
     }
@@ -104,9 +106,9 @@ const validateCoupon = async (req, res) => {
       const userIndex = tiersOrder.indexOf(userTier.toLowerCase());
 
       if (userIndex < requiredIndex) {
-        return res.status(400).json({ 
-          valid: false, 
-          message: `This coupon is restricted to users with ${coupon.restricted_membership_tier.toUpperCase()} tier or higher` 
+        return res.status(400).json({
+          valid: false,
+          message: `This coupon is restricted to users with ${coupon.restricted_membership_tier.toUpperCase()} tier or higher`
         });
       }
     }
@@ -114,7 +116,7 @@ const validateCoupon = async (req, res) => {
     // 7. Check specific item constraints (applies_to & target_id)
     // Applies to types: all, product, category, membership, ticket
     let finalDiscount = 0;
-    
+
     if (coupon.applies_to === 'all') {
       // Applies to total subtotal
       if (coupon.discount_type === 'percentage') {
@@ -129,11 +131,11 @@ const validateCoupon = async (req, res) => {
       }
 
       // Check if target_id matches one of the items product IDs
-      const matchingItem = items.find(item => item.id === coupon.target_id);
+      const matchingItem = items.find(item => String(item.id) === String(coupon.target_id));
       if (!matchingItem) {
-        return res.status(400).json({ 
-          valid: false, 
-          message: 'This coupon is only valid for a specific product not currently in your cart' 
+        return res.status(400).json({
+          valid: false,
+          message: 'This coupon is only valid for a specific product not currently in your cart'
         });
       }
 
@@ -156,7 +158,7 @@ const validateCoupon = async (req, res) => {
       let categoryItemsTotal = 0;
 
       for (const item of items) {
-        if (item.category && item.category.toLowerCase() === coupon.target_id.toLowerCase()) {
+        if (item.category && item.category.toLowerCase() === String(coupon.target_id || '').toLowerCase()) {
           hasMatchingCategory = true;
           categoryItemsTotal += parseFloat(item.price) * (parseInt(item.qty) || 1);
         } else if (item.id) {
@@ -167,7 +169,7 @@ const validateCoupon = async (req, res) => {
             .eq('id', item.id)
             .single();
 
-          if (prod && prod.category && prod.category.toLowerCase() === coupon.target_id.toLowerCase()) {
+          if (prod && prod.category && prod.category.toLowerCase() === String(coupon.target_id || '').toLowerCase()) {
             hasMatchingCategory = true;
             categoryItemsTotal += parseFloat(item.price) * (parseInt(item.qty) || 1);
           }
@@ -175,9 +177,9 @@ const validateCoupon = async (req, res) => {
       }
 
       if (!hasMatchingCategory) {
-        return res.status(400).json({ 
-          valid: false, 
-          message: `This coupon is only valid for items in the category: ${coupon.target_id}` 
+        return res.status(400).json({
+          valid: false,
+          message: `This coupon is only valid for items in the category: ${coupon.target_id}`
         });
       }
 
@@ -192,9 +194,9 @@ const validateCoupon = async (req, res) => {
       }
 
       if (coupon.target_id && targetId && coupon.target_id.toLowerCase() !== targetId.toLowerCase()) {
-        return res.status(400).json({ 
-          valid: false, 
-          message: `This coupon is only valid for the ${coupon.target_id.toUpperCase()} membership tier` 
+        return res.status(400).json({
+          valid: false,
+          message: `This coupon is only valid for the ${coupon.target_id.toUpperCase()} membership tier`
         });
       }
 
@@ -209,9 +211,9 @@ const validateCoupon = async (req, res) => {
       }
 
       if (coupon.target_id && targetId && coupon.target_id !== targetId) {
-        return res.status(400).json({ 
-          valid: false, 
-          message: 'This coupon is only valid for a specific event ticket' 
+        return res.status(400).json({
+          valid: false,
+          message: 'This coupon is only valid for a specific event ticket'
         });
       }
 
@@ -265,17 +267,17 @@ const getAllCouponsByAdmin = async (req, res) => {
 // @route   POST /api/coupons
 // @access  Private (Admin)
 const createCouponByAdmin = async (req, res) => {
-  const { 
-    code, 
-    discountType, 
-    discountValue, 
-    active, 
-    expirationDate, 
-    appliesTo, 
-    targetId, 
-    minPurchase, 
-    maxRedemptions, 
-    restrictedMembershipTier, 
+  const {
+    code,
+    discountType,
+    discountValue,
+    active,
+    expirationDate,
+    appliesTo,
+    targetId,
+    minPurchase,
+    maxRedemptions,
+    restrictedMembershipTier,
     restrictedCountry,
     autoGenerate
   } = req.body;
@@ -339,18 +341,18 @@ const createCouponByAdmin = async (req, res) => {
 // @access  Private (Admin)
 const updateCouponByAdmin = async (req, res) => {
   const { id } = req.params;
-  const { 
-    code, 
-    discountType, 
-    discountValue, 
-    active, 
-    expirationDate, 
-    appliesTo, 
-    targetId, 
-    minPurchase, 
-    maxRedemptions, 
-    restrictedMembershipTier, 
-    restrictedCountry 
+  const {
+    code,
+    discountType,
+    discountValue,
+    active,
+    expirationDate,
+    appliesTo,
+    targetId,
+    minPurchase,
+    maxRedemptions,
+    restrictedMembershipTier,
+    restrictedCountry
   } = req.body;
 
   try {
@@ -423,7 +425,7 @@ const getCouponStatsByAdmin = async (req, res) => {
     coupons.forEach(coupon => {
       if (!coupon.active) {
         expiredCount++; // count deactivated as expired/inactive
-      } else if (coupon.expiration_date && new Date(coupon.expiration_date) < now) {
+      } else if (coupon.expiration_date && new Date(new Date(coupon.expiration_date).setUTCHours(23, 59, 59, 999)) < now) {
         expiredCount++;
       } else {
         activeCount++;

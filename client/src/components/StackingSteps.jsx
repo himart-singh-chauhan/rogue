@@ -69,7 +69,7 @@ export default function StackingSteps() {
         height: '100vh',
         position: 'sticky',
         top: 0,
-        background: `linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), url('/image copy 2.png') no-repeat center center / cover`,
+        background: `linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), url('/images/sketch-banner.webp') no-repeat center center / cover`,
         display: 'grid',
         placeContent: 'center',
         overflow: 'hidden',
@@ -195,7 +195,7 @@ export default function StackingSteps() {
 
               {/* Main Image */}
               <div style={{ position: 'relative', height: '85%', width: 'auto', display: 'flex', alignItems: 'flex-end' }}>
-                <img 
+                <img loading="lazy" decoding="async" 
                   src={s.img} 
                   alt={s.tag} 
                   style={{ 
@@ -227,7 +227,7 @@ export default function StackingSteps() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'rgba(255,106,0,0.1)', border: '1px solid rgba(255,106,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                <img src="/image.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'translateY(6px)' }} />
+                <img loading="lazy" decoding="async" src="/images/logo-mascot.webp" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'translateY(6px)' }} />
               </div>
               <div>
                 <h4 style={{ fontSize: 16, fontWeight: 800, marginBottom: 2 }}>{s.footerTitle}</h4>

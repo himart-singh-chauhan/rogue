@@ -37,10 +37,15 @@ const createChallenge = async (req, res) => {
       finalVideoUrl = youtubeUrl;
     } else if (req.files && req.files.videoFile && req.files.videoFile[0]) {
       finalVideoUrl = req.files.videoFile[0].url || `${baseUrl}/uploads/videos/${req.files.videoFile[0].filename}`;
+    } else if (req.body.videoUrl) {
+      // already uploaded straight to storage via /api/uploads/sign
+      finalVideoUrl = req.body.videoUrl;
     }
 
     if (req.files && req.files.thumbnailImage && req.files.thumbnailImage[0]) {
       finalThumbnailUrl = req.files.thumbnailImage[0].url || `${baseUrl}/uploads/thumbnails/${req.files.thumbnailImage[0].filename}`;
+    } else if (req.body.thumbnailUrl) {
+      finalThumbnailUrl = req.body.thumbnailUrl;
     }
 
     if (!title || !description) {
@@ -103,10 +108,15 @@ const updateChallenge = async (req, res) => {
       const url = req.files.videoFile[0].url || `${baseUrl}/uploads/videos/${req.files.videoFile[0].filename}`;
       updateData.video_url = url;
       updateData.evidence_url = url;
+    } else if (req.body.videoUrl) {
+      updateData.video_url = req.body.videoUrl;
+      updateData.evidence_url = req.body.videoUrl;
     }
 
     if (req.files && req.files.thumbnailImage && req.files.thumbnailImage[0]) {
       updateData.thumbnail_url = req.files.thumbnailImage[0].url || `${baseUrl}/uploads/thumbnails/${req.files.thumbnailImage[0].filename}`;
+    } else if (req.body.thumbnailUrl) {
+      updateData.thumbnail_url = req.body.thumbnailUrl;
     }
 
     const { data: updatedChallenge, error } = await supabase
@@ -149,7 +159,7 @@ const deleteChallenge = async (req, res) => {
 const toggleFeatureChallenge = async (req, res) => {
   const { id } = req.params;
   const { isFeatured } = req.body;
-  
+
   try {
     const { data, error } = await supabase
       .from('records')

@@ -340,7 +340,7 @@ const VideoManagement = () => {
                         <div className="flex items-center gap-3">
                           {video.thumbnail_url && video.thumbnail_url !== "pending_upload" && (
                             <div style={{ width: '40px', height: '40px', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}>
-                              <img 
+                              <img loading="lazy" decoding="async" 
                                 src={formatProductImage(video.thumbnail_url)} 
                                 alt={video.title}
                                 className="w-12 h-12 rounded object-cover"

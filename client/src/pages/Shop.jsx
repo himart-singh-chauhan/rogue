@@ -135,7 +135,7 @@ const Shop = () => {
 
         {/* HERO SECTION */}
         <header style={{ position: "relative", height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", margin: "20px 2.5%", borderRadius: "40px", marginTop: "20px" }}>
-          <img
+          <img loading="lazy" decoding="async"
             src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"
             alt="Rogue Gear Shop"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }}
@@ -247,7 +247,7 @@ const Shop = () => {
                   }}
                 >
                   <div style={{ position: "relative", height: "220px" }}>
-                    <img src={product.img} alt={product.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img loading="lazy" decoding="async" src={product.img} alt={product.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     <div style={{ position: "absolute", top: "16px", right: "16px", background: "#FF6A00", color: "white", padding: "4px 12px", borderRadius: "8px", fontSize: "9px", fontWeight: "900" }}>
                       {product.badge}
                     </div>
@@ -302,7 +302,7 @@ const Shop = () => {
             boxShadow: "0 40px 80px rgba(0,0,0,0.8)"
           }}>
             {/* Background Image - Using a placeholder until the final asset is added to the repo */}
-            <img 
+            <img loading="lazy" decoding="async" 
               src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1600&q=80" 
               alt="Elite Member" 
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} 

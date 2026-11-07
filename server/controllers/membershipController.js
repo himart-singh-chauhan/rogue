@@ -75,8 +75,11 @@ const getTierConfigs = async (req, res) => {
 
 const getAllMemberships = async (req, res) => {
   try {
-    const { tier, status, page = 1, limit = 20, search = '' } = req.query;
+    const { tier, status } = req.query;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 500);
     const offset = (page - 1) * limit;
+    const search = String(req.query.search || '').replace(/[,()*%\\]/g, ' ').trim();
 
     let query = supabase
       .from('memberships')
@@ -100,7 +103,7 @@ const getAllMemberships = async (req, res) => {
         return res.json({
           memberships: [],
           total: 0,
-          page: parseInt(page),
+          page,
           pages: 0
         });
       }
@@ -110,12 +113,12 @@ const getAllMemberships = async (req, res) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (error) throw error;
+    if (error && error.code !== 'PGRST103') throw error;
 
     res.json({
-      memberships: memberships.map(getFormattedMembership),
+      memberships: (memberships || []).map(getFormattedMembership),
       total: count || 0,
-      page: parseInt(page),
+      page,
       pages: Math.ceil((count || 0) / limit)
     });
   } catch (error) {
@@ -125,6 +128,10 @@ const getAllMemberships = async (req, res) => {
 
 const getUserMembership = async (req, res) => {
   try {
+    // Users may only read their own membership; admins may read anyone's.
+    if (!req.user.is_admin && String(req.user.id) !== String(req.params.userId)) {
+      return res.status(403).json({ message: 'Not authorized to view this membership' });
+    }
     const { data: membership, error } = await supabase
       .from('memberships')
       .select('*, user:users(id, name, email)')
@@ -137,9 +144,9 @@ const getUserMembership = async (req, res) => {
     if (!membership) {
       const { data: user } = await supabase
         .from('users')
-        .select('*')
+        .select('id, name, email')
         .eq('id', req.params.userId)
-        .single();
+        .maybeSingle();
 
       return res.json({
         tier: 'free',
@@ -259,7 +266,8 @@ const updateMembership = async (req, res) => {
       updates.tier = tier;
       updates.submission_limit = tierConfig.submissionLimit;
       updates.features = tierConfig.features;
-      updates.renewal_price = tierConfig.renewal_price;
+      updates.renewal_price = tierConfig.renewalPrice;
+      updates.price = tierConfig.price;
     }
 
     if (typeof autoRenew !== 'undefined') updates.auto_renew = autoRenew;
@@ -475,7 +483,7 @@ const getMembershipStats = async (req, res) => {
     res.json({
       byTier: byTierArray,
       byStatus: byStatusArray,
-      totalRevenue: [{ _id: null, total: totalRevenue }]
+      totalRevenue: Math.round(totalRevenue * 100) / 100
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching stats', error: error.message });

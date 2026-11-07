@@ -93,12 +93,12 @@ const Cart = () => {
   const handleCardNumberChange = (e) => {
     const raw = e.target.value.replace(/\D/g, "");
     const isAmex = raw.startsWith("34") || raw.startsWith("37");
-    const isStandard = raw.startsWith("4") || 
-                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(raw) || 
+    const isStandard = raw.startsWith("4") ||
+                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(raw) ||
                        /^(6011|622|64[4-9]|65)/.test(raw);
     const maxLength = isAmex ? 15 : (isStandard ? 16 : 19);
     const limited = raw.substring(0, maxLength);
-    
+
     if (isAmex) {
       setCardNumber(formatAmex(limited));
     } else {
@@ -152,8 +152,8 @@ const Cart = () => {
     }
 
     const isAmex = cleanCard.startsWith("34") || cleanCard.startsWith("37");
-    const isStandard = cleanCard.startsWith("4") || 
-                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(cleanCard) || 
+    const isStandard = cleanCard.startsWith("4") ||
+                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(cleanCard) ||
                        /^(6011|622|64[4-9]|65)/.test(cleanCard);
 
     if (isAmex) {
@@ -244,7 +244,7 @@ const Cart = () => {
         })),
         checkoutType: "shop",
         userId: user?.id || null
-      });
+      }, user?.token);
 
       if (response && response.valid) {
         setAppliedCoupon(response);
@@ -256,23 +256,11 @@ const Cart = () => {
         setCouponMessage(`✗ ${response?.message || "Invalid coupon code."}`);
       }
     } catch (err) {
+      // apiCall throws on 4xx, so the server's reason ("expired", "minimum purchase"...) arrives here.
       console.error("Error applying coupon:", err);
-      // Hardcoded fallback for offline database testing/graceful path
-      if (coupon.toUpperCase() === "ROGUE20" || coupon.toUpperCase() === "ELITE20") {
-        const fallbackDiscount = subtotal * 0.20;
-        setAppliedCoupon({
-          code: coupon.toUpperCase(),
-          discountType: "percentage",
-          discountValue: 20,
-          discountAmount: fallbackDiscount
-        });
-        setDiscount(fallbackDiscount);
-        setCouponMessage("✓ 20% OFFLINE FALLBACK DISCOUNT APPLIED!");
-      } else {
-        setAppliedCoupon(null);
-        setDiscount(0);
-        setCouponMessage("✗ Validation failed. Coupon database offline.");
-      }
+      setAppliedCoupon(null);
+      setDiscount(0);
+      setCouponMessage(`✗ ${err.message && err.message !== "Something went wrong" ? err.message : "Could not validate this coupon right now."}`);
     }
   };
 
@@ -307,25 +295,25 @@ const Cart = () => {
           </Link>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: "60px" }}>
-            
+
             {/* ITEM LIST */}
             <div>
               <h1 style={{ fontSize: "40px", fontWeight: "950", textTransform: "uppercase", marginBottom: "40px" }}>YOUR SHOPPING <span style={{ color: "#FF6A00" }}>BAG</span></h1>
-              
+
               {items.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                   {items.map(item => {
                     const uniqueKey = `${item.id}-${item.size || ""}-${item.color || ""}`;
                     return (
                       <div key={uniqueKey} style={{ background: "#161616", borderRadius: "24px", padding: "24px", display: "flex", gap: "24px", border: "1px solid rgba(255,255,255,0.05)", transition: "all 0.3s ease" }}>
-                        <img src={formatProductImage(item.img)} alt={item.title} style={{ width: "120px", height: "120px", borderRadius: "16px", objectFit: "cover" }} />
+                        <img loading="lazy" decoding="async" src={formatProductImage(item.img)} alt={item.title} style={{ width: "120px", height: "120px", borderRadius: "16px", objectFit: "cover" }} />
                         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "flex-start" }}>
                               <h3 style={{ fontSize: "18px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "-0.01em" }}>{item.title}</h3>
                               <div style={{ fontSize: "18px", fontWeight: "900", color: "#FF6A00" }}>${(item.price * item.qty).toFixed(2)}</div>
                             </div>
-                            
+
                             {/* Selected Options Label */}
                             {(item.size || item.color) && (
                               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -359,20 +347,20 @@ const Cart = () => {
                               </button>
                             </div>
 
-                            <button 
+                            <button
                               type="button"
                               onClick={() => removeItem(item.id, item.size, item.color)}
-                              style={{ 
-                                background: "rgba(255,255,255,0.03)", 
-                                border: "1px solid rgba(255,255,255,0.05)", 
-                                color: "rgba(255,255,255,0.5)", 
+                              style={{
+                                background: "rgba(255,255,255,0.03)",
+                                border: "1px solid rgba(255,255,255,0.05)",
+                                color: "rgba(255,255,255,0.5)",
                                 padding: "8px 16px",
                                 borderRadius: "10px",
-                                cursor: "pointer", 
-                                display: "flex", 
-                                alignItems: "center", 
-                                gap: "8px", 
-                                fontSize: "11px", 
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                fontSize: "11px",
                                 fontWeight: "800",
                                 transition: "all 0.2s"
                               }}
@@ -409,7 +397,7 @@ const Cart = () => {
             {/* SUMMARY */}
             <div style={{ background: "#161616", borderRadius: "32px", padding: "40px", height: "fit-content", border: "1px solid rgba(255,255,255,0.05)" }}>
               <h2 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "32px" }}>ORDER SUMMARY</h2>
-              
+
               <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
                 {items.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px", paddingBottom: "16px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -458,37 +446,37 @@ const Cart = () => {
                   If you currently have a coupon code, you can place it here and redeem it.
                 </p>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <input 
-                    type="text" 
-                    placeholder="ROGUE20" 
+                  <input
+                    type="text"
+                    placeholder="ROGUE20"
                     value={coupon}
                     onChange={(e) => setCoupon(e.target.value)}
-                    style={{ 
-                      flex: 1, 
-                      background: "rgba(0,0,0,0.3)", 
-                      border: "1px solid rgba(255,255,255,0.05)", 
-                      borderRadius: "12px", 
-                      padding: "12px 16px", 
-                      color: "white", 
-                      fontSize: "13px", 
-                      fontWeight: "700", 
-                      outline: "none" 
+                    style={{
+                      flex: 1,
+                      background: "rgba(0,0,0,0.3)",
+                      border: "1px solid rgba(255,255,255,0.05)",
+                      borderRadius: "12px",
+                      padding: "12px 16px",
+                      color: "white",
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      outline: "none"
                     }}
                   />
-                  <button 
+                  <button
                     type="button"
                     onClick={applyCoupon}
-                    style={{ 
-                      background: "#FF6A00", 
-                      color: "white", 
-                      border: "none", 
-                      borderRadius: "12px", 
-                      padding: "12px 24px", 
-                      fontSize: "12px", 
-                      fontWeight: "900", 
-                      textTransform: "uppercase", 
+                    style={{
+                      background: "#FF6A00",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "12px",
+                      padding: "12px 24px",
+                      fontSize: "12px",
+                      fontWeight: "900",
+                      textTransform: "uppercase",
                       cursor: "pointer",
-                      transition: "all 0.2s" 
+                      transition: "all 0.2s"
                     }}
                   >
                     REDEEM
@@ -501,7 +489,7 @@ const Cart = () => {
                 )}
               </div>
 
-              <button 
+              <button
                 onClick={() => {
                   if (items.length > 0) {
                     setCardholderName("");
@@ -513,33 +501,33 @@ const Cart = () => {
                   }
                 }}
 
-                style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: items.length > 0 ? "pointer" : "not-allowed", opacity: items.length > 0 ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", transition: "all 0.3s" }} 
-                onMouseEnter={e => { if(items.length > 0) { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 10px 30px rgba(255,106,0,0.3)"; } }} 
+                style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: items.length > 0 ? "pointer" : "not-allowed", opacity: items.length > 0 ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", transition: "all 0.3s" }}
+                onMouseEnter={e => { if(items.length > 0) { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 10px 30px rgba(255,106,0,0.3)"; } }}
                 onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
               >
                 CHECKOUT <ChevronRight size={18} />
               </button>
 
               <Link to="/shop" style={{ textDecoration: "none" }}>
-                <button 
+                <button
                   type="button"
-                  style={{ 
-                    width: "100%", 
-                    background: "rgba(255,255,255,0.03)", 
-                    border: "1px solid rgba(255,255,255,0.05)", 
-                    color: "white", 
-                    borderRadius: "100px", 
-                    padding: "16px", 
-                    fontSize: "13px", 
-                    fontWeight: "900", 
-                    textTransform: "uppercase", 
-                    cursor: "pointer", 
-                    display: "flex", 
-                    alignItems: "center", 
-                    justifyContent: "center", 
-                    gap: "8px", 
+                  style={{
+                    width: "100%",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.05)",
+                    color: "white",
+                    borderRadius: "100px",
+                    padding: "16px",
+                    fontSize: "13px",
+                    fontWeight: "900",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
                     marginTop: "16px",
-                    transition: "all 0.3s" 
+                    transition: "all 0.3s"
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.background = "rgba(255,255,255,0.08)";
@@ -564,7 +552,7 @@ const Cart = () => {
         {showCheckout && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "20px" }}>
             <div style={{ background: "#161616", border: "1px solid rgba(255, 106, 0, 0.2)", borderRadius: "32px", width: "100%", maxWidth: "500px", padding: "40px", position: "relative", boxShadow: "0 30px 60px rgba(0, 0, 0, 0.8), 0 0 100px rgba(255, 106, 0, 0.05)", color: "white", maxHeight: "90vh", overflowY: "auto" }}>
-              <button 
+              <button
                 type="button"
                 onClick={() => { setShowCheckout(false); setIsSuccess(false); setIsProcessing(false); }}
                 style={{ position: "absolute", top: "24px", right: "24px", background: "rgba(255,255,255,0.05)", border: "none", borderRadius: "50%", width: "36px", height: "36px", display: "flex", alignItems: "center", justifyContent: "center", color: "white", cursor: "pointer", fontWeight: "bold", fontSize: "16px" }}
@@ -581,7 +569,7 @@ const Cart = () => {
                     {(() => {
                       const hasPass = items.some(item => item.title.toLowerCase().includes("spectator pass"));
                       const hasOtherItems = items.some(item => !item.title.toLowerCase().includes("spectator pass"));
-                      
+
                       if (hasPass && !hasOtherItems) {
                         return successMessages.msg_spectator;
                       } else if (!hasPass && hasOtherItems) {
@@ -617,7 +605,7 @@ const Cart = () => {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => { setShowCheckout(false); setIsSuccess(false); setItems([]); localStorage.removeItem("rogue_cart_items"); }}
                     style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", boxShadow: "0 10px 20px rgba(255,106,0,0.3)" }}
@@ -632,11 +620,11 @@ const Cart = () => {
                   <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Verifying card details with payment gateway...</p>
                 </div>
               ) : (
-                <form 
+                <form
                   onSubmit={async (e) => {
                     e.preventDefault();
                     setFormError("");
-                    
+
                     const validationErr = validateCardDetails();
                     if (validationErr) {
                       setFormError(validationErr);
@@ -743,7 +731,7 @@ const Cart = () => {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", boxShadow: "0 10px 20px rgba(255,106,0,0.3)", marginTop: "8px" }}
                   >

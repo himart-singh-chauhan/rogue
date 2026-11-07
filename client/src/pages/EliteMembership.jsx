@@ -24,7 +24,7 @@ import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { apiCall } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -213,22 +213,9 @@ const EliteMembership = () => {
       }
     } catch (err) {
       console.error("Error applying membership coupon:", err);
-      // Hardcoded fallback
-      if (coupon.toUpperCase() === "ELITE20" || coupon.toUpperCase() === "ROGUE20") {
-        const fallbackDiscount = originalPrice * 0.20;
-        setAppliedCoupon({
-          code: coupon.toUpperCase(),
-          discountType: "percentage",
-          discountValue: 20,
-          discountAmount: fallbackDiscount
-        });
-        setDiscount(fallbackDiscount);
-        setCouponMessage("✓ 20% OFFLINE FALLBACK DISCOUNT APPLIED!");
-      } else {
-        setAppliedCoupon(null);
-        setDiscount(0);
-        setCouponMessage("✗ Validation failed. Coupon database offline.");
-      }
+      setAppliedCoupon(null);
+      setDiscount(0);
+      setCouponMessage(`✗ ${err.message && err.message !== "Something went wrong" ? err.message : "Could not validate this coupon right now."}`);
     }
   };
 

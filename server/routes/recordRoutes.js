@@ -11,7 +11,7 @@ const {
   processCheckout,
   toggleRecordFeatured,
 } = require('../controllers/recordController');
-const { protect, admin } = require('../middleware/authMiddleware');
+const { protect, admin, optionalAuth } = require('../middleware/authMiddleware');
 const { thumbnailUpload, videoUpload } = require('../config/upload');
 const { uploadThumbnail, uploadVideoFile } = require('../controllers/videoUploadController');
 
@@ -28,7 +28,7 @@ router.put('/:id/featured', protect, admin, toggleRecordFeatured);
 router.post('/upload/image', protect, thumbnailUpload.single('image'), uploadThumbnail);
 router.post('/upload/video', protect, videoUpload.single('video'), uploadVideoFile);
 
-router.get('/:id', getRecordById);
+router.get('/:id', optionalAuth, getRecordById);
 router.post('/', protect, createRecord);
 router.post('/:id/checkout', protect, processCheckout);
 

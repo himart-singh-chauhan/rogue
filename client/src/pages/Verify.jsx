@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ArrowRight, 
-  ArrowLeft, 
-  Shield, 
-  User, 
-  IdCard, 
-  Globe, 
-  Dumbbell, 
-  Timer, 
-  Zap, 
+import { motion, AnimatePresence } from "motion/react";
+import {
+  ArrowRight,
+  ArrowLeft,
+  FileText,
+  Shield,
+  User,
+  IdCard,
+  Globe,
+  Dumbbell,
+  Timer,
+  Zap,
   Crosshair,
   MapPin,
   ClipboardCheck,
@@ -36,7 +37,10 @@ import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import { Link, useNavigate } from "react-router-dom";
 import ScrollReveal from "../components/ScrollReveal";
-import { API_URL, apiCall } from "../utils/api";
+import { API_URL, apiCall, uploadDirect } from "../utils/api";
+
+// Supabase free plan: 50 MB per file. Bigger footage should be submitted as a YouTube / Vimeo link.
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 import { useAuth } from "../context/AuthContext";
 import {
   DropdownMenu,
@@ -156,7 +160,6 @@ const Verify = () => {
     }
   }, [user, authLoading, navigate]);
 
-  if (authLoading || !user) return null;
 
   const [formData, setFormData] = useState({
     // Section 1
@@ -168,7 +171,7 @@ const Verify = () => {
     phone: "",
     country: "UNITED STATES",
     socialMedia: "",
-    
+
     // Section 2
     recordTitle: "",
     category: "Strength",
@@ -177,7 +180,7 @@ const Verify = () => {
     attemptType: "NEW_RECORD", // NEW_RECORD, BREAK_RECORD, NEW_PROPOSAL
     currentRecordHolder: "",
     currentRecordValue: "",
-    
+
     // Section 3
     date: "",
     time: "",
@@ -185,26 +188,26 @@ const Verify = () => {
     city: "",
     resultScore: "",
     measurementType: "TIME",
-    unit: "H:M:S", 
+    unit: "H:M:S",
     explanation: "",
-    
+
     // Section 4
     equipment: "",
-    
+
     // Section 5
     witnesses: [
       { name: "", contact: "", role: "", showOther: false, otherValue: "", signed: false }
     ],
-    
+
     // Section 6 (Evidence)
     youtubeLink: "",
-    
+
     // Section 7 (Safety)
     safetyConfirmed: false,
     noIllegalActivity: false,
     authenticEvidence: false,
     followedRules: false,
-    
+
     // Section 8
     declarationSigned: false,
     declarationDate: new Date().toISOString().split('T')[0],
@@ -271,37 +274,21 @@ const Verify = () => {
       let uploadedImageUrl = "pending_upload";
       let uploadedVideoUrl = "pending_upload";
 
-      // Upload image evidence if present
+      // Files go straight from the browser to storage (signed URL). Any failure stops the
+      // submission with a clear message instead of saving a record without its evidence.
       if (uploadedFiles.images && uploadedFiles.images.length > 0) {
-        const formDataObj = new FormData();
-        formDataObj.append('image', uploadedFiles.images[0]);
-        const imgRes = await fetch(`${API_URL}/records/upload/image`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${user.token}`
-          },
-          body: formDataObj
-        });
-        const imgData = await imgRes.json();
-        if (imgData.url) {
-          uploadedImageUrl = imgData.url;
+        try {
+          uploadedImageUrl = await uploadDirect(uploadedFiles.images[0], 'record-image', user.token);
+        } catch (uploadErr) {
+          throw new Error(`Photo upload failed: ${uploadErr.message}`);
         }
       }
-      
-      // Upload video evidence if present
+
       if (uploadedFiles.video) {
-        const formDataObj = new FormData();
-        formDataObj.append('video', uploadedFiles.video);
-        const vidRes = await fetch(`${API_URL}/records/upload/video`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${user.token}`
-          },
-          body: formDataObj
-        });
-        const vidData = await vidRes.json();
-        if (vidData.url) {
-          uploadedVideoUrl = vidData.url;
+        try {
+          uploadedVideoUrl = await uploadDirect(uploadedFiles.video, 'record-video', user.token);
+        } catch (uploadErr) {
+          throw new Error(`Video upload failed: ${uploadErr.message}`);
         }
       }
 
@@ -368,11 +355,11 @@ const Verify = () => {
         if (currentProgress >= 100) {
           currentProgress = 100;
           clearInterval(interval);
-          
+
           // Evaluate outcome
           const hasVideo = uploadedFiles.video || (formData.youtubeLink && formData.youtubeLink.trim() !== "");
           const isMissingFields = !formData.fullName || !formData.recordTitle || !formData.resultScore || !formData.venueName || !formData.explanation || !hasVideo;
-          
+
           if (isMissingFields) {
             setAuditOutcome("incomplete");
             setAuditConfidence(45.5);
@@ -388,10 +375,10 @@ const Verify = () => {
             const isUnrealisticScore = scoreVal > 10000 || scoreVal <= 0 || isNaN(scoreVal);
             const hasUnsignedWitness = formData.witnesses.some(w => !w.signed);
             const suspiciousKeywords = ['fake', 'cheat', 'test', 'hack', 'bypass'];
-            const hasSuspiciousText = suspiciousKeywords.some(kw => 
+            const hasSuspiciousText = suspiciousKeywords.some(kw =>
               formData.recordTitle.toLowerCase().includes(kw) || formData.explanation.toLowerCase().includes(kw)
             );
-            
+
             if (isUnrealisticScore || hasSuspiciousText) {
               setAuditOutcome("failed");
               setAuditConfidence(38.2);
@@ -399,7 +386,7 @@ const Verify = () => {
               const reasons = [];
               if (isUnrealisticScore) reasons.push("Anomalous performance score detected");
               if (hasSuspiciousText) reasons.push("Suspicious attempt keyword flag");
-              
+
               setAuditLogs(prev => [
                 ...prev,
                 "[Biometrics] Analyzing frame rate and spatial coordinates...",
@@ -531,6 +518,17 @@ const Verify = () => {
         setValidationError("Please upload a primary video or provide a valid video link to continue.");
         return false;
       }
+      if (uploadedFiles.video) {
+        const v = uploadedFiles.video;
+        if (!["video/mp4", "video/webm", "video/quicktime"].includes(v.type)) {
+          setValidationError("Please upload an MP4, WEBM or MOV video, or provide a YouTube / Vimeo link.");
+          return false;
+        }
+        if (v.size > MAX_VIDEO_BYTES) {
+          setValidationError(`This video is larger than ${MAX_VIDEO_BYTES / 1048576} MB. Please upload a shorter clip or provide an unlisted YouTube / Vimeo link.`);
+          return false;
+        }
+      }
     }
 
     // Standard HTML5 validation check
@@ -595,20 +593,22 @@ const Verify = () => {
     setFormData({ ...formData, witnesses: newWitnesses });
   };
 
+  if (authLoading || !user) return null;
+
   return (
     <PageTransition>
-      <div style={{ 
-        background: "#0A0A0A", 
-        color: "white", 
-        minHeight: "100vh", 
+      <div style={{
+        background: "#0A0A0A",
+        color: "white",
+        minHeight: "100vh",
         fontFamily: "'Inter', sans-serif",
         display: "flex",
         flexDirection: "column"
       }}>
         <Navbar />
 
-        <div style={{ 
-          padding: "180px 5% 120px", 
+        <div style={{
+          padding: "180px 5% 120px",
           flex: 1,
           display: "flex",
           flexDirection: "column",
@@ -616,7 +616,7 @@ const Verify = () => {
         }}>
           {/* GLOBAL PROGRESS BAR (TOP) */}
           <div style={{ position: "fixed", top: "0", left: "0", width: "100%", height: "4px", background: "rgba(255,255,255,0.05)", zIndex: 100 }}>
-            <motion.div 
+            <motion.div
               animate={{ width: `${(step / totalSteps) * 100}%` }}
               transition={{ duration: 0.5 }}
               style={{ height: "100%", background: "#FF6A00", boxShadow: "0 0 10px #FF6A00" }}
@@ -626,7 +626,7 @@ const Verify = () => {
           <div style={{ maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
             <AnimatePresence mode="wait">
               {isSubmitted ? (
-                <motion.div 
+                <motion.div
                   key="success"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -677,9 +677,9 @@ const Verify = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>FULL LEGAL NAME</label>
-                          <input 
-                            type="text" 
-                            placeholder="AS APPEARS ON PASSPORT" 
+                          <input
+                            type="text"
+                            placeholder="AS APPEARS ON PASSPORT"
                             value={formData.fullName}
                             onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                             required
@@ -688,9 +688,9 @@ const Verify = () => {
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>USERNAME / PROFILE NAME</label>
-                          <input 
-                            type="text" 
-                            placeholder="ATHLETE HANDLE" 
+                          <input
+                            type="text"
+                            placeholder="ATHLETE HANDLE"
                             value={formData.username}
                             onChange={(e) => setFormData({...formData, username: e.target.value})}
                             required
@@ -702,8 +702,8 @@ const Verify = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>DATE OF BIRTH</label>
-                          <input 
-                            type="date" 
+                          <input
+                            type="date"
                             max={new Date().toISOString().split('T')[0]}
                             value={formData.dob}
                             onChange={(e) => setFormData({...formData, dob: e.target.value})}
@@ -781,9 +781,9 @@ const Verify = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>EMAIL ADDRESS</label>
-                          <input 
-                            type="email" 
-                            placeholder="OFFICIAL CONTACT EMAIL" 
+                          <input
+                            type="email"
+                            placeholder="OFFICIAL CONTACT EMAIL"
                             value={formData.email}
                             onChange={(e) => setFormData({...formData, email: e.target.value})}
                             required
@@ -792,9 +792,9 @@ const Verify = () => {
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>PHONE NUMBER</label>
-                          <input 
-                            type="tel" 
-                            placeholder="+X XXX XXX XXXX" 
+                          <input
+                            type="tel"
+                            placeholder="+X XXX XXX XXXX"
                             value={formData.phone}
                             onChange={(e) => setFormData({...formData, phone: e.target.value})}
                             required
@@ -860,9 +860,9 @@ const Verify = () => {
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>SOCIAL MEDIA (OPTIONAL)</label>
-                          <input 
-                            type="text" 
-                            placeholder="@INSTAGRAM / X / FB" 
+                          <input
+                            type="text"
+                            placeholder="@INSTAGRAM / X / FB"
                             value={formData.socialMedia}
                             onChange={(e) => setFormData({...formData, socialMedia: e.target.value})}
                             style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "16px", padding: "18px 24px", color: "white", fontSize: "14px", outline: "none" }}
@@ -891,21 +891,21 @@ const Verify = () => {
                           </div>
                         )}
                         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "40px" }}>
-                          <button 
+                          <button
                             onClick={nextStep}
-                            style={{ 
-                              background: "#FF6A00", 
-                              color: "white", 
-                              border: "none", 
-                              borderRadius: "100px", 
-                              padding: "16px 40px", 
-                              fontSize: "14px", 
-                              fontWeight: "900", 
-                              textTransform: "uppercase", 
-                              cursor: "pointer", 
-                              display: "flex", 
-                              alignItems: "center", 
-                              gap: "10px", 
+                            style={{
+                              background: "#FF6A00",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "100px",
+                              padding: "16px 40px",
+                              fontSize: "14px",
+                              fontWeight: "900",
+                              textTransform: "uppercase",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
                               boxShadow: "0 20px 40px rgba(255, 106, 0, 0.2)",
                               transition: "all 0.3s"
                             }}
@@ -934,9 +934,9 @@ const Verify = () => {
                           {/* RECORD TITLE */}
                           <div>
                             <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>RECORD TITLE</label>
-                            <input 
-                              type="text" 
-                              placeholder="E.G. MOST PUSH-UPS IN ONE MINUTE" 
+                            <input
+                              type="text"
+                              placeholder="E.G. MOST PUSH-UPS IN ONE MINUTE"
                               value={formData.recordTitle}
                               onChange={(e) => setFormData({...formData, recordTitle: e.target.value})}
                               required
@@ -985,7 +985,7 @@ const Verify = () => {
                                         onClick={() => {
                                           const groups = Object.keys(categoriesData[cat]);
                                           setFormData({
-                                            ...formData, 
+                                            ...formData,
                                             category: cat,
                                             subCategoryGroup: groups[0],
                                             subCategory: categoriesData[cat][groups[0]][0]
@@ -1046,7 +1046,7 @@ const Verify = () => {
                                         key={group}
                                         onClick={() => {
                                           setFormData({
-                                            ...formData, 
+                                            ...formData,
                                             subCategoryGroup: group,
                                             subCategory: categoriesData[formData.category][group][0]
                                           });
@@ -1137,10 +1137,10 @@ const Verify = () => {
                                 <button
                                   key={type.id}
                                   onClick={() => setFormData({...formData, attemptType: type.id})}
-                                  style={{ 
-                                    padding: "16px", 
-                                    background: formData.attemptType === type.id ? "rgba(255,106,0,0.1)" : "rgba(255,255,255,0.03)", 
-                                    border: formData.attemptType === type.id ? "1px solid #FF6A00" : "1px solid rgba(255,255,255,0.08)", 
+                                  style={{
+                                    padding: "16px",
+                                    background: formData.attemptType === type.id ? "rgba(255,106,0,0.1)" : "rgba(255,255,255,0.03)",
+                                    border: formData.attemptType === type.id ? "1px solid #FF6A00" : "1px solid rgba(255,255,255,0.08)",
                                     borderRadius: "12px",
                                     color: formData.attemptType === type.id ? "#FF6A00" : "white",
                                     fontSize: "11px",
@@ -1165,10 +1165,10 @@ const Verify = () => {
                                 transition={{ duration: 0.3 }}
                                 style={{ overflow: "hidden" }}
                               >
-                                <div style={{ 
-                                  background: "rgba(255, 106, 0, 0.02)", 
-                                  border: "1px dashed rgba(255, 106, 0, 0.3)", 
-                                  borderRadius: "20px", 
+                                <div style={{
+                                  background: "rgba(255, 106, 0, 0.02)",
+                                  border: "1px dashed rgba(255, 106, 0, 0.3)",
+                                  borderRadius: "20px",
                                   padding: "24px",
                                   display: "grid",
                                   gridTemplateColumns: "1fr 1fr",
@@ -1183,9 +1183,9 @@ const Verify = () => {
                                     <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                                       CURRENT HOLDER'S NAME
                                     </label>
-                                    <input 
-                                      type="text" 
-                                      placeholder="E.G. JOHN DOE" 
+                                    <input
+                                      type="text"
+                                      placeholder="E.G. JOHN DOE"
                                       value={formData.currentRecordHolder}
                                       onChange={(e) => setFormData({...formData, currentRecordHolder: e.target.value})}
                                       style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", fontSize: "14px", outline: "none" }}
@@ -1195,9 +1195,9 @@ const Verify = () => {
                                     <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                                       CURRENT RECORD SCORE / VALUE
                                     </label>
-                                    <input 
-                                      type="text" 
-                                      placeholder={`E.G. 500 (IN ${formData.unit})`} 
+                                    <input
+                                      type="text"
+                                      placeholder={`E.G. 500 (IN ${formData.unit})`}
                                       value={formData.currentRecordValue}
                                       onChange={(e) => setFormData({...formData, currentRecordValue: e.target.value})}
                                       style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", fontSize: "14px", outline: "none" }}
@@ -1212,9 +1212,9 @@ const Verify = () => {
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                             <div>
                               <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "white", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.1em" }}>RESULT OF NEW ATTEMPT</label>
-                              <input 
-                                type="text" 
-                                placeholder="E.G. 502.5" 
+                              <input
+                                type="text"
+                                placeholder="E.G. 502.5"
                                 value={formData.resultScore}
                                 onChange={(e) => setFormData({...formData, resultScore: e.target.value})}
                                 required
@@ -1376,17 +1376,17 @@ const Verify = () => {
                                 <input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} required style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", fontSize: "12px", colorScheme: "dark" }} />
                               </div>
                             </div>
-                            <input 
-                              type="text" placeholder="VENUE / FACILITY NAME" value={formData.venueName} 
+                            <input
+                              type="text" placeholder="VENUE / FACILITY NAME" value={formData.venueName}
                               onChange={(e) => setFormData({...formData, venueName: e.target.value})}
                               required
-                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", marginBottom: "12px" }} 
+                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", marginBottom: "12px" }}
                             />
-                            <input 
-                              type="text" placeholder="CITY / COUNTRY" value={formData.city} 
+                            <input
+                              type="text" placeholder="CITY / COUNTRY" value={formData.city}
                               onChange={(e) => setFormData({...formData, city: e.target.value})}
                               required
-                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                             />
                           </div>
 
@@ -1396,49 +1396,49 @@ const Verify = () => {
                               <MapPin size={18} color="#FF6A00" />
                               <span style={{ fontSize: "11px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "0.1em", color: "#FF6A00" }}>APPLICANT HOME ADDRESS</span>
                             </div>
-                            
+
                             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "8px", textTransform: "uppercase" }}>Street Address</label>
-                                <input 
-                                  type="text" 
-                                  placeholder="Enter Street Address" 
-                                  value={formData.streetAddress || ""} 
+                                <input
+                                  type="text"
+                                  placeholder="Enter Street Address"
+                                  value={formData.streetAddress || ""}
                                   onChange={(e) => setFormData({...formData, streetAddress: e.target.value})}
                                   required
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                 />
                               </div>
-                              
+
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                                 <div>
                                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "8px", textTransform: "uppercase" }}>Apartment / Unit Number (Optional)</label>
-                                  <input 
-                                    type="text" 
-                                    placeholder="e.g. Apt 4B" 
-                                    value={formData.apartment || ""} 
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Apt 4B"
+                                    value={formData.apartment || ""}
                                     onChange={(e) => setFormData({...formData, apartment: e.target.value})}
-                                    style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                    style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                   />
                                 </div>
                                 <div>
                                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "8px", textTransform: "uppercase" }}>City</label>
-                                  <input 
-                                    type="text" 
-                                    placeholder="Enter City" 
-                                    value={formData.cityAddress || ""} 
+                                  <input
+                                    type="text"
+                                    placeholder="Enter City"
+                                    value={formData.cityAddress || ""}
                                     onChange={(e) => setFormData({...formData, cityAddress: e.target.value})}
                                     required
-                                    style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                    style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                   />
                                 </div>
                               </div>
-                              
+
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                                 <div>
                                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "8px", textTransform: "uppercase" }}>Country</label>
-                                  <select 
-                                    value={formData.countryAddress || ""} 
+                                  <select
+                                    value={formData.countryAddress || ""}
                                     onChange={(e) => setFormData({...formData, countryAddress: e.target.value, stateAddress: ""})}
                                     required
                                     style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
@@ -1455,12 +1455,12 @@ const Verify = () => {
                                     <option value="Other">Other</option>
                                   </select>
                                 </div>
-                                
+
                                 <div>
                                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "8px", textTransform: "uppercase" }}>State / Province</label>
                                   {formData.countryAddress === "United States" ? (
-                                    <select 
-                                      value={formData.stateAddress || ""} 
+                                    <select
+                                      value={formData.stateAddress || ""}
                                       onChange={(e) => setFormData({...formData, stateAddress: e.target.value})}
                                       required
                                       style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
@@ -1518,24 +1518,24 @@ const Verify = () => {
                                       <option value="WY">Wyoming</option>
                                     </select>
                                   ) : (
-                                    <input 
-                                      type="text" 
-                                      placeholder="Select State" 
-                                      value={formData.stateAddress || ""} 
+                                    <input
+                                      type="text"
+                                      placeholder="Select State"
+                                      value={formData.stateAddress || ""}
                                       onChange={(e) => setFormData({...formData, stateAddress: e.target.value})}
                                       required
-                                      style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                      style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                     />
                                   )}
                                 </div>
                               </div>
-                              
+
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "8px", textTransform: "uppercase" }}>Zip / Postal Code</label>
-                                <input 
-                                  type="text" 
-                                  placeholder="Enter Zip / Postal Code" 
-                                  value={formData.zipCode || ""} 
+                                <input
+                                  type="text"
+                                  placeholder="Enter Zip / Postal Code"
+                                  value={formData.zipCode || ""}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     if (formData.countryAddress === "United States") {
@@ -1550,7 +1550,7 @@ const Verify = () => {
                                     }
                                   }}
                                   required
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                 />
                               </div>
                             </div>
@@ -1558,8 +1558,8 @@ const Verify = () => {
 
                           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "24px", padding: "32px" }}>
                             <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "#FF6A00", marginBottom: "20px", textTransform: "uppercase", letterSpacing: "0.1em" }}>EXPLAIN YOUR ATTEMPT</label>
-                            <textarea 
-                              placeholder="DESCRIBE THE PROCESS AND METHODS USED..." 
+                            <textarea
+                              placeholder="DESCRIBE THE PROCESS AND METHODS USED..."
                               value={formData.explanation}
                               onChange={(e) => setFormData({...formData, explanation: e.target.value})}
                               required
@@ -1611,11 +1611,11 @@ const Verify = () => {
                             <p style={{ fontSize: "12px", color: "white", marginBottom: "20px", lineHeight: "1.5" }}>
                               List all specialized gear, weights, or tools used during the attempt. Include calibration details if applicable.
                             </p>
-                            <textarea 
-                              placeholder="E.G. ROGUE OHIO BAR, 25KG CALIBRATED PLATES, OFFICIAL TIMER..." 
+                            <textarea
+                              placeholder="E.G. ROGUE OHIO BAR, 25KG CALIBRATED PLATES, OFFICIAL TIMER..."
                               value={formData.equipment}
                               onChange={(e) => setFormData({...formData, equipment: e.target.value})}
-                              style={{ width: "100%", minHeight: "200px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", fontSize: "13px", resize: "none" }} 
+                              style={{ width: "100%", minHeight: "200px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", fontSize: "13px", resize: "none" }}
                             />
                           </div>
 
@@ -1635,7 +1635,7 @@ const Verify = () => {
                           {formData.witnesses.map((witness, index) => (
                             <div key={index} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px", padding: "32px", position: "relative" }}>
                               {formData.witnesses.length > 1 && (
-                                <button 
+                                <button
                                   onClick={() => removeWitness(index)}
                                   style={{ position: "absolute", top: "20px", right: "20px", background: "rgba(255,0,0,0.1)", border: "none", borderRadius: "50%", padding: "8px", cursor: "pointer", color: "#FF4D4D" }}
                                 >
@@ -1647,29 +1647,29 @@ const Verify = () => {
                                 <span style={{ fontSize: "11px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "0.1em" }}>WITNESS {index + 1} DATA</span>
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-                                <input 
-                                  type="text" placeholder="FULL LEGAL NAME" value={witness.name} 
+                                <input
+                                  type="text" placeholder="FULL LEGAL NAME" value={witness.name}
                                   onChange={(e) => updateWitness(index, "name", e.target.value)}
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                 />
-                                <input 
-                                  type="text" placeholder="CONTACT (EMAIL/PHONE)" value={witness.contact} 
+                                <input
+                                  type="text" placeholder="CONTACT (EMAIL/PHONE)" value={witness.contact}
                                   onChange={(e) => updateWitness(index, "contact", e.target.value)}
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                 />
                               </div>
-                              
+
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "20px" }}>
                                 {["COACH", "OFFICIAL", "TRAINER", "MEDIA", "OTHER"].map((role) => (
-                                  <button 
-                                    key={role} 
+                                  <button
+                                    key={role}
                                     onClick={() => updateWitness(index, "role", role)}
-                                    style={{ 
-                                      padding: "12px", 
-                                      background: witness.role === role ? "rgba(255,106,0,0.1)" : "rgba(0,0,0,0.2)", 
-                                      borderRadius: "12px", 
-                                      border: witness.role === role ? "1px solid #FF6A00" : "1px solid rgba(255,255,255,0.05)", 
-                                      cursor: "pointer", fontSize: "11px", fontWeight: "800", color: witness.role === role ? "#FF6A00" : "rgba(255,255,255,0.6)", transition: "all 0.2s" 
+                                    style={{
+                                      padding: "12px",
+                                      background: witness.role === role ? "rgba(255,106,0,0.1)" : "rgba(0,0,0,0.2)",
+                                      borderRadius: "12px",
+                                      border: witness.role === role ? "1px solid #FF6A00" : "1px solid rgba(255,255,255,0.05)",
+                                      cursor: "pointer", fontSize: "11px", fontWeight: "800", color: witness.role === role ? "#FF6A00" : "rgba(255,255,255,0.6)", transition: "all 0.2s"
                                     }}
                                   >
                                     {role}
@@ -1678,8 +1678,8 @@ const Verify = () => {
                               </div>
 
                               <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", background: witness.signed ? "rgba(74, 222, 128, 0.05)" : "transparent", padding: "16px", borderRadius: "12px", border: witness.signed ? "1px solid #4ADE80" : "1px solid rgba(255,255,255,0.05)", transition: "all 0.3s" }}>
-                                <input 
-                                  type="checkbox" 
+                                <input
+                                  type="checkbox"
                                   checked={witness.signed}
                                   onChange={(e) => updateWitness(index, "signed", e.target.checked)}
                                   style={{ width: "18px", height: "18px", accentColor: "#4ADE80" }}
@@ -1690,11 +1690,11 @@ const Verify = () => {
                               </label>
                             </div>
                           ))}
-                          
+
                           {formData.witnesses.length < 5 && (
-                            <button 
+                            <button
                               onClick={addWitness}
-                              style={{ 
+                              style={{
                                 background: "rgba(255,106,0,0.1)", border: "1px dashed #FF6A00", borderRadius: "16px", padding: "16px", color: "#FF6A00", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", transition: "all 0.3s"
                               }}
                             >
@@ -1735,18 +1735,18 @@ const Verify = () => {
                       {/* MAIN CONTENT GRID */}
                       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "24px", marginBottom: "32px" }}>
                         {/* PRIMARY VIDEO CARD */}
-                        <div 
+                        <div
                           onClick={() => videoInputRef.current?.click()}
                           style={{ position: "relative", borderRadius: "32px", overflow: "hidden", background: "#111", border: "1px solid rgba(255,255,255,0.05)", minHeight: "480px", cursor: "pointer" }}
                         >
-                          <input 
-                            type="file" 
-                            ref={videoInputRef} 
-                            style={{ display: "none" }} 
-                            accept="video/*" 
-                            onChange={handleVideoUpload} 
+                          <input
+                            type="file"
+                            ref={videoInputRef}
+                            style={{ display: "none" }}
+                            accept="video/mp4,video/webm,video/quicktime"
+                            onChange={handleVideoUpload}
                           />
-                          <img src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
+                          <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
                           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px", textAlign: "center" }}>
                             <div style={{ width: "90px", height: "90px", background: "#FF6A00", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px", boxShadow: "0 15px 30px rgba(255,106,0,0.3)" }}>
                               <Video size={40} color="white" />
@@ -1768,30 +1768,30 @@ const Verify = () => {
                             <h3 style={{ fontSize: "16px", fontWeight: "900", textTransform: "uppercase", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
                               <Link2 size={18} color="#FF6A00" /> VIDEO LINK URL
                             </h3>
-                            <input 
-                              type="text" 
-                              placeholder="HTTPS://YOUTUBE.COM/..." 
+                            <input
+                              type="text"
+                              placeholder="HTTPS://YOUTUBE.COM/..."
                               value={formData.youtubeLink}
                               onChange={(e) => setFormData({...formData, youtubeLink: e.target.value})}
-                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px 20px", color: "white", outline: "none", fontSize: "13px" }} 
+                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px 20px", color: "white", outline: "none", fontSize: "13px" }}
                             />
                             <p style={{ fontSize: "11px", color: "white", marginTop: "12px" }}>
-                              If your raw footage is over 2GB, please provide an unlisted YouTube or Vimeo link.
+                              If your raw footage is over 50MB, please provide an unlisted YouTube or Vimeo link.
                             </p>
                           </div>
 
                           {/* PHOTO EVIDENCE */}
-                          <div 
+                          <div
                             onClick={() => imageInputRef.current?.click()}
                             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px", padding: "32px", position: "relative", cursor: "pointer", flex: 1 }}
                           >
-                            <input 
-                              type="file" 
-                              ref={imageInputRef} 
-                              style={{ display: "none" }} 
-                              multiple 
-                              accept="image/*" 
-                              onChange={handleImageUpload} 
+                            <input
+                              type="file"
+                              ref={imageInputRef}
+                              style={{ display: "none" }}
+                              multiple
+                              accept="image/jpeg,image/png,image/webp,image/gif"
+                              onChange={handleImageUpload}
                             />
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
                               <Camera size={24} color="#FF6A00" />
@@ -1831,22 +1831,22 @@ const Verify = () => {
                         <button onClick={prevStep} style={{ background: "none", border: "none", color: "white", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
                           <ArrowLeft size={18} /> PREVIOUS STEP
                         </button>
-                        <button 
-                          onClick={nextStep} 
-                          style={{ 
-                            background: "linear-gradient(90deg, #FF6A00, #FF8F3F)", 
-                            color: "white", 
-                            border: "none", 
-                            borderRadius: "100px", 
-                            padding: "20px 60px", 
-                            fontSize: "14px", 
-                            fontWeight: "900", 
-                            textTransform: "uppercase", 
-                            cursor: "pointer", 
-                            display: "flex", 
-                            alignItems: "center", 
-                            gap: "15px", 
-                            boxShadow: "0 20px 40px rgba(255, 106, 0, 0.3)" 
+                        <button
+                          onClick={nextStep}
+                          style={{
+                            background: "linear-gradient(90deg, #FF6A00, #FF8F3F)",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "100px",
+                            padding: "20px 60px",
+                            fontSize: "14px",
+                            fontWeight: "900",
+                            textTransform: "uppercase",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "15px",
+                            boxShadow: "0 20px 40px rgba(255, 106, 0, 0.3)"
                           }}
                         >
                           SUBMIT EVIDENCE <ArrowRight size={20} />
@@ -1877,35 +1877,35 @@ const Verify = () => {
                           auditOutcome === "failed" ? "rgba(255, 77, 77, 0.3)" :
                           auditOutcome === "incomplete" ? "rgba(255, 204, 0, 0.3)" : "rgba(255, 106, 0, 0.3)"
                         }`, background: "#000" }}>
-                          <img src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
+                          <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
                           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.6))" }}></div>
-                          
+
                           {/* HUD TOP LEFT */}
                           <div style={{ position: "absolute", top: "24px", left: "24px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                            <div style={{ 
-                              display: "flex", 
-                              alignItems: "center", 
-                              gap: "8px", 
-                              color: 
+                            <div style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              color:
                                 auditOutcome === "passed" ? "#4ADE80" :
                                 auditOutcome === "failed" ? "#FF4D4D" :
-                                auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00", 
-                              fontSize: "10px", 
-                              fontWeight: "900", 
-                              letterSpacing: "0.1em" 
+                                auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00",
+                              fontSize: "10px",
+                              fontWeight: "900",
+                              letterSpacing: "0.1em"
                             }}>
-                              <div style={{ 
-                                width: "6px", 
-                                height: "6px", 
-                                background: 
+                              <div style={{
+                                width: "6px",
+                                height: "6px",
+                                background:
                                   auditOutcome === "passed" ? "#4ADE80" :
                                   auditOutcome === "failed" ? "#FF4D4D" :
-                                  auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00", 
-                                borderRadius: "50%", 
-                                animation: auditState === "scanning" ? "pulse 1s infinite" : "none" 
-                              }}></div> 
-                              {auditState === "scanning" ? "SCANNING_ACTIVE" : 
-                               auditOutcome === "passed" ? "SYSTEM_NOMINAL" : 
+                                  auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00",
+                                borderRadius: "50%",
+                                animation: auditState === "scanning" ? "pulse 1s infinite" : "none"
+                              }}></div>
+                              {auditState === "scanning" ? "SCANNING_ACTIVE" :
+                               auditOutcome === "passed" ? "SYSTEM_NOMINAL" :
                                auditOutcome === "failed" ? "THREAT_DETECTED" : "DATA_MISSING"}
                             </div>
                             <div style={{ fontSize: "14px", fontWeight: "900", color: "white", letterSpacing: "0.05em" }}>
@@ -1915,7 +1915,7 @@ const Verify = () => {
 
                           {/* SCAN LINE ANIMATION */}
                           {auditState === "scanning" && (
-                            <motion.div 
+                            <motion.div
                               animate={{ top: ["0%", "100%", "0%"] }}
                               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                               style={{ position: "absolute", left: 0, width: "100%", height: "2px", background: "linear-gradient(90deg, transparent, #FF6A00, transparent)", boxShadow: "0 0 15px #FF6A00", zIndex: 2 }}
@@ -1933,13 +1933,13 @@ const Verify = () => {
                           {/* HUD BOTTOM RIGHT */}
                           <div style={{ position: "absolute", bottom: "24px", right: "24px", textAlign: "right" }}>
                             <div style={{ fontSize: "10px", fontWeight: "900", color: "white", textTransform: "uppercase", marginBottom: "4px" }}>CONFIDENCE SCORE</div>
-                            <div style={{ 
-                              fontSize: "32px", 
-                              fontWeight: "950", 
-                              color: 
+                            <div style={{
+                              fontSize: "32px",
+                              fontWeight: "950",
+                              color:
                                 auditOutcome === "passed" ? "#4ADE80" :
                                 auditOutcome === "failed" ? "#FF4D4D" :
-                                auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00" 
+                                auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00"
                             }}>
                               {auditConfidence.toFixed(1)}%
                             </div>
@@ -1957,14 +1957,14 @@ const Verify = () => {
                                 auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00"
                               } />
                             </div>
-                            
+
                             {/* DYNAMIC AUDIT STATE CARD */}
                             <div style={{
-                              background: 
+                              background:
                                 auditOutcome === "passed" ? "rgba(74, 222, 128, 0.04)" :
                                 auditOutcome === "failed" ? "rgba(255, 77, 77, 0.04)" :
                                 auditOutcome === "incomplete" ? "rgba(255, 204, 0, 0.04)" : "rgba(255, 106, 0, 0.04)",
-                              border: 
+                              border:
                                 auditOutcome === "passed" ? "1px solid rgba(74, 222, 128, 0.2)" :
                                 auditOutcome === "failed" ? "1px solid rgba(255, 77, 77, 0.2)" :
                                 auditOutcome === "incomplete" ? "1px solid rgba(255, 204, 0, 0.2)" : "1px solid rgba(255, 106, 0, 0.2)",
@@ -1972,17 +1972,17 @@ const Verify = () => {
                               padding: "20px",
                               marginBottom: "24px",
                               textAlign: "center",
-                              boxShadow: 
+                              boxShadow:
                                 auditOutcome === "passed" ? "0 0 20px rgba(74, 222, 128, 0.05)" :
                                 auditOutcome === "failed" ? "0 0 20px rgba(255, 77, 77, 0.05)" :
                                 auditOutcome === "incomplete" ? "0 0 20px rgba(255, 204, 0, 0.05)" : "0 0 20px rgba(255, 106, 0, 0.05)"
                             }}>
-                              <div style={{ 
-                                fontSize: "14px", 
-                                fontWeight: "950", 
+                              <div style={{
+                                fontSize: "14px",
+                                fontWeight: "950",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.05em",
-                                color: 
+                                color:
                                   auditOutcome === "passed" ? "#4ADE80" :
                                   auditOutcome === "failed" ? "#FF4D4D" :
                                   auditOutcome === "incomplete" ? "#FFCC00" : "#FF6A00"
@@ -2023,9 +2023,9 @@ const Verify = () => {
                                 return <div key={lIdx} style={{ color }}>{log}</div>;
                               })}
                             </div>
-                            
+
                             {auditOutcome === "failed" && (
-                              <div style={{ 
+                              <div style={{
                                 marginTop: "16px",
                                 padding: "16px",
                                 background: "rgba(255, 77, 77, 0.05)",
@@ -2035,7 +2035,7 @@ const Verify = () => {
                                 fontSize: "12px",
                                 lineHeight: "1.5"
                               }}>
-                                <strong style={{ fontWeight: "900", display: "block", marginBottom: "4px" }}>AUDIT FAILED:</strong> 
+                                <strong style={{ fontWeight: "900", display: "block", marginBottom: "4px" }}>AUDIT FAILED:</strong>
                                 The biometric engine detected anomalies in the video frame rate, spatial coordinates, or movement signatures. This often occurs if the video is edited, spliced, or if the participant's facial mesh cannot be securely locked. Please provide an uncut, raw, and high-quality video to pass the security audit.
                               </div>
                             )}
@@ -2043,28 +2043,28 @@ const Verify = () => {
 
                           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "32px", padding: "32px" }}>
                              <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "24px" }}>
-                               {auditOutcome === "incomplete" 
+                               {auditOutcome === "incomplete"
                                  ? "Mandatory fields or uncut evidence file are missing. Please step back and complete all required inputs."
                                  : "Biometric validation check complete. Reconcile diagnostic reports to proceed to final ledger submission."}
                              </p>
-                             <button 
+                             <button
                                onClick={nextStep}
                                disabled={auditState !== "complete" || auditOutcome !== "passed"}
-                               style={{ 
-                                 width: "100%", 
-                                 background: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.1)" : "#FF6A00", 
-                                 color: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.4)" : "white", 
-                                 border: "none", 
-                                 borderRadius: "100px", 
-                                 padding: "20px", 
-                                 fontSize: "14px", 
-                                 fontWeight: "900", 
-                                 textTransform: "uppercase", 
-                                 cursor: (auditState !== "complete" || auditOutcome !== "passed") ? "not-allowed" : "pointer", 
-                                 display: "flex", 
-                                 alignItems: "center", 
-                                 justifyContent: "center", 
-                                 gap: "12px", 
+                               style={{
+                                 width: "100%",
+                                 background: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.1)" : "#FF6A00",
+                                 color: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.4)" : "white",
+                                 border: "none",
+                                 borderRadius: "100px",
+                                 padding: "20px",
+                                 fontSize: "14px",
+                                 fontWeight: "900",
+                                 textTransform: "uppercase",
+                                 cursor: (auditState !== "complete" || auditOutcome !== "passed") ? "not-allowed" : "pointer",
+                                 display: "flex",
+                                 alignItems: "center",
+                                 justifyContent: "center",
+                                 gap: "12px",
                                  boxShadow: (auditState !== "complete" || auditOutcome !== "passed") ? "none" : "0 20px 40px rgba(255,106,0,0.2)",
                                  transition: "all 0.3s"
                                }}
@@ -2121,10 +2121,10 @@ const Verify = () => {
                           <div style={{ position: "absolute", top: "40px", right: "40px", opacity: 0.1 }}>
                             <Trophy size={120} color="#FF6A00" />
                           </div>
-                          
+
                           <div style={{ position: "relative", zIndex: 2 }}>
                             <div style={{ color: "#FF6A00", fontSize: "11px", fontWeight: "900", letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: "32px" }}>VERIFIED RECORD DATA</div>
-                            
+
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginBottom: "48px" }}>
                               <div>
                                 <div style={{ fontSize: "10px", fontWeight: "900", color: "white", textTransform: "uppercase", marginBottom: "8px" }}>ATHLETE NAME</div>
@@ -2145,7 +2145,7 @@ const Verify = () => {
 
                             <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "24px", padding: "24px", display: "flex", alignItems: "center", gap: "20px", border: "1px solid rgba(255,255,255,0.05)" }}>
                               <div style={{ width: "64px", height: "64px", borderRadius: "12px", background: "#111", overflow: "hidden" }}>
-                                <img src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
+                                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: "13px", fontWeight: "900", marginBottom: "4px" }}>
@@ -2192,19 +2192,19 @@ const Verify = () => {
                       {/* POST-SUBMISSION PREVIEW */}
                       <div style={{ textAlign: "center", marginBottom: "80px" }}>
                         <div style={{ color: "white", fontSize: "24px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "40px" }}>POST-SUBMISSION PREVIEW</div>
-                        <div style={{ 
-                          backgroundImage: "linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80')", 
-                          backgroundSize: "cover", 
+                        <div style={{
+                          backgroundImage: "linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80')",
+                          backgroundSize: "cover",
                           backgroundPosition: "center",
-                          borderRadius: "40px", 
+                          borderRadius: "40px",
                           padding: "100px 40px",
                           border: "1px solid rgba(255,255,255,0.05)"
                         }}>
-                          <div style={{ 
-                            fontSize: "120px", 
-                            fontWeight: "950", 
-                            lineHeight: "0.8", 
-                            color: "transparent", 
+                          <div style={{
+                            fontSize: "120px",
+                            fontWeight: "950",
+                            lineHeight: "0.8",
+                            color: "transparent",
                             WebkitTextStroke: "1px rgba(255,106,0,0.3)",
                             textTransform: "uppercase",
                             marginBottom: "20px"
@@ -2238,8 +2238,8 @@ const Verify = () => {
                             { id: "followedRules", label: "I have read and adhered to the specific category rules for this record." }
                           ].map((item) => (
                             <label key={item.id} style={{ display: "flex", alignItems: "center", gap: "16px", cursor: "pointer", background: formData[item.id] ? "rgba(74, 222, 128, 0.05)" : "rgba(0,0,0,0.2)", padding: "16px 24px", borderRadius: "12px", border: formData[item.id] ? "1px solid #4ADE80" : "1px solid rgba(255,255,255,0.05)", transition: "all 0.3s" }}>
-                              <input 
-                                type="checkbox" 
+                              <input
+                                type="checkbox"
                                 checked={formData[item.id]}
                                 onChange={(e) => setFormData({...formData, [item.id]: e.target.checked})}
                                 style={{ width: "20px", height: "20px", accentColor: "#4ADE80", cursor: "pointer" }}
@@ -2253,18 +2253,18 @@ const Verify = () => {
                         <div style={{ background: "rgba(255,106,0,0.03)", border: "1px solid rgba(255,106,0,0.2)", borderRadius: "24px", padding: "32px", marginBottom: "48px" }}>
                           <h4 style={{ fontSize: "14px", fontWeight: "900", color: "#FF6A00", textTransform: "uppercase", marginBottom: "20px" }}>DIGITAL SIGNATURE</h4>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-                            <input 
-                              type="text" 
-                              placeholder="TYPE FULL LEGAL NAME TO SIGN" 
+                            <input
+                              type="text"
+                              placeholder="TYPE FULL LEGAL NAME TO SIGN"
                               value={formData.declarationSigned ? formData.athleteName : ""}
                               onChange={(e) => setFormData({...formData, declarationSigned: e.target.value.length > 0})}
-                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px 20px", color: "white", outline: "none", fontSize: "13px" }} 
+                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px 20px", color: "white", outline: "none", fontSize: "13px" }}
                             />
-                            <input 
-                              type="date" 
+                            <input
+                              type="date"
                               value={formData.declarationDate}
                               onChange={(e) => setFormData({...formData, declarationDate: e.target.value})}
-                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px 20px", color: "white", outline: "none", fontSize: "13px", colorScheme: "dark" }} 
+                              style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px 20px", color: "white", outline: "none", fontSize: "13px", colorScheme: "dark" }}
                             />
                           </div>
                         </div>
@@ -2275,23 +2275,23 @@ const Verify = () => {
                           </div>
                         )}
                         <div style={{ textAlign: "center" }}>
-                          <button 
+                          <button
                             onClick={nextStep}
                             disabled={loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate}
-                            style={{ 
-                              background: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "rgba(255,255,255,0.1)" : "#FF6A00", 
-                              color: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "rgba(255,255,255,0.4)" : "white", 
-                              border: "none", 
-                              borderRadius: "100px", 
-                              padding: "24px 64px", 
-                              fontSize: "18px", 
-                              fontWeight: "950", 
-                              textTransform: "uppercase", 
-                              cursor: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "not-allowed" : "pointer", 
-                              display: "flex", 
-                              alignItems: "center", 
-                              justifyContent: "center", 
-                              gap: "16px", 
+                            style={{
+                              background: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "rgba(255,255,255,0.1)" : "#FF6A00",
+                              color: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "rgba(255,255,255,0.4)" : "white",
+                              border: "none",
+                              borderRadius: "100px",
+                              padding: "24px 64px",
+                              fontSize: "18px",
+                              fontWeight: "950",
+                              textTransform: "uppercase",
+                              cursor: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "not-allowed" : "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "16px",
                               margin: "0 auto 24px",
                               boxShadow: (loading || !formData.safetyConfirmed || !formData.noIllegalActivity || !formData.authenticEvidence || !formData.followedRules || !formData.declarationSigned || !formData.declarationDate) ? "none" : "0 20px 40px rgba(255,106,0,0.3)",
                               transition: "all 0.3s"
@@ -2307,7 +2307,7 @@ const Verify = () => {
                               ERROR: {error}
                             </div>
                           )}
-                          
+
                           <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.2)", letterSpacing: "0.2em", textTransform: "uppercase" }}>
                             AWAITING FINAL BIOMETRIC HASH...
                           </div>

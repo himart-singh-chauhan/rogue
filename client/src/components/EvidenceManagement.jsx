@@ -232,7 +232,7 @@ const EvidenceManagement = () => {
               >
                 {/* Image Preview */}
                 {item.file_url && item.mime_type?.startsWith("image") && (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={item.file_url}
                     alt={item.title}
                     className="w-full h-48 object-cover"
@@ -331,7 +331,7 @@ const EvidenceManagement = () => {
             <div className="p-6 space-y-4">
               {selectedEvidence.file_url &&
                 selectedEvidence.mime_type?.startsWith("image") && (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={selectedEvidence.file_url}
                     alt={selectedEvidence.title}
                     className="w-full h-48 object-cover rounded"

@@ -143,7 +143,7 @@ const RecordDetail = () => {
 
         {/* HERO SECTION */}
         <section style={{ position: "relative", height: "70vh", minHeight: "500px", overflow: "hidden" }}>
-          <img src={record.img} alt={record.title} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", top: 0, left: 0 }} />
+          <img loading="lazy" decoding="async" src={record.img} alt={record.title} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", top: 0, left: 0 }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(10,10,10,0.4) 0%, #0A0A0A 100%)" }} />
           
           <div style={{ position: "absolute", bottom: "60px", left: "5%", right: "5%", maxWidth: "1400px", margin: "0 auto" }}>
@@ -228,7 +228,7 @@ const RecordDetail = () => {
             <div ref={videoPlayerRef} style={{ position: "relative", borderRadius: "32px", overflow: "hidden", aspectRatio: "16/9", background: "#111", border: "1px solid rgba(255,255,255,0.05)", scrollMarginTop: "200px" }}>
               {!isPlayingMain ? (
                 <>
-                  <img src={record.img} alt="Video Thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
+                  <img loading="lazy" decoding="async" src={record.img} alt="Video Thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                     <div 
                       onClick={() => setIsPlayingMain(true)}
@@ -459,7 +459,7 @@ const RecordDetail = () => {
                     >
                       {/* Thumbnail */}
                       <div style={{ position: "relative", height: "135px" }}>
-                        <img src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img loading="lazy" decoding="async" src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
                             <Play fill="white" size={16} />
@@ -621,7 +621,7 @@ const RecordDetail = () => {
                     >
                     {/* Thumbnail */}
                     <div style={{ position: "relative", height: "180px" }}>
-                      <img src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img loading="lazy" decoding="async" src={attempt.img} alt={attempt.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
                           <Play fill="white" size={24} />
@@ -747,7 +747,7 @@ const RecordDetail = () => {
                       <div>
                         <h4 style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>ATTEMPT THUMBNAIL</h4>
                         <div style={{ borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
-                          <img src={selectedAttempt.img} alt={selectedAttempt.name} style={{ width: "100%", height: "auto", display: "block" }} />
+                          <img loading="lazy" decoding="async" src={selectedAttempt.img} alt={selectedAttempt.name} style={{ width: "100%", height: "auto", display: "block" }} />
                         </div>
                       </div>
                     )}

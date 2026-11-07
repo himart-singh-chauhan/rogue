@@ -4,6 +4,30 @@
  */
 
 const Video = require('../models/Video');
+const { extractYouTubeVideoId, generateYouTubeThumbnailUrl } = require('../utils/youtubeIntegration');
+
+// Shared normaliser for admin-created featured / newest videos.
+// Detects YouTube links (source + id + thumbnail) so admins can paste a link without a thumbnail.
+const buildVideoInput = (body, videoType, defaultTitle, userId) => {
+  const ytId = body.youtubeVideoId || extractYouTubeVideoId(body.videoUrl);
+  const isYouTube = !!ytId;
+  return {
+    recordId: body.recordId || null,
+    userId,
+    videoType,
+    title: body.title || defaultTitle,
+    description: body.description,
+    videoUrl: body.videoUrl,
+    thumbnailUrl: body.thumbnailUrl || (isYouTube ? generateYouTubeThumbnailUrl(ytId) : null),
+    source: body.source || (isYouTube ? 'youtube' : 'uploaded'),
+    youtubeVideoId: ytId || null,
+    duration: body.duration,
+    isPublished: body.isPublished !== undefined ? !!body.isPublished : true,
+    category: body.category,
+    isFeatured: body.isFeatured,
+    isNewlyUploaded: body.isNewlyUploaded,
+  };
+};
 const Evidence = require('../models/Evidence');
 
 // ==========================================
@@ -189,13 +213,14 @@ const deleteAttemptVideo = async (req, res) => {
 // @access  Private/Admin
 const getFeaturedVideos = async (req, res) => {
   try {
-    const limit = req.query.limit || 20;
-    const { data, error } = await Video.getVideos({
-      videoType: Video.VIDEO_TYPES.FEATURED,
-    });
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const filters = { videoType: Video.VIDEO_TYPES.FEATURED };
+    // Visitors only see published videos; admins see everything.
+    if (!(req.user && req.user.is_admin)) filters.isPublished = true;
+    const { data, error } = await Video.getVideos(filters);
 
     if (error) throw error;
-    res.json(data.slice(0, limit));
+    res.json((data || []).slice(0, limit));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -221,19 +246,9 @@ const createFeaturedVideo = async (req, res) => {
       return res.status(400).json({ message: 'videoUrl is required' });
     }
 
-    const { data, error } = await Video.createVideo({
-      recordId,
-      userId: req.user.id,
-      videoType: Video.VIDEO_TYPES.FEATURED,
-      title: title || 'Featured Video',
-      description,
-      videoUrl,
-      thumbnailUrl,
-      source: source || Video.VIDEO_SOURCES.UPLOADED,
-      youtubeVideoId,
-      duration,
-      isPublished: true,
-    });
+    const { data, error } = await Video.createVideo(
+      buildVideoInput(req.body, Video.VIDEO_TYPES.FEATURED, 'Featured Video', req.user.id)
+    );
 
     if (error) throw error;
     res.status(201).json(data);
@@ -265,11 +280,11 @@ const deleteFeaturedVideo = async (req, res) => {
 // @access  Private/Admin
 const getNewestRecordVideos = async (req, res) => {
   try {
-    const limit = req.query.limit || 20;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const { data, error } = await Video.getNewestRecordVideos(limit);
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -295,19 +310,9 @@ const createNewestRecordVideo = async (req, res) => {
       return res.status(400).json({ message: 'videoUrl is required' });
     }
 
-    const { data, error } = await Video.createVideo({
-      recordId,
-      userId: req.user.id,
-      videoType: Video.VIDEO_TYPES.NEWEST_RECORD,
-      title: title || 'Newest Record',
-      description,
-      videoUrl,
-      thumbnailUrl,
-      source: source || Video.VIDEO_SOURCES.UPLOADED,
-      youtubeVideoId,
-      duration,
-      isPublished: true,
-    });
+    const { data, error } = await Video.createVideo(
+      buildVideoInput(req.body, Video.VIDEO_TYPES.NEWEST_RECORD, 'Newest Record', req.user.id)
+    );
 
     if (error) throw error;
     res.status(201).json(data);

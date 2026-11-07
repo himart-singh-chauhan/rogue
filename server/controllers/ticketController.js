@@ -1,4 +1,8 @@
+const crypto = require('crypto');
 const supabase = require('../config/supabase');
+
+// Unguessable access code (the old code was userId-eventId-timestamp, all of which are public).
+const newAccessCode = () => `TKT-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
 
 const getFormattedTicket = (t) => {
   if (!t) return null;
@@ -28,6 +32,10 @@ const getFormattedTicket = (t) => {
     accessCode: t.access_code,
     status: t.status,
     ticketType: t.ticket_type,
+    scanCount: t.scan_count || 0,
+    scan_count: t.scan_count || 0,
+    lastScannedAt: t.last_scanned_at || null,
+    last_scanned_at: t.last_scanned_at || null,
     expiresAt: t.expires_at,
     createdAt: t.created_at,
     updatedAt: t.updated_at
@@ -66,7 +74,7 @@ const purchaseTicket = async (req, res) => {
       .eq('status', 'active')
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
-    
+
     if (existingTicket) {
       return res.status(400).json({ message: 'You already have a valid ticket for this event' });
     }
@@ -79,7 +87,7 @@ const purchaseTicket = async (req, res) => {
       .insert([{
         user_id: userId,
         event_id: eventId,
-        access_code: `${userId}-${eventId}-${Date.now()}`,
+        access_code: newAccessCode(),
         status: 'active',
         ticket_type: 'spectator',
         expires_at: expiresAt.toISOString()
@@ -115,8 +123,8 @@ const verifyTicket = async (req, res) => {
 
     // If event is free, no ticket required
     if (!event.is_paid) {
-      return res.json({ 
-        hasTicket: true, 
+      return res.json({
+        hasTicket: true,
         canWatch: true,
         reason: 'free_event',
         event: { isPaid: false }
@@ -125,8 +133,8 @@ const verifyTicket = async (req, res) => {
 
     // If event is paid but user is not logged in
     if (!userId) {
-      return res.json({ 
-        hasTicket: false, 
+      return res.json({
+        hasTicket: false,
         canWatch: false,
         reason: 'not_logged_in',
         event: { isPaid: true, ticketPrice: event.ticket_price }
@@ -144,8 +152,8 @@ const verifyTicket = async (req, res) => {
       .maybeSingle();
 
     if (ticket) {
-      return res.json({ 
-        hasTicket: true, 
+      return res.json({
+        hasTicket: true,
         canWatch: true,
         reason: 'valid_ticket',
         event: { isPaid: true, ticketPrice: event.ticket_price }
@@ -153,8 +161,8 @@ const verifyTicket = async (req, res) => {
     }
 
     // No valid ticket found
-    res.json({ 
-      hasTicket: false, 
+    res.json({
+      hasTicket: false,
       canWatch: false,
       reason: 'no_valid_ticket',
       event: { isPaid: true, ticketPrice: event.ticket_price }
@@ -178,6 +186,11 @@ const getTicketDetails = async (req, res) => {
       .single();
 
     if (error || !ticket) {
+      return res.status(404).json({ message: 'Ticket not found' });
+    }
+
+    // Only the ticket owner (or an admin) may see a ticket and its access code.
+    if (!req.user.is_admin && String(ticket.user_id) !== String(req.user.id)) {
       return res.status(404).json({ message: 'Ticket not found' });
     }
 
@@ -247,7 +260,7 @@ const grantFreeAccess = async (req, res) => {
       .insert([{
         user_id: userId,
         event_id: eventId,
-        access_code: `${userId}-${eventId}-${Date.now()}-grant`,
+        access_code: newAccessCode(),
         status: 'active',
         ticket_type: ticketType, // 'vip' or 'free'
         expires_at: expiresAt.toISOString()
@@ -276,7 +289,7 @@ const scanAndVerifyTicket = async (req, res) => {
     // Lookup ticket joining user and event tables
     const { data: ticket, error } = await supabase
       .from('tickets')
-      .select('*, user:users(*), event:events(*)')
+      .select('*, user:users(id, name, email, username, member_number, profile_image), event:events(*)')
       .eq('access_code', accessCode)
       .maybeSingle();
 
@@ -286,8 +299,8 @@ const scanAndVerifyTicket = async (req, res) => {
 
     // Check duplicate scan
     if (ticket.status === 'used') {
-      return res.status(400).json({ 
-        message: 'Duplicate scan attempt - Already Used!', 
+      return res.status(400).json({
+        message: 'Duplicate scan attempt - Already Used!',
         duplicate: true,
         ticket: getFormattedTicket(ticket),
         scannedAt: ticket.last_scanned_at,
@@ -316,10 +329,14 @@ const scanAndVerifyTicket = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', ticket.id)
-      .select('*, user:users(*), event:events(*)')
-      .single();
+      .neq('status', 'used') // atomic: a simultaneous second scan updates 0 rows
+      .select('*, user:users(id, name, email, username, member_number, profile_image), event:events(*)')
+      .maybeSingle();
 
     if (updateError) throw updateError;
+    if (!updatedTicket) {
+      return res.status(400).json({ message: 'Duplicate scan attempt - Already Used!', duplicate: true, ticket: getFormattedTicket(ticket) });
+    }
 
     res.json({
       message: 'Ticket scanned & verified successfully!',
@@ -366,7 +383,7 @@ const resetTicketScan = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', ticketId)
-      .select('*, user:users(*), event:events(*)')
+      .select('*, user:users(id, name, email, username, member_number, profile_image), event:events(*)')
       .single();
 
     if (error || !ticket) {

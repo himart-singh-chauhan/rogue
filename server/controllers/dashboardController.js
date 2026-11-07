@@ -1,22 +1,29 @@
 const supabase = require('../config/supabase');
 const bcrypt = require('bcryptjs');
+
+// Admin views never receive password hashes.
+const ADMIN_USER_COLUMNS =
+  'id, name, email, is_admin, role, membership_type, account_status, suspended_until, suspension_reason, ban_reason, last_login_at, profile_image, username, phone, gender, dob, weight, weight_unit, height, height_unit, country, city, street_address, state, zip_code, member_number, ethnicity, created_at, updated_at';
+
+// Strip characters that would break out of a PostgREST .or() filter string.
+const cleanSearch = (s) => String(s || '').replace(/[,()*%\\]/g, ' ').trim();
 // @route   GET /api/admin/dashboard
 // @access  Private/Admin
 const getDashboardStats = async (req, res) => {
   try {
     const tables = [
-      'users', 'records', 'events', 'products', 'videos', 
-      'evidence', 'categories', 'age_groups', 'memberships', 
+      'users', 'records', 'events', 'products', 'videos',
+      'evidence', 'categories', 'age_groups', 'memberships',
       'tickets', 'contact_messages', 'record_meta'
     ];
 
     // Fetch counts for all tables in parallel
-    const countPromises = tables.map(table => 
+    const countPromises = tables.map(table =>
       supabase.from(table).select('*', { count: 'exact', head: true })
     );
 
     const countResults = await Promise.all(countPromises);
-    
+
     // Map results to a key-value object
     const counts = {};
     tables.forEach((table, index) => {
@@ -46,22 +53,29 @@ const getDashboardStats = async (req, res) => {
 // @route   PUT /api/admin/users/:id/suspend
 // @access  Private/Admin
 const suspendUser = async (req, res) => {
-  const { reason, durationDays } = req.body;
+  const { reason, durationDays, suspendedUntil: untilFromClient } = req.body;
 
   try {
-    const suspendedUntil = durationDays 
-      ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    let suspendedUntil = null;
+    if (untilFromClient && !isNaN(new Date(untilFromClient))) {
+      suspendedUntil = new Date(untilFromClient).toISOString();
+    } else if (durationDays) {
+      suspendedUntil = new Date(Date.now() + Number(durationDays) * 24 * 60 * 60 * 1000).toISOString();
+    }
 
     const { data: user, error } = await supabase
       .from('users')
       .update({
-        account_status: 'suspended'
+        account_status: 'suspended',
+        suspended_until: suspendedUntil,
+        suspension_reason: reason || null,
+        updated_at: new Date()
       })
       .eq('id', req.params.id)
-      .select();
+      .select(ADMIN_USER_COLUMNS);
 
     if (error) throw error;
+    if (!user || !user.length) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'User suspended successfully', user: user[0] });
   } catch (error) {
     res.status(400).json({ message: 'Error suspending user', error: error.message });
@@ -78,12 +92,15 @@ const banUser = async (req, res) => {
     const { data: user, error } = await supabase
       .from('users')
       .update({
-        account_status: 'banned'
+        account_status: 'banned',
+        ban_reason: reason || null,
+        updated_at: new Date()
       })
       .eq('id', req.params.id)
-      .select();
+      .select(ADMIN_USER_COLUMNS);
 
     if (error) throw error;
+    if (!user || !user.length) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'User banned successfully', user: user[0] });
   } catch (error) {
     res.status(400).json({ message: 'Error banning user', error: error.message });
@@ -98,12 +115,17 @@ const unsuspendUser = async (req, res) => {
     const { data: user, error } = await supabase
       .from('users')
       .update({
-        account_status: 'active'
+        account_status: 'active',
+        suspended_until: null,
+        suspension_reason: null,
+        ban_reason: null,
+        updated_at: new Date()
       })
       .eq('id', req.params.id)
-      .select();
+      .select(ADMIN_USER_COLUMNS);
 
     if (error) throw error;
+    if (!user || !user.length) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'User unsuspended successfully', user: user[0] });
   } catch (error) {
     res.status(400).json({ message: 'Error unsuspending user', error: error.message });
@@ -114,24 +136,27 @@ const unsuspendUser = async (req, res) => {
 // @route   PUT /api/admin/users/:id/reset-password
 // @access  Private/Admin
 const resetUserPassword = async (req, res) => {
-  const { newPassword } = req.body;
+  // Admin panel sends { password }; older callers sent { newPassword }.
+  const newPassword = req.body.newPassword || req.body.password;
 
   try {
     if (!newPassword || newPassword.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(String(newPassword), 10);
 
     const { data: user, error } = await supabase
       .from('users')
       .update({
-        password: hashedPassword
+        password: hashedPassword,
+        updated_at: new Date()
       })
       .eq('id', req.params.id)
-      .select();
+      .select(ADMIN_USER_COLUMNS);
 
     if (error) throw error;
+    if (!user || !user.length) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'User password reset successfully', user: user[0] });
   } catch (error) {
     res.status(400).json({ message: 'Error resetting password', error: error.message });
@@ -143,11 +168,18 @@ const resetUserPassword = async (req, res) => {
 // @access  Private/Admin
 const getUserActivity = async (req, res) => {
   try {
-    const { data: userRecords, error } = await supabase
-      .from('records')
-      .select('*')
-      .eq('user_id', req.params.id)
-      .order('created_at', { ascending: false });
+    const [{ data: userRecords, error }, { data: profile }] = await Promise.all([
+      supabase
+        .from('records')
+        .select('id, title, category, status, value, unit, created_at')
+        .eq('user_id', req.params.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('users')
+        .select('id, name, email, account_status, created_at, last_login_at')
+        .eq('id', req.params.id)
+        .maybeSingle()
+    ]);
 
     if (error) throw error;
 
@@ -160,7 +192,17 @@ const getUserActivity = async (req, res) => {
 
     res.json({
       userId: req.params.id,
+      user: profile ? {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        accountStatus: profile.account_status,
+        createdAt: profile.created_at
+      } : null,
+      lastLogin: profile?.last_login_at || null,
+      totalSubmissions: submissionStats.total,
       submissions: userRecords || [],
+      recentSubmissions: (userRecords || []).slice(0, 5),
       submissionStats
     });
   } catch (error) {
@@ -197,12 +239,15 @@ const generateUniqueMemberNumber = async () => {
 // @access  Private/Admin
 const getAllUsers = async (req, res) => {
   try {
-    const { search = '', limit = 50, page = 1 } = req.query;
+    // The admin panel loads the list once and filters client-side, so the default page is large.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1000, 1), 1000);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const offset = (page - 1) * limit;
+    const search = cleanSearch(req.query.search);
 
     let query = supabase
       .from('users')
-      .select('*', { count: 'exact' });
+      .select(ADMIN_USER_COLUMNS, { count: 'exact' });
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,username.ilike.%${search}%,member_number.ilike.%${search}%`);
@@ -212,13 +257,13 @@ const getAllUsers = async (req, res) => {
       .range(offset, offset + limit - 1)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error && error.code !== 'PGRST103') throw error;
 
     res.json({
-      users,
-      total: count,
-      page: parseInt(page),
-      pages: Math.ceil(count / limit)
+      users: users || [],
+      total: count || 0,
+      page,
+      pages: Math.ceil((count || 0) / limit)
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching users', error: error.message });
@@ -236,7 +281,10 @@ const createUser = async (req, res) => {
       return res.status(400).json({ message: 'Name, email, and password are required' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (String(password).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    const hashedPassword = await bcrypt.hash(String(password), 10);
     const assignedRole = role || 'athlete';
     const computedIsAdmin = assignedRole === 'system_admin';
     const memberNumber = await generateUniqueMemberNumber();
@@ -245,11 +293,11 @@ const createUser = async (req, res) => {
       .from('users')
       .insert({
         name,
-        email,
+        email: String(email).trim().toLowerCase(),
         password: hashedPassword,
-        username,
+        username: username && String(username).trim() ? String(username).trim() : null,
         country,
-        gender: gender || 'male',
+        gender: gender || '',
         dob: dob ? dob : null,
         phone,
         city,
@@ -259,13 +307,13 @@ const createUser = async (req, res) => {
         is_admin: computedIsAdmin,
         member_number: memberNumber
       })
-      .select();
+      .select(ADMIN_USER_COLUMNS);
 
     if (error) throw error;
     res.status(201).json({ message: 'User created successfully', user: user[0] });
   } catch (error) {
     if (error.message?.includes('duplicate key') || error.message?.includes('unique')) {
-      res.status(400).json({ message: 'Email already exists' });
+      res.status(400).json({ message: 'Email or username already exists' });
     } else {
       res.status(500).json({ message: 'Error creating user', error: error.message });
     }
@@ -277,11 +325,11 @@ const createUser = async (req, res) => {
 // @access  Private/Admin
 const updateUser = async (req, res) => {
   const { name, email, username, country, gender, dob, phone, city, role, membershipType, accountStatus } = req.body;
+  const updateData = {};
 
   try {
-    const updateData = {};
     if (name) updateData.name = name;
-    if (email) updateData.email = email;
+    if (email) updateData.email = String(email).trim().toLowerCase();
     if (username) updateData.username = username;
     if (country) updateData.country = country;
     if (gender) updateData.gender = gender;
@@ -294,17 +342,22 @@ const updateUser = async (req, res) => {
     }
     if (membershipType) updateData.membership_type = membershipType;
     if (accountStatus) updateData.account_status = accountStatus;
+    updateData.updated_at = new Date();
 
     const { data: user, error } = await supabase
       .from('users')
       .update(updateData)
       .eq('id', req.params.id)
-      .select();
+      .select(ADMIN_USER_COLUMNS);
 
     if (error) throw error;
+    if (!user || !user.length) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'User updated successfully', user: user[0] });
   } catch (error) {
     console.error("updateUser failed:", updateData, "id:", req.params.id, "error:", error.message);
+    if (error.code === '23505') {
+      return res.status(400).json({ message: 'Email or username already in use' });
+    }
     res.status(500).json({ message: `Error updating user: ${error.message}` });
   }
 };

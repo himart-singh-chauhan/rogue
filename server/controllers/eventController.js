@@ -1,5 +1,22 @@
 const supabase = require('../config/supabase');
 
+// Paid events only reveal their stream/video URL to admins and active ticket holders.
+const ticketedEventIds = async (user) => {
+  if (!user) return new Set();
+  const { data } = await supabase
+    .from('tickets')
+    .select('event_id, status, expires_at')
+    .eq('user_id', user.id)
+    .in('status', ['active', 'used']);
+  const now = new Date();
+  return new Set((data || []).filter((t) => !t.expires_at || new Date(t.expires_at) > now).map((t) => t.event_id));
+};
+
+const gateMedia = (formatted, raw, user, tickets) => {
+  if (!raw.is_paid || (user && user.is_admin) || tickets.has(raw.id)) return formatted;
+  return { ...formatted, streamUrl: '', videoUrl: '', locked: true };
+};
+
 // @desc    Get all events
 // @route   GET /api/events
 // @access  Public
@@ -9,11 +26,12 @@ const getEvents = async (req, res) => {
       .from('events')
       .select('*')
       .order('date', { ascending: true });
-    
+
     if (error) throw error;
+    const tickets = await ticketedEventIds(req.user);
 
     // Map camelCase fields to match previous Mongoose models for frontend compatibility
-    const formattedEvents = events.map(e => ({
+    const formattedEvents = (events || []).map(e => gateMedia({
       _id: e.id,
       id: e.id,
       title: e.title,
@@ -37,7 +55,7 @@ const getEvents = async (req, res) => {
       category: e.category || 'WORLD RECORD',
       createdAt: e.created_at,
       updatedAt: e.updated_at
-    }));
+    }, e, req.user, tickets));
 
     res.json(formattedEvents);
   } catch (error) {
@@ -50,16 +68,20 @@ const getEvents = async (req, res) => {
 // @access  Public
 const getEventById = async (req, res) => {
   try {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
     const { data: event, error } = await supabase
       .from('events')
       .select('*')
       .eq('id', req.params.id)
-      .single();
-    
+      .maybeSingle();
+
     if (error || !event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    
+    const tickets = await ticketedEventIds(req.user);
+
     const formattedEvent = {
       _id: event.id,
       id: event.id,
@@ -86,7 +108,7 @@ const getEventById = async (req, res) => {
       updatedAt: event.updated_at
     };
 
-    res.json(formattedEvent);
+    res.json(gateMedia(formattedEvent, event, req.user, tickets));
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -279,7 +301,7 @@ const deleteEvent = async (req, res) => {
       title: event.title,
       description: event.description
     };
-    
+
     res.json({ message: 'Event deleted successfully', event: formattedEvent });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -298,14 +320,14 @@ const toggleEventPaid = async (req, res) => {
       .select('*')
       .eq('id', req.params.id)
       .single();
-    
+
     if (findError || !event) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
     const newIsPaid = !event.is_paid;
     let newPrice = 0.00;
-    
+
     if (newIsPaid && ticketPrice) {
       newPrice = parseFloat(ticketPrice);
     }
@@ -331,9 +353,9 @@ const toggleEventPaid = async (req, res) => {
       ticketPrice: updatedEvent.ticket_price
     };
 
-    res.json({ 
-      message: `Event is now a ${updatedEvent.is_paid ? 'paid' : 'free'} event`, 
-      event: formattedEvent 
+    res.json({
+      message: `Event is now a ${updatedEvent.is_paid ? 'paid' : 'free'} event`,
+      event: formattedEvent
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

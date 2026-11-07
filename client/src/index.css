@@ -855,7 +855,7 @@ a:hover svg {
 /* ── RECORD CARDS ── */
 /* ── NEWEST APPROVED SECTION ── */
 .newest-section {
-  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), url('/image copy 2.png') no-repeat center center / cover;
+  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), url('/images/sketch-banner.webp') no-repeat center center / cover;
   padding: 100px 0 100px;
   position: relative;
 }
@@ -1211,7 +1211,7 @@ a:hover svg {
 
 /* ── HOLDERS SECTION ── */
 .holders-section {
-  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)), url('/image copy 2.png') no-repeat center center / cover;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)), url('/images/sketch-banner.webp') no-repeat center center / cover;
   padding: 100px 0 60px;
   position: relative;
   overflow: hidden;
@@ -1668,12 +1668,18 @@ a:hover svg {
 .orange-cta-bg {
   position: absolute;
   inset: 0;
-  background-image: url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&q=80');
+  background-image: url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&q=65');
   background-size: cover;
   background-position: center;
   opacity: 0.15;
   mix-blend-mode: overlay;
   z-index: 0;
+}
+
+@media (max-width: 768px) {
+  .orange-cta-bg {
+    background-image: url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=800&q=65');
+  }
 }
 
 .orange-cta-grid {

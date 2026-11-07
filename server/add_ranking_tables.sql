@@ -1,3 +1,5 @@
+-- ⚠️ SUPERSEDED — DO NOT RUN. Use server/database/schema.sql instead (complete, up to date, RLS enabled).
+
 -- Create user_rankings table
 CREATE TABLE IF NOT EXISTS user_rankings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, TrendingUp, Award, Zap, Heart, Share2, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { apiCall } from '../utils/api';
+import { apiCall, formatProductImage } from '../utils/api';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
 import Footer from '../components/Footer';
@@ -163,8 +163,8 @@ export default function GlobalRankingsPage() {
 
                   {/* Profile */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '200px' }}>
-                    <img
-                      src={member.profile_image ? (member.profile_image.includes('http') ? member.profile_image : `http://localhost:5001/uploads/${member.profile_image}`) : `https://ui-avatars.com/api/?name=${encodeURIComponent(member.display_name)}&background=FF6A00&color=fff`}
+                    <img loading="lazy" decoding="async"
+                      src={member.profile_image ? (member.profile_image.includes('http') ? member.profile_image : formatProductImage(`/uploads/${member.profile_image}`)) : `https://ui-avatars.com/api/?name=${encodeURIComponent(member.display_name)}&background=FF6A00&color=fff`}
                       alt={member.display_name}
                       style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }}
                     />

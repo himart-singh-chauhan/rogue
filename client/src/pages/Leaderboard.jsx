@@ -15,7 +15,7 @@ import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 const Leaderboard = () => {
   const rankingPortals = [

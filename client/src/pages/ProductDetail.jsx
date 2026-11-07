@@ -254,7 +254,7 @@ const ProductDetail = () => {
             {/* LEFT COLUMN: IMAGE DISPLAY (CAROUSEL) */}
             <div>
               <div style={{ background: "#161616", borderRadius: "32px", border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden", position: "relative", boxShadow: "0 40px 80px rgba(0,0,0,0.6)" }}>
-                <img src={allImages[currentImageIndex] || product.img} alt={product.title} style={{ width: "100%", height: "550px", objectFit: "cover", transition: "opacity 0.3s ease-in-out" }} />
+                <img loading="lazy" decoding="async" src={allImages[currentImageIndex] || product.img} alt={product.title} style={{ width: "100%", height: "550px", objectFit: "cover", transition: "opacity 0.3s ease-in-out" }} />
                 <div style={{ position: "absolute", top: "24px", right: "24px", background: "#FF6A00", color: "white", padding: "6px 16px", borderRadius: "100px", fontSize: "10px", fontWeight: "900", letterSpacing: "0.05em", zIndex: 10 }}>
                   {product.badge}
                 </div>
@@ -281,7 +281,7 @@ const ProductDetail = () => {
                 <div style={{ display: "flex", gap: "12px", marginTop: "16px", overflowX: "auto", paddingBottom: "8px" }} className="custom-scrollbar">
                   {allImages.map((imgUrl, idx) => (
                     <div key={idx} onClick={() => setCurrentImageIndex(idx)} style={{ width: "80px", height: "80px", borderRadius: "12px", border: currentImageIndex === idx ? "2px solid #FF6A00" : "2px solid transparent", overflow: "hidden", cursor: "pointer", flexShrink: 0, opacity: currentImageIndex === idx ? 1 : 0.6, transition: "all 0.2s" }}>
-                      <img src={imgUrl} alt="thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img loading="lazy" decoding="async" src={imgUrl} alt="thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </div>
                   ))}
                 </div>

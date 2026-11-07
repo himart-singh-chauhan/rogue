@@ -1,6 +1,9 @@
-export const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:5002/api'
-  : 'https://rogue-7rnu.onrender.com/api';
+// API base URL. Set VITE_API_URL (e.g. in client/.env or the hosting dashboard) to point the
+// site at a different backend without code changes. Must end with /api.
+const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+export const API_URL = (import.meta.env.VITE_API_URL || (isLocalHost
+  ? 'http://localhost:5000/api'
+  : 'https://rogue-7rnu.onrender.com/api')).replace(/\/$/, '');
 
 export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {
   const headers = {
@@ -83,6 +86,55 @@ export const apiUpload = async (endpoint, formData, token = null) => {
     console.error('API upload error:', error);
     throw error;
   }
+};
+
+/**
+ * Upload a file straight from the browser to Supabase Storage.
+ * 1. asks the API for a signed upload URL (validates type/size and the user's permissions)
+ * 2. PUTs the file directly to storage (the file never passes through our server)
+ * Returns the public URL of the stored file.
+ *
+ * kind: 'record-video' | 'record-image' | 'evidence' | 'avatar' | 'admin-video' | 'admin-image'
+ * onProgress: optional (percent: number) => void
+ */
+export const uploadDirect = async (file, kind, token, onProgress) => {
+  if (!file) throw new Error('No file selected');
+  const sign = await apiCall('/uploads/sign', 'POST', {
+    kind,
+    fileName: file.name,
+    contentType: file.type,
+    size: file.size,
+  }, token);
+
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', sign.signedUrl);
+    if (sign.apiKey) xhr.setRequestHeader('apikey', sign.apiKey);
+    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.upload.onprogress = (e) => {
+      if (onProgress && e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve();
+      let message = `Upload failed (${xhr.status})`;
+      try {
+        const body = JSON.parse(xhr.responseText);
+        if (body && (body.message || body.error)) message = body.message || body.error;
+      } catch { /* non-JSON error body */ }
+      if (xhr.status === 413 || /maximum allowed size|too large/i.test(message)) {
+        message = `File is too large. Maximum size is ${Math.round((sign.maxBytes || 0) / 1048576)} MB.`;
+      }
+      reject(new Error(message));
+    };
+    xhr.onerror = () => reject(new Error('Network error while uploading. Please check your connection and try again.'));
+    const body = new FormData();
+    body.append('cacheControl', '3600');
+    body.append('', file);
+    xhr.send(body);
+  });
+
+  if (onProgress) onProgress(100);
+  return sign.publicUrl;
 };
 
 // Dynamic Product Image Formatter

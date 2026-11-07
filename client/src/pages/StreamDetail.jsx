@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Play, Eye, Users, MessageSquare, Share2, Shield, Activity, Zap, Trash2, Ban } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -11,14 +11,14 @@ import { apiCall } from "../utils/api";
 
 const CountdownBox = ({ value, label }) => (
   <div style={{ textAlign: "center" }}>
-    <div style={{ 
-      background: "rgba(255,255,255,0.05)", 
-      border: "1px solid rgba(255,255,255,0.1)", 
-      borderRadius: "12px", 
-      padding: "12px", 
-      minWidth: "70px", 
-      fontSize: "24px", 
-      fontWeight: "950", 
+    <div style={{
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: "12px",
+      padding: "12px",
+      minWidth: "70px",
+      fontSize: "24px",
+      fontWeight: "950",
       color: "white",
       marginBottom: "8px"
     }}>
@@ -174,13 +174,13 @@ const StreamDetail = () => {
   const fetchEventAndVerifyAccess = async () => {
     setLoading(true);
     try {
-      const eventData = await apiCall(`/events/${id}`, 'GET');
+      const eventData = await apiCall(`/events/${id}`, 'GET', null, user?.token);
       setEvent(eventData);
-      
+
       if (eventData) {
         setEventIsPaid(eventData.isPaid || false);
         setTicketPrice(eventData.ticketPrice || 49);
-        
+
         if (user) {
           const ticketVerification = await apiCall(`/tickets/verify/${id}`, 'GET', null, user.token);
           setCanWatch(ticketVerification.canWatch);
@@ -232,7 +232,7 @@ const StreamDetail = () => {
       setShowModal(true);
       return;
     }
-    
+
     setIsPlaying(prev => !prev);
     if (!isPlaying) {
       showToast(currentEvent.status === "PAST" ? "▶️ Playing completed event playback!" : "🔴 Live HD Stream Loaded Successfully!");
@@ -251,7 +251,7 @@ const StreamDetail = () => {
       setLoading(true);
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
       // Generate code instead of auto unlocking
       const code = "ROGUEVIP";
       setPurchaseCode(code);
@@ -288,7 +288,7 @@ const StreamDetail = () => {
       setEvent(res.event);
       setEventIsPaid(res.event.isPaid || false);
       setTicketPrice(res.event.ticketPrice || 49);
-      
+
       const ticketVerification = await apiCall(`/tickets/verify/${id}`, 'GET', null, user.token);
       setCanWatch(ticketVerification.canWatch);
       setHasTicket(ticketVerification.hasTicket);
@@ -305,7 +305,7 @@ const StreamDetail = () => {
   const handleSendChatMessage = (e) => {
     if (e.key === "Enter" || e.type === "click") {
       if (!chatInput.trim()) return;
-      
+
       if (user && blockedUsers.includes(user.id || user._id)) {
         showToast("🚫 Message blocked! You are banned from this chat.");
         return;
@@ -345,19 +345,19 @@ const StreamDetail = () => {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    
+
     const timer = setInterval(() => {
       const now = new Date();
       const target = new Date();
       target.setHours(23, 59, 59);
-      
+
       const diff = target - now;
-      
+
       if (diff > 0) {
         const h = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const s = Math.floor((diff % (1000 * 60)) / 1000);
-        
+
         setTimeLeft({
           hours: h.toString().padStart(2, "0"),
           minutes: m.toString().padStart(2, "0"),
@@ -451,7 +451,7 @@ const StreamDetail = () => {
               <h3 style={{ fontSize: "28px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px", letterSpacing: "-0.02em" }}>
                 SPECTATOR PASS <span style={{ color: "#FF6A00" }}>REQUIRED</span>
               </h3>
-              
+
               <p style={{ color: "rgba(255, 255, 255, 0.6)", fontSize: "14px", lineHeight: "1.6", marginBottom: "32px" }}>
                 This exclusive live world record attempt requires a Spectator Pass. Secure your premium ticket now to unlock full live coverage, high-definition playbacks, and live chat features!
               </p>
@@ -489,7 +489,7 @@ const StreamDetail = () => {
 
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {!purchaseCode ? (
-                  <button 
+                  <button
                     onClick={purchaseTicket}
                     disabled={loading}
                     style={{
@@ -511,7 +511,7 @@ const StreamDetail = () => {
                     {loading ? "PROCESSING..." : "PAY NOW"}
                   </button>
                 ) : (
-                  <button 
+                  <button
                     onClick={() => {
                       navigator.clipboard.writeText(purchaseCode).catch(() => console.log("Clipboard write failed"));
                       setHasTicket(true);
@@ -540,7 +540,7 @@ const StreamDetail = () => {
                   </button>
                 )}
 
-                <button 
+                <button
                   onClick={() => { setShowModal(false); setPurchaseCode(""); }}
                   style={{
                     background: "rgba(255, 255, 255, 0.05)",
@@ -581,9 +581,9 @@ const StreamDetail = () => {
               <p style={{ color: "rgba(255, 255, 255, 0.6)", fontSize: "14px", lineHeight: "1.6", marginBottom: "24px" }}>
                 Enter the access code from your spectator pass to unlock the live stream.
               </p>
-              
-              <input 
-                type="text" 
+
+              <input
+                type="text"
                 value={redeemCodeInput}
                 onChange={e => setRedeemCodeInput(e.target.value.toUpperCase())}
                 placeholder="e.g. ROGUEVIP"
@@ -591,7 +591,7 @@ const StreamDetail = () => {
               />
 
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <button 
+                <button
                   onClick={() => {
                     if (redeemCodeInput.trim() === "ROGUEVIP" || redeemCodeInput.trim() === "VIPACCESS") {
                       setHasTicket(true);
@@ -609,7 +609,7 @@ const StreamDetail = () => {
                 >
                   UNLOCK STREAM
                 </button>
-                <button 
+                <button
                   onClick={() => { setShowRedeemModal(false); setRedeemCodeInput(""); }}
                   style={{ background: "rgba(255, 255, 255, 0.05)", color: "rgba(255, 255, 255, 0.6)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "800", textTransform: "uppercase", cursor: "pointer", transition: "all 0.2s" }}
                 >
@@ -640,7 +640,7 @@ const StreamDetail = () => {
                 </div>
               ) : isLocked ? (
                 <>
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={currentEvent.img || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1600&q=80"}
                     alt="Stream locked"
                     style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(16px)", opacity: 0.4 }}
@@ -662,7 +662,7 @@ const StreamDetail = () => {
                       <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{ background: "#FF6A00", border: "none", color: "white", padding: "14px 32px", borderRadius: "100px", fontWeight: "900", fontSize: "13px", cursor: "pointer", boxShadow: "0 10px 20px rgba(255,106,0,0.25)", transition: "transform 0.2s" }} onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"} onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
                         PURCHASE TICKET
                       </button>
-                      <button 
+                      <button
                         onClick={() => setShowRedeemModal(true)}
                         style={{ background: "transparent", border: "none", color: "#FF6A00", padding: "14px 32px", borderRadius: "100px", fontWeight: "800", fontSize: "13px", cursor: "pointer" }}
                       >
@@ -673,22 +673,22 @@ const StreamDetail = () => {
                 </>
               ) : isPlaying ? (
                 <div style={{ width: "100%", height: "100%", position: "relative", background: "#0c0c0c" }}>
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={currentEvent.img || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1600&q=80"}
                     alt="Stream playing"
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                   <div style={{ position: "absolute", inset: 0, background: "rgba(255, 106, 0, 0.05)", pointerEvents: "none" }} />
-                  
+
                   <div style={{ position: "absolute", bottom: "30px", left: "30px", display: "flex", alignItems: "center", gap: "10px", background: "rgba(0,0,0,0.7)", padding: "10px 20px", borderRadius: "100px", backdropFilter: "blur(10px)" }}>
                     <div style={{ width: "8px", height: "8px", background: "#EF4444", borderRadius: "50%", animation: "pulse 1s infinite" }}></div>
                     <span style={{ fontSize: "12px", fontWeight: "900", color: "white", letterSpacing: "0.05em" }}>LIVE HD FEED</span>
                   </div>
 
-                  <div 
-                    style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", opacity: 0, transition: "opacity 0.23s", display: "flex", alignItems: "center", justifyContent: "center" }} 
-                    onMouseEnter={e => e.currentTarget.style.opacity = 1} 
-                    onMouseLeave={e => e.currentTarget.style.opacity = 0} 
+                  <div
+                    style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", opacity: 0, transition: "opacity 0.23s", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0}
                     onClick={handleWatchClick}
                   >
                     <div style={{ width: "70px", height: "70px", borderRadius: "50%", background: "#FF6A00", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
@@ -698,7 +698,7 @@ const StreamDetail = () => {
                 </div>
               ) : (
                 <>
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={currentEvent.img || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1600&q=80"}
                     alt="Stream"
                     style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.6 }}
@@ -797,10 +797,10 @@ const StreamDetail = () => {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                  
+
                   {/* INLINE ADMIN CONTROLS SWITCH */}
                   {user && user.isAdmin && event && (
-                    <button 
+                    <button
                       onClick={() => setIsAdminEditing(prev => !prev)}
                       style={{ background: "rgba(255,106,0,0.1)", border: "1px solid rgba(255,106,0,0.3)", color: "#FF6A00", padding: "12px 24px", borderRadius: "100px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
                     >
@@ -811,20 +811,20 @@ const StreamDetail = () => {
                   <button style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", padding: "12px 24px", borderRadius: "100px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Share2 size={16} /> SHARE
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={handleWatchClick}
-                    style={{ 
-                      background: isPlaying ? "#EF4444" : "#FF6A00", 
-                      border: "none", 
-                      color: "white", 
-                      padding: "12px 28px", 
-                      borderRadius: "100px", 
-                      fontWeight: "900", 
-                      fontSize: "12px", 
-                      cursor: "pointer", 
-                      display: "flex", 
-                      alignItems: "center", 
+                    style={{
+                      background: isPlaying ? "#EF4444" : "#FF6A00",
+                      border: "none",
+                      color: "white",
+                      padding: "12px 28px",
+                      borderRadius: "100px",
+                      fontWeight: "900",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
                       gap: "8px",
                       boxShadow: isPlaying ? "0 10px 20px rgba(239,68,68,0.2)" : "0 10px 20px rgba(255,106,0,0.2)",
                       transition: "all 0.3s",
@@ -869,7 +869,7 @@ const StreamDetail = () => {
               {/* INLINE ADMIN EDITING SUITE */}
               <AnimatePresence>
                 {isAdminEditing && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
@@ -878,13 +878,13 @@ const StreamDetail = () => {
                     <h3 style={{ fontSize: "15px", fontWeight: "950", color: "white", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "20px" }}>
                       ⚡ ADMIN LIVESTREAM LOCK & TICKET PRICING CONTROLS
                     </h3>
-                    
+
                     <form onSubmit={handleSaveAdminChanges} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>STREAM TITLE</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             required
                             value={adminFields.title}
                             onChange={e => setAdminFields({...adminFields, title: e.target.value})}
@@ -893,18 +893,18 @@ const StreamDetail = () => {
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>BANNER / THUMBNAIL URL</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             value={adminFields.imageUrl}
                             onChange={e => setAdminFields({...adminFields, imageUrl: e.target.value})}
                             style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 14px", color: "white", fontSize: "13px", outline: "none" }}
                           />
                         </div>
                       </div>
-                      
+
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>STREAM DESCRIPTION</label>
-                        <textarea 
+                        <textarea
                           value={adminFields.description}
                           onChange={e => setAdminFields({...adminFields, description: e.target.value})}
                           style={{ width: "100%", height: "60px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 14px", color: "white", fontSize: "13px", outline: "none", resize: "none" }}
@@ -914,8 +914,8 @@ const StreamDetail = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>COMPETITORS</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             value={adminFields.competitors}
                             onChange={e => setAdminFields({...adminFields, competitors: e.target.value})}
                             placeholder="e.g. 12 ATHLETES"
@@ -924,8 +924,8 @@ const StreamDetail = () => {
                         </div>
                         <div>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>JUDGING OFFICIALS</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             value={adminFields.judges}
                             onChange={e => setAdminFields({...adminFields, judges: e.target.value})}
                             placeholder="e.g. Adjudicated by Rogue Marshals"
@@ -937,18 +937,18 @@ const StreamDetail = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 1fr", gap: "16px", alignItems: "center" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>STREAM VIDEO SOURCE URL</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             value={adminFields.streamUrl}
                             onChange={e => setAdminFields({...adminFields, streamUrl: e.target.value})}
                             placeholder="e.g. https://..."
                             style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 14px", color: "white", fontSize: "13px", outline: "none" }}
                           />
                         </div>
-                        
+
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             id="adminIsPaid"
                             checked={adminFields.isPaid}
                             onChange={e => setAdminFields({...adminFields, isPaid: e.target.checked})}
@@ -960,8 +960,8 @@ const StreamDetail = () => {
                         {adminFields.isPaid && (
                           <div>
                             <label style={{ display: "block", fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "4px" }}>PASS PRICE ($ USD)</label>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               step="0.01"
                               value={adminFields.ticketPrice}
                               onChange={e => setAdminFields({...adminFields, ticketPrice: e.target.value})}
@@ -974,8 +974,8 @@ const StreamDetail = () => {
                       {/* LIVESTREAM STATUS & HOMEPAGE FEATURE CONTROLS */}
                       <div style={{ display: "flex", gap: "24px", alignItems: "center", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             id="adminIsLive"
                             checked={adminFields.isLive}
                             onChange={e => setAdminFields({...adminFields, isLive: e.target.checked})}
@@ -987,8 +987,8 @@ const StreamDetail = () => {
                         </div>
 
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             id="adminIsFeatured"
                             checked={adminFields.isFeatured}
                             onChange={e => setAdminFields({...adminFields, isFeatured: e.target.checked})}
@@ -1001,13 +1001,13 @@ const StreamDetail = () => {
                       </div>
 
                       <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
-                        <button 
+                        <button
                           type="submit"
                           style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "12px 32px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}
                         >
                           💾 SAVE CHANGES
                         </button>
-                        <button 
+                        <button
                           type="button"
                           onClick={() => setIsAdminEditing(false)}
                           style={{ background: "rgba(255, 255, 255, 0.05)", color: "rgba(255, 255, 255, 0.6)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "100px", padding: "12px 32px", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", cursor: "pointer" }}
@@ -1028,10 +1028,10 @@ const StreamDetail = () => {
         {/* PURCHASE TICKETS SECTION - Conditionally Rendered */}
         {currentEvent.status !== "PAST" && (
           <section style={{ margin: "0 auto 0", padding: "40px 5% 100px", maxWidth: "1400px" }}>
-            <div style={{ 
-              background: "linear-gradient(135deg, rgba(255,106,0,0.1) 0%, rgba(255,106,0,0.02) 100%)", 
-              border: "1px solid rgba(255,106,0,0.2)", 
-              borderRadius: "40px", 
+            <div style={{
+              background: "linear-gradient(135deg, rgba(255,106,0,0.1) 0%, rgba(255,106,0,0.02) 100%)",
+              border: "1px solid rgba(255,106,0,0.2)",
+              borderRadius: "40px",
               padding: "60px",
               display: "flex",
               justifyContent: "space-between",
@@ -1073,20 +1073,20 @@ const StreamDetail = () => {
                     <CountdownBox value={timeLeft.seconds} label="SECS" />
                   </div>
                 </div>
-                
-                <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{ 
-                  background: "#FF6A00", 
-                  color: "white", 
-                  border: "none", 
-                  borderRadius: "100px", 
-                  padding: "20px 48px", 
-                  fontSize: "14px", 
-                  fontWeight: "900", 
-                  textTransform: "uppercase", 
-                  cursor: "pointer", 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "12px", 
+
+                <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{
+                  background: "#FF6A00",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "100px",
+                  padding: "20px 48px",
+                  fontSize: "14px",
+                  fontWeight: "900",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
                   boxShadow: "0 20px 40px rgba(255, 106, 0, 0.3)",
                   transition: "transform 0.3s"
                 }} onMouseEnter={e => e.currentTarget.style.transform = "translateY(-5px)"} onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>

@@ -1,31 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const supabase = require('../config/supabase');
 const { protect, admin } = require('../middleware/authMiddleware');
 
-const dataPath = path.join(__dirname, '../data/countries.json');
+// Countries live in the database (they used to be in data/countries.json, which Render's
+// ephemeral disk reset on every deploy). The JSON file is kept as the fallback/seed list.
+const fallbackCountries = require('../data/countries.json');
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-    res.json(data);
+    const { data, error } = await supabase.from('countries').select('name, code, flag, competitors').order('name');
+    if (error) throw error;
+    res.json(data && data.length ? data : fallbackCountries);
   } catch (err) {
-    res.status(500).json({ message: 'Error reading countries', error: err.message });
+    console.error('Countries lookup failed, serving fallback list:', err.message);
+    res.json(fallbackCountries);
   }
 });
 
-router.post('/', protect, admin, (req, res) => {
+router.post('/', protect, admin, async (req, res) => {
   try {
     const { name, code, flag } = req.body;
     if (!name || !code || !flag) {
       return res.status(400).json({ message: 'Name, code, and flag are required' });
     }
-    const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-    const newCountry = { name, code, flag, competitors: "0" };
-    data.push(newCountry);
-    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8');
-    res.status(201).json(newCountry);
+    const { data, error } = await supabase
+      .from('countries')
+      .insert([{ name: String(name).trim(), code: String(code).trim().toUpperCase(), flag, competitors: 0 }])
+      .select('name, code, flag, competitors')
+      .single();
+    if (error) {
+      if (error.code === '23505') return res.status(400).json({ message: 'That country code already exists' });
+      throw error;
+    }
+    res.status(201).json(data);
   } catch (err) {
     res.status(500).json({ message: 'Error adding country', error: err.message });
   }

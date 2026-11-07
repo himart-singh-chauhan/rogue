@@ -142,7 +142,7 @@ export default function MemberProfilePage() {
         {/* Header */}
         <div style={{ background: 'rgba(255,85,0,0.1)', border: '1px solid rgba(255,85,0,0.2)', borderRadius: '20px', padding: '40px', marginBottom: '40px', display: 'grid', gridTemplateColumns: '150px 1fr', gap: '32px', alignItems: 'start' }}>
           <div>
-            <img
+            <img loading="lazy" decoding="async"
               src={profile.profile_picture}
               alt={profile.display_name}
               style={{ width: '150px', height: '150px', borderRadius: '12px', objectFit: 'cover', border: '3px solid #FF5500' }}
@@ -493,7 +493,7 @@ export default function MemberProfilePage() {
                             allowFullScreen
                           ></iframe>
                         ) : (
-                          <video
+                          <video preload="metadata"
                             src={formatProductImage(videoUrl)}
                             style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                           />

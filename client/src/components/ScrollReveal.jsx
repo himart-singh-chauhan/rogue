@@ -55,6 +55,8 @@ const ScrollReveal = ({
       duration: duration,
       stagger: stagger,
       ease: 'power3.out',
+      // Drop the compositor hints once the reveal is done so idle pages stay light
+      onComplete: () => gsap.set(targets, { clearProps: 'filter,willChange' }),
       scrollTrigger: {
         trigger: el,
         start: 'top 90%',

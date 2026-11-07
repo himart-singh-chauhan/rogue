@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { 
-  ShieldAlert, Trophy, X, Eye, Calendar, 
-  User, Users, Search, Filter, 
-  AlertTriangle, CheckCircle, Video, FileText, Loader2, 
+import {
+  ShieldAlert, Trophy, X, Eye, Calendar,
+  User, Users, Search, Filter,
+  AlertTriangle, CheckCircle, Video, FileText, Loader2,
   Sparkles, Trash2, Edit3, Plus, ShoppingBag, Mail, HardDrive, Ticket, Layers, Folder,
   ArrowRight, Bell, Settings, LogOut, LayoutDashboard, BarChart3, MoreVertical,
   Activity, Zap, Timer, Network, Component, TrendingUp, DollarSign, Clock, XCircle, Target, Radio, CreditCard,
-  Flag, ClipboardList, GitBranch, MessageSquare, Star, Layout, Crown, Lock, Server, Image, Megaphone, UploadCloud
+  Flag, ClipboardList, GitBranch, MessageSquare, Star, Layout, Crown, Lock, Server, Image, Megaphone, UploadCloud, BarChart2, Download, MapPin, ExternalLink
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
-import { apiCall, formatProductImage, API_URL } from "../utils/api";
+import { apiCall, formatProductImage, API_URL, uploadDirect } from "../utils/api";
 import AdminRankingPanel from "../components/AdminRankingPanel";
 
 const Admin = () => {
@@ -84,7 +84,7 @@ const Admin = () => {
   const [tickets, setTickets] = useState([]);
   const [ticketSearchQuery, setTicketSearchQuery] = useState("");
   const [ledgerPayments, setLedgerPayments] = useState([]);
-  
+
   // New State variables for Phase 5 additions
   const [homepageRecords, setHomepageRecords] = useState({
     featured: [],
@@ -187,7 +187,7 @@ const Admin = () => {
   const [sponsorSaveStatus, setSponsorSaveStatus] = useState(null); // 'saving'|'success'|'error'|'imageError'
   const [revenueMetrics, setRevenueMetrics] = useState({ totalRevenue: 0, activeSubscriptions: 0, recentTransactions: [] });
   const [vipRequests, setVipRequests] = useState([]);
-  
+
   // Challenge Management States
   const [challenges, setChallenges] = useState([]);
   const [challengeSearchQuery, setChallengeSearchQuery] = useState("");
@@ -484,7 +484,7 @@ const Admin = () => {
     const msgLower = String(message).toLowerCase();
     const isError = msgLower.includes("fail") || msgLower.includes("error") || msgLower.includes("invalid") || msgLower.includes("must be") || msgLower.includes("required");
     const isSuccess = msgLower.includes("success") || msgLower.includes("seeded") || msgLower.includes("created") || msgLower.includes("deleted") || msgLower.includes("restored") || msgLower.includes("done");
-    
+
     showToast(message, isError ? "error" : isSuccess ? "success" : "info");
   };
 
@@ -501,10 +501,10 @@ const Admin = () => {
       p.referenceId || "",
       p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""
     ]);
-    
-    let csvContent = "data:text/csv;charset=utf-8," 
+
+    let csvContent = "data:text/csv;charset=utf-8,"
       + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
-    
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -524,10 +524,10 @@ const Admin = () => {
       ["Average Review Time (hrs)", "24.5"],
       ["Approval Rate (%)", "78%"],
     ];
-    
-    let csvContent = "data:text/csv;charset=utf-8," 
+
+    let csvContent = "data:text/csv;charset=utf-8,"
       + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\\n");
-    
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -687,11 +687,11 @@ const Admin = () => {
           apiCall("/admin/videos/record", "GET", null, user.token).catch(() => []),
           apiCall("/records/admin/submissions", "GET", null, user.token).catch(() => [])
         ]);
-        
+
         const syncedSubmissions = syncRecordsWithLocalFeatures(allSubmissionsData || []);
         const allSubmissionVids = [];
         const additionalFeaturedVids = [];
-        
+
         if (Array.isArray(syncedSubmissions)) {
           syncedSubmissions.forEach(sub => {
             const vidUrl = sub.evidence_url || sub.evidenceUrl || sub.youtube_link || sub.youtubeLink || sub.video_url || sub.videoUrl;
@@ -709,16 +709,16 @@ const Admin = () => {
                 status: sub.status
               };
               allSubmissionVids.push(videoObj);
-              
+
               if (sub.is_featured) {
                 additionalFeaturedVids.push(videoObj);
               }
             }
           });
         }
-        
+
         const combinedFeatured = [...featuredVids, ...additionalFeaturedVids];
-        
+
         setVideos({ featured: combinedFeatured, newest: newestVids, highlights: highlightVids, all_submissions: allSubmissionVids });
       } else if (activeTab === "coupons") {
         const [couponsData, couponStatsData] = await Promise.all([
@@ -742,33 +742,10 @@ const Admin = () => {
           apiCall("/tickets/admin/list", "GET", null, user.token).catch(() => [])
         ]);
 
-        let finalPayments = paymentsData?.payments || [];
-        let finalMetrics = paymentsData?.metrics || { totalRevenue: 0, newSubscriptions: 0, recentPayments: 0 };
-        
-        if (activeTab === "revenue" && finalPayments.length === 0 && allVerifiedData && allVerifiedData.length > 0) {
-          finalPayments = allVerifiedData.map((rec, i) => {
-            const customerName = rec.user?.full_name || rec.full_name || 'Athlete';
-            return {
-              id: `pay_${rec.id || i}`,
-              title: `Submission Fee - ${rec.title || rec.category || 'General'}`,
-              amount: 49.99,
-              currency: 'USD',
-              status: 'paid',
-              created_at: rec.created_at || new Date().toISOString(),
-              dateReceived: rec.created_at || new Date().toISOString(),
-              customerName: customerName,
-              customerEmail: rec.user?.email || rec.email || `${customerName.toLowerCase().replace(/\\s+/g, '')}@example.com`,
-              paymentMethod: 'credit_card',
-              paymentType: 'challenge',
-              user: { full_name: customerName }
-            };
-          });
-          finalMetrics = {
-            totalRevenue: finalPayments.length * 49.99,
-            newSubscriptions: Math.floor(finalPayments.length / 3),
-            recentPayments: finalPayments.length
-          };
-        }
+        const finalPayments = paymentsData?.payments || [];
+        const finalMetrics = paymentsData?.metrics || { totalRevenue: 0, newSubscriptions: 0, recentPayments: 0 };
+
+        // (Removed: fabricated $49.99 demo payments were shown here whenever the ledger was empty.)
 
         setMemberships(membData.memberships || []);
         setMembershipStats(statsData);
@@ -795,6 +772,12 @@ const Admin = () => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, activeTab]);
+
+  // Appeals filter / page changes must refetch with the NEW values (the old setTimeout(fetchData) used stale state)
+  useEffect(() => {
+    if (user && activeTab === "appeals") fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appealsFilter, appealsPage]);
 
   // Lock background scroll when any modal is open to prevent scroll chaining
   useEffect(() => {
@@ -970,7 +953,7 @@ const Admin = () => {
             referenceId: payment.referenceId,
             status: newStatus
           }, user.token);
-          
+
           if (response && response.success) {
             alert(`Payment status successfully set to ${newStatus.toUpperCase()}!`);
             fetchData();
@@ -1018,7 +1001,7 @@ const Admin = () => {
   const openModal = (type, item = null) => {
     setModalType(type);
     setModalTarget(item);
-    
+
     if (activeTab === "records") {
       if (recordsSubTab === "submissions") {
         if (type === "edit" && item) {
@@ -1226,7 +1209,7 @@ const Admin = () => {
   const handleStreamSubmit = (e) => {
     e.preventDefault();
     if (!streamTarget) return;
-    
+
     const newStream = {
       id: Date.now(),
       title: streamTarget.title || "LIVE ATTEMPT",
@@ -1261,51 +1244,60 @@ const Admin = () => {
         if (!videoForm.title.trim()) {
           throw new Error('Please enter a video title.');
         }
-        const safeVideoUrl = (videoForm.videoUrl || '').trim();
-        
+        let safeVideoUrl = (videoForm.videoUrl || '').trim();
+        const isYouTube = /youtube\.com|youtu\.be/i.test(safeVideoUrl);
+
         if (!safeVideoUrl && !videoFile) {
           throw new Error('Please enter a Video URL or upload a video file.');
         }
-        
-        if (!thumbnailFile) {
+
+        // YouTube links get an automatic thumbnail on the server; other videos need one.
+        if (!thumbnailFile && !isYouTube) {
           throw new Error('Please upload a thumbnail image.');
         }
 
-        let uploadedThumbnailUrl = null;
-        
-        // Upload thumbnail file if provided
-        if (thumbnailFile) {
-          const formData = new FormData();
-          formData.append('image', thumbnailFile);
+        let source = isYouTube ? 'youtube' : 'external_url';
+
+        // Upload the video file straight to storage when no URL was given
+        if (!safeVideoUrl && videoFile) {
           try {
-            const uploadResponse = await fetch(`${API_URL}/records/upload/image`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${user.token}`
-              },
-              body: formData
-            });
-            const uploadData = await uploadResponse.json();
-            uploadedThumbnailUrl = uploadData.url;
+            showToast("Uploading video... please keep this tab open.", "info");
+            safeVideoUrl = await uploadDirect(videoFile, 'admin-video', user.token);
+            source = 'uploaded';
           } catch (uploadErr) {
-            console.error('Thumbnail upload error:', uploadErr);
-            throw new Error('Failed to upload thumbnail image. Please try again.');
+            throw new Error(`Video upload failed: ${uploadErr.message}`);
           }
         }
 
-        let targetRoute = "/admin/videos/featured";
-        if (videoForm.isNewlyUploaded) targetRoute = "/admin/videos/newest";
+        let uploadedThumbnailUrl = null;
+        if (thumbnailFile) {
+          try {
+            uploadedThumbnailUrl = await uploadDirect(thumbnailFile, 'admin-image', user.token);
+          } catch (uploadErr) {
+            throw new Error(`Thumbnail upload failed: ${uploadErr.message}`);
+          }
+        }
 
-        await apiCall(targetRoute, "POST", {
+        const videoPayload = {
           title: videoForm.title,
           description: videoForm.description,
+          category: videoForm.category,
           videoUrl: safeVideoUrl,
           thumbnailUrl: uploadedThumbnailUrl,
-          source: safeVideoUrl.includes('youtube') || safeVideoUrl.includes('youtu.be') ? 'youtube' : 'external_url',
-          youtubeVideoId: (safeVideoUrl.includes('youtube.com/watch?v=') ? safeVideoUrl.split('v=')[1]?.split('&')[0] : (safeVideoUrl.includes('youtu.be/') ? safeVideoUrl.split('youtu.be/')[1]?.split('?')[0] : null)),
-        }, user.token);
+          source,
+          isFeatured: !!videoForm.isFeatured,
+          isNewlyUploaded: !!videoForm.isNewlyUploaded,
+        };
 
-        showToast("✅ Video saved successfully with thumbnail!", "success");
+        // Honour both checkboxes; default to the featured list when neither is ticked.
+        const targets = [];
+        if (videoForm.isFeatured || !videoForm.isNewlyUploaded) targets.push("/admin/videos/featured");
+        if (videoForm.isNewlyUploaded) targets.push("/admin/videos/newest");
+        for (const targetRoute of targets) {
+          await apiCall(targetRoute, "POST", videoPayload, user.token);
+        }
+
+        showToast("✅ Video saved successfully!", "success");
         setVideoForm({ title: "", description: "", category: "Strength", isFeatured: false, isNewlyUploaded: false, videoUrl: "" });
         setVideoFile(null);
         setThumbnailFile(null);
@@ -1314,26 +1306,26 @@ const Admin = () => {
       } else if (activeTab === "products") {
         const endpoint = modalType === "edit" ? `/admin/products/${modalTarget.id}` : "/admin/products";
         const method = modalType === "edit" ? "PUT" : "POST";
-        
+
         // Exclude file helper attributes from JSON payload
         const { imageFile, imagePreview, ...jsonPayload } = productForm;
-        
+
         // First create/update product details
         const createdProduct = await apiCall(endpoint, method, jsonPayload, user.token);
         const productId = modalType === "edit" ? modalTarget.id : createdProduct.id;
-        
+
         // Then upload image if file is selected
         if (productForm.imageFile) {
           try {
             const formData = new FormData();
             formData.append("productImage", productForm.imageFile);
-            
+
             const imgRes = await fetch(API_URL + `/admin/products/${productId}/image`, {
               method: "POST",
               headers: { Authorization: `Bearer ${user.token}` },
               body: formData
             });
-            
+
             if(!imgRes.ok) throw new Error("Image upload failed");
             alert("Product image uploaded successfully.");
           } catch (uploadErr) {
@@ -1341,7 +1333,7 @@ const Admin = () => {
             alert("Image upload failed. Please try again.");
           }
         }
-        
+
         alert(`Product ${modalType === "add" ? "added" : "updated"} successfully.`);
         fetchData();
         setIsModalOpen(false);
@@ -1464,7 +1456,7 @@ const Admin = () => {
         // Reload dataset dynamically
         fetchData();
         setIsModalOpen(false);
-        
+
         // Reset forms
         if (activeTab === "users" || activeTab === "adjudicators") {
           setUserForm({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
@@ -1512,7 +1504,7 @@ const Admin = () => {
     try {
       await apiCall(`/records/${id}/featured`, "PUT", { isFeatured }, user.token);
       setRecords(prev => prev.map(x => x.id === id ? { ...x, is_featured: isFeatured } : x));
-      
+
       // Update local storage for landing page sync
       try {
         const statStr = localStorage.getItem(`rogue_stat_${id}`);
@@ -1704,6 +1696,45 @@ const Admin = () => {
     );
   };
 
+  // Seeding mock judges in case roster is unpopulated, to provide a beautiful high-fidelity interactive flow
+  useEffect(() => {
+    if (activeTab === "adjudicators" && (!judges || judges.length === 0)) {
+      setJudges([
+        {
+          id: "j-1",
+          name: "Rogue Marshal Team",
+          email: "marshals@rogueworldrecords.com",
+          role: "judge",
+          admin_notes: "Elite veteran review team. Expert in physical speed and weightlifting challenges.",
+          stats: { assigned: 8, pending: 2, completed: 6, verified: 4, rejected: 2, averageSpeed: "0.8 days" }
+        },
+        {
+          id: "j-2",
+          name: "Chief Adjudicator Sarah Jenkins",
+          email: "sarah.j@rogueworldrecords.com",
+          role: "judge",
+          admin_notes: "Senior adjudicator, details-oriented. Handles high-stakes tech and endurance records.",
+          stats: { assigned: 5, pending: 1, completed: 4, verified: 3, rejected: 1, averageSpeed: "1.4 days" }
+        },
+        {
+          id: "j-3",
+          name: "Timing Specialist Liam Vance",
+          email: "liam.vance@rogueworldrecords.com",
+          role: "judge",
+          admin_notes: "Precision calibration analyst. Expert in digital time-based athletics.",
+          stats: { assigned: 3, pending: 0, completed: 3, verified: 2, rejected: 1, averageSpeed: "0.9 days" }
+        }
+      ]);
+    }
+  }, [activeTab, judges]);
+
+  // Check badge colors helper (AI scan)
+  const getCheckBadge = (val) => {
+    if (val === "passed") return { color: "#22c55e", label: "PASS" };
+    if (val === "flagged") return { color: "#eab308", label: "WARN" };
+    return { color: "#ef4444", label: "FAIL" };
+  };
+
   // loading view
   if (authLoading) {
     return (
@@ -1743,8 +1774,8 @@ const Admin = () => {
       });
     } else if (activeTab === "users") {
       if (usersSubTab === "registry") {
-        return users.filter(user => 
-          user.name?.toLowerCase().includes(query) || 
+        return users.filter(user =>
+          user.name?.toLowerCase().includes(query) ||
           user.email?.toLowerCase().includes(query) ||
           user.username?.toLowerCase().includes(query) ||
           (user.member_number || user.memberNumber)?.toLowerCase().includes(query)
@@ -1753,8 +1784,8 @@ const Admin = () => {
         return contacts.filter(c => c.name?.toLowerCase().includes(query) || c.email?.toLowerCase().includes(query) || c.subject?.toLowerCase().includes(query));
       }
     } else if (activeTab === "events") {
-      return events.filter(e => 
-        e.title?.toLowerCase().includes(query) || 
+      return events.filter(e =>
+        e.title?.toLowerCase().includes(query) ||
         e.location?.toLowerCase().includes(query)
       );
     } else if (activeTab === "products") {
@@ -1810,37 +1841,6 @@ const Admin = () => {
     }
   };
 
-  // Seeding mock judges in case roster is unpopulated, to provide a beautiful high-fidelity interactive flow
-  useEffect(() => {
-    if (activeTab === "adjudicators" && (!judges || judges.length === 0)) {
-      setJudges([
-        {
-          id: "j-1",
-          name: "Rogue Marshal Team",
-          email: "marshals@rogueworldrecords.com",
-          role: "judge",
-          admin_notes: "Elite veteran review team. Expert in physical speed and weightlifting challenges.",
-          stats: { assigned: 8, pending: 2, completed: 6, verified: 4, rejected: 2, averageSpeed: "0.8 days" }
-        },
-        {
-          id: "j-2",
-          name: "Chief Adjudicator Sarah Jenkins",
-          email: "sarah.j@rogueworldrecords.com",
-          role: "judge",
-          admin_notes: "Senior adjudicator, details-oriented. Handles high-stakes tech and endurance records.",
-          stats: { assigned: 5, pending: 1, completed: 4, verified: 3, rejected: 1, averageSpeed: "1.4 days" }
-        },
-        {
-          id: "j-3",
-          name: "Timing Specialist Liam Vance",
-          email: "liam.vance@rogueworldrecords.com",
-          role: "judge",
-          admin_notes: "Precision calibration analyst. Expert in digital time-based athletics.",
-          stats: { assigned: 3, pending: 0, completed: 3, verified: 2, rejected: 1, averageSpeed: "0.9 days" }
-        }
-      ]);
-    }
-  }, [activeTab, judges]);
 
   const handlePromoteToJudge = async (athlete) => {
     try {
@@ -1850,11 +1850,8 @@ const Admin = () => {
       setIsPromoteModalOpen(false);
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      const updatedJudges = [...judges, { ...athlete, role: 'judge', admin_notes: '', stats: { assigned: 0, pending: 0, completed: 0, verified: 0, rejected: 0, averageSpeed: '1.2 days' } }];
-      setJudges(updatedJudges);
-      setUsers(users.filter(u => u.id !== athlete.id));
-      alert(`[SANDBOX SIMULATION] Promoted ${athlete.name} to Adjudicator Roster.`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
       setIsPromoteModalOpen(false);
     }
   };
@@ -1867,10 +1864,8 @@ const Admin = () => {
       alert(`Revoked Adjudicator credentials for ${judge.name}.`);
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      setJudges(judges.filter(j => j.id !== judge.id));
-      setUsers([...users, { ...judge, role: 'athlete' }]);
-      alert(`[SANDBOX SIMULATION] Revoked Adjudicator credentials for ${judge.name}.`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1882,10 +1877,8 @@ const Admin = () => {
       setIsJudgeNotesModalOpen(false);
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      setJudges(judges.map(j => j.id === selectedJudgeForNotes.id ? { ...j, admin_notes: judgeNotesText } : j));
-      setIsJudgeNotesModalOpen(false);
-      alert("[SANDBOX SIMULATION] Judge oversight notes updated.");
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1897,21 +1890,8 @@ const Admin = () => {
       alert(`Successfully assigned submission to ${selectedJudge ? selectedJudge.name : 'Judge'}.`);
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      setRecords(records.map(r => r.id === recordId ? { 
-        ...r, 
-        assigned_judge_id: judgeId, 
-        judge_decision: 'pending',
-        judge_notes: '',
-        judge_assigned_at: new Date().toISOString()
-      } : r));
-      if (selectedJudge) {
-        setJudges(judges.map(j => j.id === judgeId ? {
-          ...j,
-          stats: { ...j.stats, assigned: j.stats.assigned + 1, pending: j.stats.pending + 1 }
-        } : j));
-      }
-      alert(`[SANDBOX SIMULATION] Assigned submission to ${selectedJudge ? selectedJudge.name : 'Judge'}.`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1921,14 +1901,8 @@ const Admin = () => {
       alert("Judge recommendation registered successfully.");
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      setRecords(records.map(r => r.id === recordId ? {
-        ...r,
-        judge_decision: decision,
-        judge_notes: notes || 'Evidence conforms with Rogue World Records standard codes.',
-        judge_decided_at: new Date().toISOString()
-      } : r));
-      alert(`[SANDBOX SIMULATION] Judge recommended record to be [${decision.toUpperCase()}].`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1938,25 +1912,8 @@ const Admin = () => {
       alert(`Record has been officially approved and published! Status set to ${record.judge_decision}.`);
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      setRecords(records.map(r => r.id === record.id ? {
-        ...r,
-        status: record.judge_decision,
-        judge_decision: null
-      } : r));
-      if (record.assigned_judge_id) {
-        setJudges(judges.map(j => j.id === record.assigned_judge_id ? {
-          ...j,
-          stats: { 
-            ...j.stats, 
-            pending: Math.max(0, j.stats.pending - 1),
-            completed: j.stats.completed + 1,
-            verified: record.judge_decision === 'verified' ? j.stats.verified + 1 : j.stats.verified,
-            rejected: record.judge_decision === 'rejected' ? j.stats.rejected + 1 : j.stats.rejected
-          }
-        } : j));
-      }
-      alert(`[SANDBOX SIMULATION] Official record approved and published live: [${record.judge_decision.toUpperCase()}]`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1968,14 +1925,8 @@ const Admin = () => {
       setIsOversightRevertModalOpen(false);
       fetchData();
     } catch (err) {
-      // Sandbox fallback
-      setRecords(records.map(r => r.id === selectedOversightRecord.id ? {
-        ...r,
-        judge_decision: 'pending',
-        judge_notes: `[ADMIN CORRECTION REVISION]: ${oversightRevertFeedback}`
-      } : r));
-      setIsOversightRevertModalOpen(false);
-      alert(`[SANDBOX SIMULATION] Recommendation sent back to judge with correction notes: "${oversightRevertFeedback}"`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1985,9 +1936,8 @@ const Admin = () => {
       alert("AI configuration settings updated successfully.");
       setAiSettings(prev => ({ ...prev, ...configs }));
     } catch (err) {
-      // Sandbox fallback
-      setAiSettings(prev => ({ ...prev, ...configs }));
-      alert("[SANDBOX SIMULATION] AI configuration settings updated.");
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -1996,7 +1946,7 @@ const Admin = () => {
     try {
       await apiCall(`/admin/ai-verification/scans/${recordId}/override`, "PUT", { overrideStatus, overrideReason }, user.token);
       alert(`AI scan decision overridden successfully to: ${overrideStatus.toUpperCase()}`);
-      
+
       // Update local state
       setAiScans(prev => prev.map(scan => {
         if (scan.record_id === recordId) {
@@ -2008,7 +1958,7 @@ const Admin = () => {
         }
         return scan;
       }));
-      
+
       // Update record status locally as well
       setRecords(prev => prev.map(rec => {
         if (rec.id === recordId) {
@@ -2019,31 +1969,11 @@ const Admin = () => {
         }
         return rec;
       }));
-      
+
       setIsAiDetailModalOpen(false);
     } catch (err) {
-      // Sandbox fallback
-      setAiScans(prev => prev.map(scan => {
-        if (scan.record_id === recordId) {
-          return {
-            ...scan,
-            override_status: overrideStatus,
-            override_reason: overrideReason
-          };
-        }
-        return scan;
-      }));
-      setRecords(prev => prev.map(rec => {
-        if (rec.id === recordId) {
-          return {
-            ...rec,
-            status: overrideStatus === "approved" ? "verified" : overrideStatus === "rejected" ? "rejected" : rec.status
-          };
-        }
-        return rec;
-      }));
-      setIsAiDetailModalOpen(false);
-      alert(`[SANDBOX SIMULATION] Overrode AI scan to ${overrideStatus.toUpperCase()} successfully.`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     } finally {
       setIsAiActionUpdating(false);
     }
@@ -2054,7 +1984,7 @@ const Admin = () => {
     try {
       await apiCall(`/admin/ai-verification/scans/${recordId}/flag`, "PUT", { suspiciousFlagged }, user.token);
       alert(suspiciousFlagged ? "Record marked as suspicious and prioritized." : "Suspicious flag removed.");
-      
+
       setAiScans(prev => prev.map(scan => {
         if (scan.record_id === recordId) {
           return {
@@ -2065,17 +1995,8 @@ const Admin = () => {
         return scan;
       }));
     } catch (err) {
-      // Sandbox fallback
-      setAiScans(prev => prev.map(scan => {
-        if (scan.record_id === recordId) {
-          return {
-            ...scan,
-            suspicious_flagged: suspiciousFlagged
-          };
-        }
-        return scan;
-      }));
-      alert(`[SANDBOX SIMULATION] Flag state updated for record scan.`);
+      console.error("Admin action failed:", err);
+      alert(`Action failed: ${err.message}`);
     } finally {
       setIsAiActionUpdating(false);
     }
@@ -2084,23 +2005,23 @@ const Admin = () => {
   return (
     <>
       <Navbar />
-      <div style={{ 
+      <div style={{
         display: "flex", minHeight: "100vh", background: "#050505", color: "white", fontFamily: "'Outfit', sans-serif",
         overflow: "hidden"
       }}>
         {/* Main Content Area */}
         <main style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", position: "relative" }}>
-          
+
           {/* Top Navbar */}
           <header style={{ padding: "16px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "rgba(5,5,5,0.8)", backdropFilter: "blur(12px)", zIndex: 10 }}>
           <div style={{ position: "relative", width: "400px" }}>
             <Search size={16} color="#666" style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)" }} />
-            <input 
-              type="text" 
-              placeholder="Search records, users, or payments..." 
+            <input
+              type="text"
+              placeholder="Search records, users, or payments..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: "100%", background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "100px", padding: "10px 16px 10px 42px", color: "white", fontSize: "13px", outline: "none" }} 
+              style={{ width: "100%", background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "100px", padding: "10px 16px 10px 42px", color: "white", fontSize: "13px", outline: "none" }}
             />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
@@ -2147,8 +2068,8 @@ const Admin = () => {
                   { label: "Trending Records", value: "0", icon: <TrendingUp size={20} />, color: "#14b8a6", bg: "rgba(20,184,166,0.1)", onClick: () => setActiveTab("records") },
                   { label: "Most Active Categories", value: dashboardStats?.counts?.categories?.toLocaleString() || 0, icon: <Activity size={20} />, color: "#FF5500", bg: "rgba(255,85,0,0.1)", onClick: () => { setActiveTab("records"); setRecordsSubTab("categories"); } }
                 ].map((stat, idx) => (
-                  <div key={idx} onClick={stat.onClick} style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", transition: "transform 0.2s, box-shadow 0.2s, border-color 0.2s", cursor: "pointer" }} 
-                       onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }} 
+                  <div key={idx} onClick={stat.onClick} style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", transition: "transform 0.2s, box-shadow 0.2s, border-color 0.2s", cursor: "pointer" }}
+                       onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}
                        onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
                       <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: stat.bg, display: "flex", alignItems: "center", justifyContent: "center", color: stat.color }}>
@@ -2163,7 +2084,7 @@ const Admin = () => {
 
               {/* Chart & Recent Activity */}
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px", marginBottom: "24px" }}>
-                
+
                 {/* Chart Box */}
                 <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", position: "relative", minHeight: "360px", display: "flex", flexDirection: "column" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
@@ -2204,7 +2125,7 @@ const Admin = () => {
                     {dashboardStats?.recentSubmissions?.slice(0, 3).map((sub, idx) => (
                       <div key={`sub-${idx}`} style={{ display: "flex", gap: "12px" }}>
                         <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#222", overflow: "hidden", flexShrink: 0 }}>
-                          <img src={`https://ui-avatars.com/api/?name=${sub.title}&background=random`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Avatar" />
+                          <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${sub.title}&background=random`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Avatar" />
                         </div>
                         <div>
                           <div style={{ fontSize: "13px", color: "#ccc", lineHeight: "1.4" }}>New submission for <strong style={{ color: "white" }}>{sub.title}</strong></div>
@@ -2218,7 +2139,7 @@ const Admin = () => {
                     {dashboardStats?.recentUsers?.slice(0, 1).map((usr, idx) => (
                       <div key={`usr-${idx}`} style={{ display: "flex", gap: "12px" }}>
                         <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#222", overflow: "hidden", flexShrink: 0 }}>
-                          <img src={`https://ui-avatars.com/api/?name=${usr.name}&background=random`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Avatar" />
+                          <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${usr.name}&background=random`} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Avatar" />
                         </div>
                         <div>
                           <div style={{ fontSize: "13px", color: "#ccc", lineHeight: "1.4" }}><strong style={{ color: "white" }}>{usr.name}</strong> joined the platform</div>
@@ -2398,7 +2319,7 @@ const Admin = () => {
                       </div>
                       <div style={{ display: "flex", alignItems: "center" }}>
                         {records.filter(r => r.status === 'verified').slice(0,3).map((r, i) => (
-                          <img key={i} src={`https://ui-avatars.com/api/?name=${r.user?.name || 'A'}&background=random`} alt="Avatar" style={{ width: "20px", height: "20px", borderRadius: "50%", border: "2px solid #111", marginLeft: i > 0 ? "-8px" : "0" }} />
+                          <img loading="lazy" decoding="async" key={i} src={`https://ui-avatars.com/api/?name=${r.user?.name || 'A'}&background=random`} alt="Avatar" style={{ width: "20px", height: "20px", borderRadius: "50%", border: "2px solid #111", marginLeft: i > 0 ? "-8px" : "0" }} />
                         ))}
                       </div>
                     </div>
@@ -2431,7 +2352,7 @@ const Admin = () => {
                         ) : records.slice(0, 10).map((r, idx) => (
                           <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                             <td style={{ padding: "16px 0", display: "flex", alignItems: "center", gap: "12px" }}>
-                              <img src={`https://ui-avatars.com/api/?name=${r.user?.name || 'Athlete'}&background=random`} alt={r.user?.name || 'User'} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
+                              <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${r.user?.name || 'Athlete'}&background=random`} alt={r.user?.name || 'User'} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
                               <div>
                                 <div style={{ color: "white", fontSize: "14px", fontWeight: "700" }}>{r.user?.name || "Rogue Athlete"}</div>
                                 <div style={{ color: "#666", fontSize: "11px", marginTop: "2px" }}>{r.user?.email || "athlete@rogue.com"}</div>
@@ -2449,12 +2370,12 @@ const Admin = () => {
                               </span>
                             </td>
                             <td style={{ padding: "16px 0", textAlign: "center" }}>
-                              <span style={{ 
-                                background: r.status === 'pending' ? "rgba(255,106,0,0.15)" : r.status === 'verified' ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", 
-                                color: r.status === 'pending' ? "#FF6A00" : r.status === 'verified' ? "#22c55e" : "#ef4444", 
-                                padding: "4px 8px", 
-                                borderRadius: "100px", 
-                                fontSize: "10px", 
+                              <span style={{
+                                background: r.status === 'pending' ? "rgba(255,106,0,0.15)" : r.status === 'verified' ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                                color: r.status === 'pending' ? "#FF6A00" : r.status === 'verified' ? "#22c55e" : "#ef4444",
+                                padding: "4px 8px",
+                                borderRadius: "100px",
+                                fontSize: "10px",
                                 fontWeight: "900",
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -2467,14 +2388,15 @@ const Admin = () => {
                             </td>
                             <td style={{ padding: "16px 0", textAlign: "center" }}>
                               {(() => {
-                                const paymentStatus = r.record_meta?.[0]?.admin_notes?.includes('paid') ? 'Paid' : 'Pending';
+                                const meta0 = Array.isArray(r.record_meta) ? r.record_meta[0] : r.record_meta;
+                                const paymentStatus = (meta0?.payment_status === 'paid' || /payment_status:paid/.test(meta0?.admin_notes || '')) ? 'Paid' : 'Pending';
                                 return (
-                                  <span style={{ 
-                                    background: paymentStatus === 'Pending' ? "rgba(255,255,255,0.05)" : "rgba(34,197,94,0.15)", 
-                                    color: paymentStatus === 'Pending' ? "#888" : "#22c55e", 
-                                    padding: "4px 8px", 
-                                    borderRadius: "100px", 
-                                    fontSize: "10px", 
+                                  <span style={{
+                                    background: paymentStatus === 'Pending' ? "rgba(255,255,255,0.05)" : "rgba(34,197,94,0.15)",
+                                    color: paymentStatus === 'Pending' ? "#888" : "#22c55e",
+                                    padding: "4px 8px",
+                                    borderRadius: "100px",
+                                    fontSize: "10px",
                                     fontWeight: "900",
                                     display: "inline-flex",
                                     textTransform: "uppercase"
@@ -2498,16 +2420,16 @@ const Admin = () => {
                                 )}
                                 {r.status === "verified" && (
                                   <>
-                                    <button 
-                                      onClick={() => handleToggleFeatured(r.id, !r.is_featured)} 
-                                      style={{ 
-                                        background: r.is_featured ? "#FF5500" : "transparent", 
-                                        border: r.is_featured ? "none" : "1px solid rgba(255,255,255,0.2)", 
-                                        color: "white", 
-                                        padding: "6px 12px", 
-                                        borderRadius: "6px", 
-                                        cursor: "pointer", 
-                                        fontSize: "11px", 
+                                    <button
+                                      onClick={() => handleToggleFeatured(r.id, !r.is_featured)}
+                                      style={{
+                                        background: r.is_featured ? "#FF5500" : "transparent",
+                                        border: r.is_featured ? "none" : "1px solid rgba(255,255,255,0.2)",
+                                        color: "white",
+                                        padding: "6px 12px",
+                                        borderRadius: "6px",
+                                        cursor: "pointer",
+                                        fontSize: "11px",
                                         fontWeight: "900",
                                         display: "flex",
                                         alignItems: "center",
@@ -2532,7 +2454,7 @@ const Admin = () => {
                         ))}
                       </tbody>
                     </table>
-                    
+
                     {/* Pagination */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px", paddingTop: "24px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
                       <div style={{ fontSize: "12px", color: "#888", fontWeight: "700" }}>
@@ -2580,7 +2502,7 @@ const Admin = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #111 100%)", borderRadius: "16px", padding: "32px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                       <h3 style={{ fontSize: "16px", fontWeight: "900", margin: "0 0 12px 0", color: "white" }}>Record Review Tip</h3>
                       <p style={{ color: "#888", fontSize: "13px", lineHeight: "1.6", margin: "0 0 24px 0" }}>
@@ -2683,7 +2605,7 @@ const Admin = () => {
                               {categoriesList.length === 0 ? "NO CATEGORIES FOUND" : "NO MATCHING CATEGORIES"}
                             </h3>
                             <p style={{ color: "#888", fontSize: "14px", margin: "0 0 24px 0" }}>
-                              {categoriesList.length === 0 
+                              {categoriesList.length === 0
                                 ? "Seed the default Apex World Records categories or create your first custom one."
                                 : "Try adjusting your search or filter criteria."
                               }
@@ -2703,7 +2625,7 @@ const Admin = () => {
                           const colSpan = index < 2 ? (index === 0 ? 4 : 2) : 2;
                           const isFirstRow = index < 2;
                           const height = isFirstRow ? "360px" : "260px";
-                          
+
                           const bgImages = [
                             "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop",
                             "https://images.unsplash.com/photo-1552674605-1e16977fb794?q=80&w=1472&auto=format&fit=crop",
@@ -2719,11 +2641,11 @@ const Admin = () => {
                           const bgImage = bgImages[index % bgImages.length];
 
                           return (
-                            <div key={cat._id || cat.id || index} style={{ 
+                            <div key={cat._id || cat.id || index} style={{
                               gridColumn: `span ${colSpan}`,
                               height: height,
-                              position: "relative", 
-                              borderRadius: "24px", 
+                              position: "relative",
+                              borderRadius: "24px",
                               overflow: "hidden",
                               boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
                               transition: "transform 0.2s",
@@ -2733,25 +2655,25 @@ const Admin = () => {
                               <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center", filter: cat.active === false ? "grayscale(80%)" : "none" }} />
                               {/* Dark overlay gradient */}
                               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.1) 100%)" }} />
-                              
+
                               {/* Content */}
                               <div style={{ position: "relative", zIndex: 1, padding: "32px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                                 {/* Top row */}
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                  <span style={{ 
-                                    background: cat.active !== false ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", 
-                                    border: `1px solid ${cat.active !== false ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, 
-                                    color: cat.active !== false ? "#22c55e" : "#ef4444", 
-                                    padding: "6px 16px", 
-                                    borderRadius: "100px", 
-                                    fontSize: "10px", 
-                                    fontWeight: "900", 
+                                  <span style={{
+                                    background: cat.active !== false ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                                    border: `1px solid ${cat.active !== false ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+                                    color: cat.active !== false ? "#22c55e" : "#ef4444",
+                                    padding: "6px 16px",
+                                    borderRadius: "100px",
+                                    fontSize: "10px",
+                                    fontWeight: "900",
                                     letterSpacing: "1px",
-                                    backdropFilter: "blur(8px)" 
+                                    backdropFilter: "blur(8px)"
                                   }}>
                                     {cat.active !== false ? "ACTIVE" : "INACTIVE"}
                                   </span>
-                                  
+
                                   <div style={{ display: "flex", gap: "8px" }}>
                                     {/* Toggle Active */}
                                     <button
@@ -2780,12 +2702,12 @@ const Admin = () => {
 
                                 {/* Bottom row */}
                                 <div>
-                                  <h3 style={{ 
-                                    fontSize: colSpan === 4 ? "48px" : "28px", 
-                                    fontWeight: "950", 
-                                    color: "white", 
-                                    textTransform: "uppercase", 
-                                    margin: "0 0 16px 0", 
+                                  <h3 style={{
+                                    fontSize: colSpan === 4 ? "48px" : "28px",
+                                    fontWeight: "950",
+                                    color: "white",
+                                    textTransform: "uppercase",
+                                    margin: "0 0 16px 0",
                                     letterSpacing: "-1.5px",
                                     lineHeight: "1"
                                   }}>
@@ -2796,7 +2718,7 @@ const Admin = () => {
                                       {cat.description.length > 80 ? cat.description.substring(0, 80) + "..." : cat.description}
                                     </p>
                                   )}
-                                  
+
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                                     <div>
                                       <div style={{ color: "#aaa", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", marginBottom: "6px" }}>{colSpan === 4 ? "ACTIVE RECORDS" : "RECORDS"}</div>
@@ -2865,7 +2787,7 @@ const Admin = () => {
                       <Network size={20} color="#FF5500" />
                       <h3 style={{ fontSize: "20px", fontWeight: "900", margin: 0 }}>Division Management</h3>
                     </div>
-                    
+
                     {ageGroups.length === 0 ? (
                       <div style={{ padding: "40px", textAlign: "center", background: "#111", borderRadius: "16px", border: "1px dashed rgba(255,255,255,0.1)" }}>
                         <p style={{ color: "#888", fontWeight: "700" }}>No Divisions / Age Groups found.</p>
@@ -2875,10 +2797,10 @@ const Admin = () => {
                         {ageGroups.map((g, i) => {
                           const isPrimary = g.name?.toLowerCase().includes("adult") && !g.name?.toLowerCase().includes("young");
                           return (
-                            <div key={g._id || i} style={{ 
-                              background: "#111", 
-                              border: isPrimary ? "2px solid #FF5500" : "1px solid rgba(255,255,255,0.05)", 
-                              borderRadius: "16px", 
+                            <div key={g._id || i} style={{
+                              background: "#111",
+                              border: isPrimary ? "2px solid #FF5500" : "1px solid rgba(255,255,255,0.05)",
+                              borderRadius: "16px",
                               padding: "24px",
                               display: "flex",
                               flexDirection: "column",
@@ -2887,12 +2809,12 @@ const Admin = () => {
                             }}>
                               <div>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                                  <span style={{ 
-                                    background: isPrimary ? "#FF5500" : "rgba(255,85,0,0.1)", 
-                                    color: isPrimary ? "white" : "#FF5500", 
-                                    padding: "4px 8px", 
-                                    borderRadius: "4px", 
-                                    fontSize: "10px", 
+                                  <span style={{
+                                    background: isPrimary ? "#FF5500" : "rgba(255,85,0,0.1)",
+                                    color: isPrimary ? "white" : "#FF5500",
+                                    padding: "4px 8px",
+                                    borderRadius: "4px",
+                                    fontSize: "10px",
                                     fontWeight: "900",
                                     textTransform: "uppercase"
                                   }}>
@@ -2920,7 +2842,7 @@ const Admin = () => {
 
                   {/* Bottom Grid: Categories & Weight Classes */}
                   <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "24px" }}>
-                    
+
                     {/* Categories Hierarchy */}
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -3050,7 +2972,7 @@ const Admin = () => {
                     Manage your global record-keeping community. Control permissions, verify identities, and monitor activity levels.
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => openModal("add")}
                   style={{ background: "#FF5500", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", fontSize: "13px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
                 >
@@ -3086,7 +3008,7 @@ const Admin = () => {
               <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", marginBottom: "24px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
                   <h3 style={{ fontSize: "18px", fontWeight: "900", margin: 0 }}>Registered Members</h3>
-                  
+
                   {/* Search and Filter UI */}
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
                     <div style={{ display: "flex", gap: "8px" }}>
@@ -3101,7 +3023,7 @@ const Admin = () => {
                           style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", padding: "10px 14px 10px 40px", color: "white", fontSize: "13px", fontWeight: "600", outline: "none" }}
                         />
                       </div>
-                      <button 
+                      <button
                         onClick={() => setUsersCurrentPage(1)}
                         style={{ background: "#222", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "0 16px", borderRadius: "8px", fontSize: "13px", fontWeight: "800", cursor: "pointer" }}
                       >
@@ -3157,13 +3079,13 @@ const Admin = () => {
                     {(() => {
                       const filteredUsers = users.filter(u => {
                         const q = usersSearchQuery.toLowerCase();
-                        const matchesSearch = !q || 
+                        const matchesSearch = !q ||
                           (u.name && u.name.toLowerCase().includes(q)) ||
                           (u.email && u.email.toLowerCase().includes(q)) ||
                           (u.username && u.username.toLowerCase().includes(q)) ||
                           (u.phone && u.phone.toLowerCase().includes(q)) ||
                           ((u.member_number || u.memberNumber) && (u.member_number || u.memberNumber).toLowerCase().includes(q));
-                        
+
                         const r = usersFilterRole;
                         const roleValue = u.role || 'athlete';
                         const matchesRole = r === "all" || roleValue === r;
@@ -3193,7 +3115,7 @@ const Admin = () => {
                           {paginatedUsers.map((u, idx) => (
                             <tr key={u.id || idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                               <td style={{ padding: "16px 0", display: "flex", alignItems: "center", gap: "12px" }}>
-                                <img src={u.profile_image ? formatProductImage(u.profile_image) : `https://ui-avatars.com/api/?name=${u.name}&background=random`} alt={u.name} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
+                                <img loading="lazy" decoding="async" src={u.profile_image ? formatProductImage(u.profile_image) : `https://ui-avatars.com/api/?name=${u.name}&background=random`} alt={u.name} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
                                 <div>
                                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                     <span style={{ color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }} onClick={() => openModal('viewProfile', u)}>{u.name}</span>
@@ -3204,13 +3126,13 @@ const Admin = () => {
                                     )}
                                   </div>
                                   <div style={{ color: "#888", fontSize: "11px", marginTop: "4px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px" }}>
-                                    <span style={{ 
-                                      color: u.role === 'system_admin' ? '#FF5500' : 
-                                             u.role === 'moderator' ? '#3b82f6' : 
-                                             u.role === 'judge' ? '#ffcc00' : '#22c55e', 
+                                    <span style={{
+                                      color: u.role === 'system_admin' ? '#FF5500' :
+                                             u.role === 'moderator' ? '#3b82f6' :
+                                             u.role === 'judge' ? '#ffcc00' : '#22c55e',
                                       fontWeight: "800",
-                                      background: u.role === 'system_admin' ? 'rgba(255,85,0,0.08)' : 
-                                                  u.role === 'moderator' ? 'rgba(59,130,246,0.08)' : 
+                                      background: u.role === 'system_admin' ? 'rgba(255,85,0,0.08)' :
+                                                  u.role === 'moderator' ? 'rgba(59,130,246,0.08)' :
                                                   u.role === 'judge' ? 'rgba(255,204,0,0.08)' : 'rgba(34,197,94,0.08)',
                                       padding: "2px 6px",
                                       borderRadius: "4px",
@@ -3220,8 +3142,8 @@ const Admin = () => {
                                       {u.role === 'athlete' || !u.role ? 'Athlete' : u.role.replace('_', ' ')}
                                     </span>
                                     <span style={{ color: "#aaa", fontSize: "10px", fontWeight: "700" }}>•</span>
-                                    <span style={{ 
-                                      color: "#ccc", 
+                                    <span style={{
+                                      color: "#ccc",
                                       background: "rgba(255,255,255,0.05)",
                                       border: "1px solid rgba(255,255,255,0.05)",
                                       padding: "2px 6px",
@@ -3240,12 +3162,12 @@ const Admin = () => {
                               <td style={{ padding: "16px 0", color: "#aaa", fontSize: "13px" }}>{u.email}</td>
                               <td style={{ padding: "16px 0", color: "#aaa", fontSize: "13px" }}>{new Date(u.created_at || new Date()).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
                               <td style={{ padding: "16px 0" }}>
-                                <span style={{ 
-                                  background: (u.account_status === 'active' || !u.account_status) ? "rgba(34,197,94,0.1)" : u.account_status === 'suspended' ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)", 
-                                  color: (u.account_status === 'active' || !u.account_status) ? "#22c55e" : u.account_status === 'suspended' ? "#f59e0b" : "#ef4444", 
-                                  padding: "4px 8px", 
-                                  borderRadius: "100px", 
-                                  fontSize: "11px", 
+                                <span style={{
+                                  background: (u.account_status === 'active' || !u.account_status) ? "rgba(34,197,94,0.1)" : u.account_status === 'suspended' ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)",
+                                  color: (u.account_status === 'active' || !u.account_status) ? "#22c55e" : u.account_status === 'suspended' ? "#f59e0b" : "#ef4444",
+                                  padding: "4px 8px",
+                                  borderRadius: "100px",
+                                  fontSize: "11px",
                                   fontWeight: "800",
                                   display: "inline-flex",
                                   alignItems: "center",
@@ -3288,7 +3210,7 @@ const Admin = () => {
                               </td>
                             </tr>
                           ))}
-                          
+
                           {/* Pagination Controls */}
                           {totalPages > 1 && (
                             <tr>
@@ -3299,10 +3221,10 @@ const Admin = () => {
                                   </div>
                                   <div style={{ display: "flex", gap: "8px" }}>
                                     <button onClick={() => setUsersCurrentPage(p => Math.max(1, p - 1))} disabled={currentUsersPage === 1} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: currentUsersPage === 1 ? "#444" : "#888", padding: "6px 10px", borderRadius: "6px", cursor: currentUsersPage === 1 ? "not-allowed" : "pointer" }}>&lt;</button>
-                                    
+
                                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                      <button 
-                                        key={page} 
+                                      <button
+                                        key={page}
                                         onClick={() => setUsersCurrentPage(page)}
                                         style={{ background: currentUsersPage === page ? "#FF5500" : "transparent", border: currentUsersPage === page ? "none" : "1px solid rgba(255,255,255,0.1)", color: currentUsersPage === page ? "white" : "#888", padding: "6px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
                                       >
@@ -3346,7 +3268,7 @@ const Admin = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #111 100%)", borderRadius: "16px", padding: "32px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                   <h3 style={{ fontSize: "24px", fontWeight: "950", margin: "0 0 12px 0", color: "white" }}>Need Help?</h3>
                   <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.6", margin: "0 0 24px 0" }}>
@@ -3375,7 +3297,7 @@ const Admin = () => {
                     CHALLENGES
                   </h2>
                 </div>
-                <button 
+                <button
                   onClick={() => openModal("add")}
                   style={{ background: "#FF5500", color: "white", border: "none", padding: "14px 28px", borderRadius: "100px", fontSize: "13px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "1px", marginTop: "12px" }}
                 >
@@ -3447,7 +3369,7 @@ const Admin = () => {
                     "https://images.unsplash.com/photo-1563823251-4045f09623e1?q=80&w=1470&auto=format&fit=crop"
                   ];
                   const bgImg = item.image_url || item.imageUrl || fallbackImages[originalIndex % fallbackImages.length];
-                  
+
                   // Determine status based on index for variety if real status isn't available
                   const isCompleted = originalIndex === 2;
                   const isScheduled = originalIndex === 1;
@@ -3478,13 +3400,13 @@ const Admin = () => {
                         <Trophy size={48} color="#444" />
                       </div>
                       <h4 style={{ margin: "0 0 8px 0", fontSize: "18px", color: "white", fontWeight: "900", textTransform: "uppercase" }}>
-                        {eventsFilter === "ACTIVE" ? "NO ACTIVE CHALLENGES" : 
-                         eventsFilter === "SCHEDULED" ? "NO SCHEDULED CHALLENGES" : 
+                        {eventsFilter === "ACTIVE" ? "NO ACTIVE CHALLENGES" :
+                         eventsFilter === "SCHEDULED" ? "NO SCHEDULED CHALLENGES" :
                          "NO CHALLENGES FOUND"}
                       </h4>
                       <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>
-                        {eventsFilter === "ACTIVE" ? "There are currently no active challenges running." : 
-                         eventsFilter === "SCHEDULED" ? "There are no upcoming challenges scheduled." : 
+                        {eventsFilter === "ACTIVE" ? "There are currently no active challenges running." :
+                         eventsFilter === "SCHEDULED" ? "There are no upcoming challenges scheduled." :
                          "Create a new challenge to populate the roster."}
                       </p>
                     </div>
@@ -3497,19 +3419,19 @@ const Admin = () => {
                       const { originalIndex: index, bgImg, isCompleted, isScheduled, isActive } = item;
 
                     return (
-                      <div key={item.id || index} style={{ 
-                        display: "flex", 
-                        alignItems: "center", 
-                        background: "rgba(255,255,255,0.02)", 
-                        borderRadius: "20px", 
-                        padding: "20px", 
+                      <div key={item.id || index} style={{
+                        display: "flex",
+                        alignItems: "center",
+                        background: "rgba(255,255,255,0.02)",
+                        borderRadius: "20px",
+                        padding: "20px",
                         border: "1px solid rgba(255,255,255,0.04)",
                         transition: "background 0.2s"
                       }} className="hover-bg-white-05">
-                        
+
                         {/* Thumbnail */}
                         <div style={{ width: "180px", height: "100px", borderRadius: "12px", overflow: "hidden", marginRight: "32px", position: "relative" }}>
-                          <img src={bgImg} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isCompleted ? 0.5 : 1 }} />
+                          <img loading="lazy" decoding="async" src={bgImg} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isCompleted ? 0.5 : 1 }} />
                           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 100%)" }} />
                         </div>
 
@@ -3519,7 +3441,7 @@ const Admin = () => {
                             {isActive && <span style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e", padding: "4px 8px", borderRadius: "4px", fontSize: "9px", fontWeight: "900", letterSpacing: "1px" }}>ACTIVE</span>}
                             {isScheduled && <span style={{ background: "rgba(59,130,246,0.15)", color: "#3b82f6", padding: "4px 8px", borderRadius: "4px", fontSize: "9px", fontWeight: "900", letterSpacing: "1px" }}>SCHEDULED</span>}
                             {isCompleted && <span style={{ background: "rgba(156,163,175,0.15)", color: "#9ca3af", padding: "4px 8px", borderRadius: "4px", fontSize: "9px", fontWeight: "900", letterSpacing: "1px" }}>COMPLETED</span>}
-                            
+
                             <h3 style={{ fontSize: "20px", fontWeight: "950", color: isCompleted ? "#aaa" : "white", margin: 0, textTransform: "uppercase", letterSpacing: "-0.5px" }}>
                               {item.title}
                             </h3>
@@ -3553,11 +3475,11 @@ const Admin = () => {
                         <div style={{ display: "flex", gap: "16px", paddingLeft: "32px", borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
                           {isScheduled && <button style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Calendar size={14} /></button>}
                           {isCompleted && <button style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><BarChart2 size={14} /></button>}
-                          
+
                           <button onClick={() => openModal("edit", item)} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-white-10">
                             {isCompleted ? <Eye size={14} /> : <Edit3 size={14} />}
                           </button>
-                          
+
                           {!isCompleted && (
                             <>
                               <button style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-white-10">
@@ -3579,7 +3501,7 @@ const Admin = () => {
           )}
 
           {/* ==================== 4. PRODUCTS & SHOP INVENTORY ==================== */}
-          
+
                 {/* 10. VIDEO UPLOAD FORM */}
                 {activeTab === "videoManagement" && (
                   <>
@@ -3630,12 +3552,12 @@ const Admin = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "16px" }}>
                         <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.1)" }}>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>UPLOAD VIDEO FILE (Alternative)</label>
-                          <input type="file" accept="video/mp4,video/webm" onChange={(e) => setVideoFile(e.target.files[0])} style={{ color: "white", fontSize: "12px" }} />
+                          <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => setVideoFile(e.target.files[0])} style={{ color: "white", fontSize: "12px" }} />
                           <p style={{ fontSize: "10px", color: "#666", margin: "8px 0 0 0" }}>Max 50MB. MP4 or WebM.</p>
                         </div>
                         <div style={{ background: "rgba(255,85,0,0.1)", padding: "16px", borderRadius: "8px", border: "2px dashed rgba(255,85,0,0.3)" }}>
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#FF5500", marginBottom: "6px" }}>📸 UPLOAD THUMBNAIL (Required)</label>
-                          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setThumbnailFile(e.target.files[0])} required style={{ color: "white", fontSize: "12px" }} />
+                          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setThumbnailFile(e.target.files[0])} style={{ color: "white", fontSize: "12px" }} />
                           <p style={{ fontSize: "10px", color: "#FF5500", margin: "8px 0 0 0", fontWeight: "600" }}>✓ Required. Max 5MB. JPG, PNG, WEBP.</p>
                           {thumbnailFile && <p style={{ fontSize: "9px", color: "#22c55e", margin: "4px 0 0 0" }}>✓ {thumbnailFile.name}</p>}
                         </div>
@@ -3655,7 +3577,7 @@ const Admin = () => {
                     MANAGE THE ROGUE OFFICIAL MERCHANDISE AND STOCK
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => openModal("add")}
                   style={{ background: "linear-gradient(135deg, #FF5500 0%, #ff8800 100%)", color: "white", border: "none", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
                 >
@@ -3691,14 +3613,14 @@ const Admin = () => {
                     const stock = item.stock_count || item.stockCount || 0;
                     const isOutOfStock = stock === 0;
                     const isLowStock = stock > 0 && stock <= 10;
-                    
+
                     return (
                       <div key={item.id} style={{ background: "rgba(13,13,16,0.6)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "24px", overflow: "hidden", display: "flex", flexDirection: "column", transition: "all 0.25s" }}>
-                        
+
                         {/* Product image thumbnail */}
                         <div style={{ height: "200px", position: "relative", background: "#050507" }}>
                           {item.image_url || item.imageUrl ? (
-                            <img src={formatProductImage(item.image_url || item.imageUrl)} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img loading="lazy" decoding="async" src={formatProductImage(item.image_url || item.imageUrl)} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           ) : (
                             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#222" }}><ShoppingBag size={48} /></div>
                           )}
@@ -3730,7 +3652,7 @@ const Admin = () => {
                           <span style={{ fontSize: "10px", color: "#FF6A00", fontWeight: "900", textTransform: "uppercase" }}>{item.category}</span>
                           <h4 style={{ fontSize: "16px", fontWeight: "900", color: "white", margin: 0 }}>{item.name}</h4>
                           <p style={{ fontSize: "11px", color: "#aaa", margin: 0, lineHeight: "1.4", flex: 1 }}>{item.description}</p>
-                          
+
                           <div style={{ display: "flex", gap: "8px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "12px", marginTop: "4px" }}>
                             <button onClick={() => openModal("edit", item)} style={{ flex: 1, padding: "8px", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: "900", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }} className="btn-premium-edit"><Edit3 size={13} /> EDIT STOCK</button>
                             <button onClick={() => handleDelete(item.id)} style={{ padding: "8px 10px", borderRadius: "6px", cursor: "pointer" }} className="btn-premium-delete"><Trash2 size={13} /></button>
@@ -3858,7 +3780,7 @@ const Admin = () => {
                     <div onDragEnter={(e) => { e.preventDefault(); setAwardDragActive(true); }} onDragOver={(e) => { e.preventDefault(); setAwardDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); setAwardDragActive(false); }} onDrop={(e) => { e.preventDefault(); setAwardDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { const file = e.dataTransfer.files[0]; setAwardImageFile(file); setAwardImagePreview(URL.createObjectURL(file)); } }} onClick={() => awardFileInputRef.current?.click()} style={{ background: awardDragActive ? "rgba(255, 106, 0, 0.1)" : "rgba(255,255,255,0.02)", border: awardDragActive ? "2px dashed #FF6A00" : "1px dashed rgba(255,255,255,0.15)", borderRadius: "16px", padding: "30px 20px", textAlign: "center", cursor: "pointer", transition: "all 0.3s ease" }}>
                       {awardImagePreview ? (
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-                          <img src={awardImagePreview} alt="Award Preview" style={{ maxWidth: "200px", maxHeight: "150px", borderRadius: "12px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)" }} />
+                          <img loading="lazy" decoding="async" src={awardImagePreview} alt="Award Preview" style={{ maxWidth: "200px", maxHeight: "150px", borderRadius: "12px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)" }} />
                           <div style={{ fontSize: "12px", color: "white", fontWeight: "700" }}>{awardImageFile?.name}</div>
                           <button type="button" onClick={(e) => { e.stopPropagation(); setAwardImageFile(null); setAwardImagePreview(""); }} style={{ background: "rgba(239,68,68,0.15)", border: "none", color: "#ef4444", padding: "6px 14px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}>
                             <Trash2 size={12} style={{ display: "inline", marginRight: "4px" }} /> Remove Image
@@ -3972,7 +3894,7 @@ const Admin = () => {
                   <button onClick={() => setActiveShopSearch(shopSearchInput)} style={{ background: "#FF5500", border: "none", color: "white", padding: "10px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}>SEARCH</button>
                   <button onClick={() => { setShopSearchInput(""); setActiveShopSearch(""); }} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "10px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}>CLEAR</button>
                 </div>
-                
+
                 <div style={{ display: "flex", gap: "12px" }}>
                   <select
                     value={shippingStatusFilter}
@@ -4018,14 +3940,14 @@ const Admin = () => {
                     .filter(o => {
                       const emailToMatch = selectedCustomerEmail || activeShopSearch;
                       const q = emailToMatch?.toLowerCase() || "";
-                      const matchesSearch = !q || 
-                        o.customer_name?.toLowerCase().includes(q) || 
-                        o.customer_email?.toLowerCase().includes(q) || 
+                      const matchesSearch = !q ||
+                        o.customer_name?.toLowerCase().includes(q) ||
+                        o.customer_email?.toLowerCase().includes(q) ||
                         o.id?.toLowerCase().includes(q) ||
                         o.tracking_number?.toLowerCase().includes(q) ||
                         o.member_number?.toLowerCase().includes(q) ||
                         (o.items || []).some(i => i.product_name?.toLowerCase().includes(q) || i.product_id?.toLowerCase().includes(q));
-                      
+
                       const matchesShip = shippingStatusFilter === 'all' || o.shipping_status === shippingStatusFilter;
                       const matchesPay = paymentStatusFilter === 'all' || o.payment_status === paymentStatusFilter;
                       return matchesSearch && matchesShip && matchesPay;
@@ -4033,7 +3955,7 @@ const Admin = () => {
                     .map(order => {
                       return (
                         <div key={order.id} style={{ background: "rgba(13,13,16,0.6)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "24px", padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                          
+
                           {/* Top Row: Order ID, Date, Totals */}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
                             <div>
@@ -4049,7 +3971,7 @@ const Admin = () => {
                               <div style={{ marginTop: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
                                 <span style={{ color: "white", fontSize: "13px", fontWeight: "900" }}>{order.customer_name}</span>
                                 <span style={{ color: "#444" }}>|</span>
-                                <span 
+                                <span
                                   onClick={() => setSelectedCustomerEmail(order.customer_email)}
                                   style={{ color: "#FF5500", fontSize: "12px", fontWeight: "800", cursor: "pointer", textDecoration: "underline" }}
                                 >
@@ -4057,7 +3979,7 @@ const Admin = () => {
                                 </span>
                               </div>
                             </div>
-                            
+
                             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                               {/* Shipping Status Dropdown */}
                               <div>
@@ -4208,7 +4130,7 @@ const Admin = () => {
                                 CUSTOMER HISTORY <ArrowRight size={12} />
                               </button>
                             </div>
-                            
+
                             <div style={{ display: "flex", gap: "24px", alignItems: "center", fontSize: "13px" }}>
                               <div style={{ color: "#666", fontWeight: "700" }}>
                                 Subtotal: <span style={{ color: "white" }}>${order.subtotal?.toFixed(2)}</span>
@@ -4234,7 +4156,7 @@ const Admin = () => {
               {orderDetailModal.isOpen && orderDetailModal.order && (
                 <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(8px)", padding: "40px" }}>
                   <div style={{ background: "#0c0c0e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px", width: "100%", maxWidth: "1200px", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)" }}>
-                    
+
                     {/* Header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -4264,10 +4186,10 @@ const Admin = () => {
 
                     {/* Body */}
                     <div style={{ padding: "32px", overflowY: "auto", flex: 1, display: "grid", gridTemplateColumns: "1fr 350px", gap: "32px" }}>
-                      
+
                       {/* Left Column: Products & Status */}
                       <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
-                        
+
                         {/* Status Management */}
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "20px" }}>
@@ -4330,7 +4252,7 @@ const Admin = () => {
                                   <tr key={idx} style={{ borderTop: "1px solid rgba(255,255,255,0.03)" }}>
                                     <td style={{ padding: "16px 20px", display: "flex", gap: "16px", alignItems: "center" }}>
                                       <div style={{ width: "48px", height: "48px", background: "rgba(255,255,255,0.05)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                                        {item.image ? <img src={item.image} alt={item.product_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ShoppingBag size={20} color="#555" />}
+                                        {item.image ? <img loading="lazy" decoding="async" src={item.image} alt={item.product_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ShoppingBag size={20} color="#555" />}
                                       </div>
                                       <div>
                                         <div style={{ color: "white", fontSize: "14px", fontWeight: "800" }}>{item.product_name}</div>
@@ -4386,11 +4308,11 @@ const Admin = () => {
 
                       {/* Right Column: Customer & Totals */}
                       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                        
+
                         {/* Customer Info */}
                         <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px" }}>
                           <h4 style={{ fontSize: "14px", fontWeight: "900", color: "white", margin: "0 0 20px 0", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px" }}>Customer Details</h4>
-                          
+
                           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                             <div>
                               <div style={{ fontSize: "10px", color: "#666", fontWeight: "900", textTransform: "uppercase" }}>Full Name</div>
@@ -4491,7 +4413,7 @@ const Admin = () => {
                   </h2>
                   <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>View, edit, and control pricing tiers, active subscribers, and payment history.</p>
                 </div>
-                
+
                 {/* Internal Navigation */}
                 <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", borderRadius: "100px", padding: "4px" }}>
                   {['plans', 'subscribers', 'payments'].map(tab => (
@@ -4570,7 +4492,7 @@ const Admin = () => {
                       ].map((sub) => (
                         <tr key={sub.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
                           <td style={{ padding: "12px 0", display: "flex", alignItems: "center", gap: "12px" }}>
-                            <img src={`https://ui-avatars.com/api/?name=${sub.user}&background=random`} alt={sub.user} style={{ width: "32px", height: "32px", borderRadius: "50%" }} />
+                            <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${sub.user}&background=random`} alt={sub.user} style={{ width: "32px", height: "32px", borderRadius: "50%" }} />
                             <div>
                               <div style={{ color: "white", fontSize: "13px", fontWeight: "700" }}>{sub.user}</div>
                               <div style={{ color: "#888", fontSize: "11px", marginTop: "2px" }}>{sub.email}</div>
@@ -4578,7 +4500,7 @@ const Admin = () => {
                           </td>
                           <td style={{ color: "white", fontSize: "13px", fontWeight: "700", padding: "12px 0" }}>{sub.plan}</td>
                           <td style={{ padding: "12px 0" }}>
-                            <span style={{ 
+                            <span style={{
                               background: sub.status === 'Active' ? "rgba(34,197,94,0.1)" : sub.status === 'Expired' ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.05)",
                               color: sub.status === 'Active' ? "#22c55e" : sub.status === 'Expired' ? "#ef4444" : "#888",
                               padding: "4px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase"
@@ -4643,7 +4565,7 @@ const Admin = () => {
                           <td style={{ color: "#aaa", fontSize: "12px", padding: "12px 0" }}>{payment.plan}</td>
                           <td style={{ color: "white", fontSize: "12px", fontWeight: "700", padding: "12px 0" }}>{payment.amount}</td>
                           <td style={{ padding: "12px 0" }}>
-                            <span style={{ 
+                            <span style={{
                               background: payment.status === 'Success' ? "rgba(34,197,94,0.1)" : payment.status === 'Failed' ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.05)",
                               color: payment.status === 'Success' ? "#22c55e" : payment.status === 'Failed' ? "#ef4444" : "#888",
                               padding: "4px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: "800"
@@ -4749,8 +4671,8 @@ const Admin = () => {
               {/* Master Categories List */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "24px" }}>
                 {categoriesList
-                  .filter(cat => 
-                    cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase()) || 
+                  .filter(cat =>
+                    cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
                     cat.subs.some(sub => sub.toLowerCase().includes(categorySearchQuery.toLowerCase()))
                   )
                   .map(cat => (
@@ -4768,7 +4690,7 @@ const Admin = () => {
                         }} style={{ background: "rgba(239,68,68,0.1)", border: "none", color: "#ef4444", width: "32px", height: "32px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={14} /></button>
                       </div>
                     </div>
-                    
+
                     <div style={{ marginBottom: "20px", minHeight: "60px" }}>
                       <div style={{ fontSize: "11px", color: "#888", fontWeight: "800", textTransform: "uppercase", marginBottom: "10px", letterSpacing: "1px" }}>Subcategories ({cat.subs.length})</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -4780,7 +4702,7 @@ const Admin = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <button onClick={() => setCategoryModal({ isOpen: true, mode: 'edit', category: JSON.parse(JSON.stringify(cat)) })} style={{ width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
                       <Layers size={14} /> MANAGE CATEGORY
                     </button>
@@ -4796,9 +4718,9 @@ const Admin = () => {
                       <h3 style={{ fontSize: "20px", fontWeight: "900", color: "white", margin: 0 }}>{categoryModal.mode === 'add' ? 'Add New Category' : `Edit Category: ${categoryModal.category.name}`}</h3>
                       <button onClick={() => setCategoryModal({ isOpen: false, mode: 'add', category: null })} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", padding: "8px" }}><X size={24} /></button>
                     </div>
-                    
+
                     <div style={{ padding: "32px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "24px" }}>
-                      
+
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Category Name</label>
@@ -4853,7 +4775,7 @@ const Admin = () => {
                           <textarea value={categoryModal.category.requirements || ""} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, requirements: e.target.value } }))} placeholder="e.g. Video must show full unedited attempt..." style={{ width: "100%", height: "100px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px", resize: "vertical" }} />
                         </div>
                       </div>
-                      
+
                       <div>
                         <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Featured Records Showcase (Comma separated IDs)</label>
                         <input type="text" value={categoryModal.category.featured_records || ""} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, featured_records: e.target.value } }))} placeholder="rec_123, rec_456" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px" }} />
@@ -4866,7 +4788,7 @@ const Admin = () => {
                         <button onClick={() => setCategoryModal({ isOpen: false, mode: 'add', category: null })} style={{ background: "transparent", border: "none", color: "#888", padding: "10px 20px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}>Cancel</button>
                         <button onClick={async () => {
                           if (!categoryModal.category.name.trim()) return showToast('Category name is required', 'error');
-                          
+
                           try {
                             if (categoryModal.mode === 'add') {
                               // Create new category via API
@@ -5028,7 +4950,7 @@ const Admin = () => {
                   </h2>
                 </div>
                 <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
-                  <button 
+                  <button
                     onClick={() => {
                       setChallengeFormMode("add");
                       setChallengeForm({ status: "pending", videoType: "upload", isFeatured: false });
@@ -5045,7 +4967,7 @@ const Admin = () => {
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "32px", marginBottom: "40px" }}>
                   {challengeSaveStatus === "success" && <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#22c55e", fontWeight: "700" }}>✅ Challenge saved successfully.</div>}
                   {challengeSaveStatus === "error" && <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#ef4444", fontWeight: "700" }}>❌ Challenge could not be saved. Please check the required fields.</div>}
-                  
+
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "24px" }}>
                     <h3 style={{ fontSize: "18px", fontWeight: "900", color: "white", margin: 0 }}>{challengeFormMode === "add" ? "Add New Challenge" : "Edit Challenge"}</h3>
                     <button onClick={() => { setChallengeFormMode(null); setSelectedChallenge(null); }} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer" }}><X size={20} /></button>
@@ -5061,33 +4983,40 @@ const Admin = () => {
                     formData.append("status", challengeForm.status || "pending");
                     formData.append("isFeatured", challengeForm.isFeatured || false);
                     formData.append("videoType", challengeForm.videoType || "upload");
-                    
+
                     if (challengeForm.videoType === "youtube") {
                       formData.append("youtubeUrl", challengeForm.youtubeUrl || "");
-                    } else if (challengeForm.videoFile) {
-                      formData.append("videoFile", challengeForm.videoFile);
-                    }
-                    if (challengeForm.thumbnailImage) {
-                      formData.append("thumbnailImage", challengeForm.thumbnailImage);
                     }
 
                     try {
+                      // Files go straight to storage; the API only receives their URLs.
+                      if (challengeForm.videoType !== "youtube" && challengeForm.videoFile) {
+                        formData.append("videoUrl", await uploadDirect(challengeForm.videoFile, "admin-video", user.token));
+                      }
+                      if (challengeForm.thumbnailImage) {
+                        formData.append("thumbnailUrl", await uploadDirect(challengeForm.thumbnailImage, "admin-image", user.token));
+                      }
                       const url = challengeFormMode === "edit" ? `/admin/challenges/${selectedChallenge.id}` : "/admin/challenges";
                       const method = challengeFormMode === "edit" ? "PUT" : "POST";
-                      const res = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5000/api"}${url}`, {
+                      const res = await fetch(`${API_URL}${url}`, {
                         method,
                         headers: { "Authorization": `Bearer ${user.token}` },
                         body: formData
                       });
-                      if (!res.ok) throw new Error("Failed to save");
+                      if (!res.ok) {
+                        const body = await res.json().catch(() => ({}));
+                        throw new Error(body.message || body.error || "Failed to save");
+                      }
                       setChallengeSaveStatus("success");
                       fetchData(); // refresh list
                       setTimeout(() => { setChallengeFormMode(null); setSelectedChallenge(null); }, 1500);
                     } catch (err) {
+                      console.error("Challenge save failed:", err);
                       setChallengeSaveStatus("error");
+                      alert(`Could not save challenge: ${err.message}`);
                     }
                   }} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                    
+
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                       <div>
                         <label style={{ display: "block", color: "#888", fontSize: "12px", fontWeight: "700", marginBottom: "8px" }}>Video Title (Target Record) *</label>
@@ -5147,7 +5076,7 @@ const Admin = () => {
                     <div>
                       <label style={{ display: "block", color: "#888", fontSize: "12px", fontWeight: "700", marginBottom: "8px" }}>Thumbnail Image (JPG, PNG, WEBP)</label>
                       <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setChallengeForm({ ...challengeForm, thumbnailImage: e.target.files[0] })} style={{ color: "white" }} />
-                      {challengeFormMode === "edit" && selectedChallenge?.thumbnail_url && !challengeForm.thumbnailImage && <img src={selectedChallenge.thumbnail_url} alt="Current" style={{ display: "block", marginTop: "12px", height: "60px", borderRadius: "8px" }} />}
+                      {challengeFormMode === "edit" && selectedChallenge?.thumbnail_url && !challengeForm.thumbnailImage && <img loading="lazy" decoding="async" src={selectedChallenge.thumbnail_url} alt="Current" style={{ display: "block", marginTop: "12px", height: "60px", borderRadius: "8px" }} />}
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "20px" }}>
@@ -5164,16 +5093,16 @@ const Admin = () => {
                     <div style={{ color: "#888", fontSize: "14px", padding: "32px", textAlign: "center", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: "16px" }}>No challenges found. Create one to get started.</div>
                   ) : challenges.map(challenge => (
                     <div key={challenge.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 1fr", gap: "24px", alignItems: "center" }}>
-                      
+
                       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                        <img src={challenge.thumbnail_url || `https://ui-avatars.com/api/?name=${challenge.athlete_id}&background=random`} alt={challenge.athlete_id} style={{ width: "64px", height: "64px", borderRadius: "12px", objectFit: "cover" }} />
+                        <img loading="lazy" decoding="async" src={challenge.thumbnail_url || `https://ui-avatars.com/api/?name=${challenge.athlete_id}&background=random`} alt={challenge.athlete_id} style={{ width: "64px", height: "64px", borderRadius: "12px", objectFit: "cover" }} />
                         <div>
                           <div style={{ color: "#FF5500", fontSize: "10px", fontWeight: "900", letterSpacing: "1px" }}>{challenge.id.substring(0,8)}</div>
                           <div style={{ color: "white", fontSize: "16px", fontWeight: "800" }}>{challenge.athlete_id}</div>
                           {challenge.is_featured && <span style={{ background: "rgba(255,85,0,0.1)", color: "#FF5500", fontSize: "9px", padding: "2px 6px", borderRadius: "4px", fontWeight: "800", marginLeft: "8px" }}>FEATURED</span>}
                         </div>
                       </div>
-                      
+
                       <div>
                         <div style={{ color: "#666", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", marginBottom: "4px" }}>TARGET RECORD (TITLE)</div>
                         <div style={{ color: "white", fontSize: "14px", fontWeight: "700" }}>{challenge.title}</div>
@@ -5193,8 +5122,8 @@ const Admin = () => {
                       </div>
 
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "12px" }}>
-                        <span style={{ 
-                          background: challenge.status === 'verified' ? "rgba(34,197,94,0.1)" : challenge.status === 'rejected' ? "rgba(239,68,68,0.1)" : "rgba(255,106,0,0.1)", 
+                        <span style={{
+                          background: challenge.status === 'verified' ? "rgba(34,197,94,0.1)" : challenge.status === 'rejected' ? "rgba(239,68,68,0.1)" : "rgba(255,106,0,0.1)",
                           color: challenge.status === 'verified' ? "#22c55e" : challenge.status === 'rejected' ? "#ef4444" : "#FF6A00",
                           padding: "6px 12px", borderRadius: "100px", fontSize: "11px", fontWeight: "900"
                         }}>
@@ -5231,13 +5160,13 @@ const Admin = () => {
                     APPEALS
                   </h2>
                 </div>
-                
+
                 {/* Search & Filters */}
                 <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "100px", padding: "4px 4px 4px 16px" }}>
-                    <input 
-                      type="text" 
-                      placeholder="Search appeals..." 
+                    <input
+                      type="text"
+                      placeholder="Search appeals..."
                       value={appealsSearch}
                       onChange={(e) => setAppealsSearch(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && fetchData()}
@@ -5247,10 +5176,10 @@ const Admin = () => {
                       <Search size={14} /> SEARCH
                     </button>
                   </div>
-                  
-                  <select 
-                    value={appealsFilter} 
-                    onChange={(e) => { setAppealsFilter(e.target.value); setTimeout(fetchData, 100); }}
+
+                  <select
+                    value={appealsFilter}
+                    onChange={(e) => { setAppealsFilter(e.target.value); setAppealsPage(1); }}
                     style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "12px 16px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", outline: "none", cursor: "pointer" }}
                   >
                     <option value="all">ALL APPEALS</option>
@@ -5276,7 +5205,7 @@ const Admin = () => {
                 ) : (
                   appeals.map(appeal => (
                     <div key={appeal.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", display: "grid", gridTemplateColumns: "1.5fr 1fr auto", gap: "24px", alignItems: "center", cursor: "pointer", transition: "all 0.2s" }} onClick={() => setSelectedAppeal(appeal)} onMouseEnter={e => e.currentTarget.style.borderColor = "#FF5500"} onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"}>
-                      
+
                       {/* Athlete & Record Info */}
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
@@ -5291,12 +5220,12 @@ const Admin = () => {
                           {appeal.appeal_reason}
                         </div>
                       </div>
-                      
+
                       {/* Status & Dates */}
                       <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderLeft: "1px solid rgba(255,255,255,0.05)", paddingLeft: "24px" }}>
                         <div>
-                          <span style={{ 
-                            background: ['Approved', 'Closed'].includes(appeal.status) ? "rgba(34,197,94,0.1)" : appeal.status === 'Denied' ? "rgba(239,68,68,0.1)" : appeal.status === 'Pending' ? "rgba(255,106,0,0.1)" : "rgba(255,204,0,0.1)", 
+                          <span style={{
+                            background: ['Approved', 'Closed'].includes(appeal.status) ? "rgba(34,197,94,0.1)" : appeal.status === 'Denied' ? "rgba(239,68,68,0.1)" : appeal.status === 'Pending' ? "rgba(255,106,0,0.1)" : "rgba(255,204,0,0.1)",
                             color: ['Approved', 'Closed'].includes(appeal.status) ? "#22c55e" : appeal.status === 'Denied' ? "#ef4444" : appeal.status === 'Pending' ? "#FF6A00" : "#ffcc00",
                             padding: "6px 12px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", display: "inline-block", border: "1px solid currentColor"
                           }}>
@@ -5319,13 +5248,13 @@ const Admin = () => {
                   ))
                 )}
               </div>
-              
+
               {/* Pagination */}
               {appealsTotalPages > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", gap: "10px", paddingBottom: "60px" }}>
-                  <button disabled={appealsPage === 1} onClick={() => { setAppealsPage(p => p - 1); setTimeout(fetchData, 50); }} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: appealsPage === 1 ? "#555" : "white", padding: "8px 16px", borderRadius: "100px", cursor: appealsPage === 1 ? "not-allowed" : "pointer", fontWeight: "bold" }}>Prev</button>
-                  <span style={{ color: "white", fontSize: "14px", fontWeight: "bold", padding: "8px 16px", background: "rgba(255,85,0,0.1)", borderRadius: "100px", color: "#FF5500" }}>Page {appealsPage} of {appealsTotalPages}</span>
-                  <button disabled={appealsPage === appealsTotalPages} onClick={() => { setAppealsPage(p => p + 1); setTimeout(fetchData, 50); }} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: appealsPage === appealsTotalPages ? "#555" : "white", padding: "8px 16px", borderRadius: "100px", cursor: appealsPage === appealsTotalPages ? "not-allowed" : "pointer", fontWeight: "bold" }}>Next</button>
+                  <button disabled={appealsPage === 1} onClick={() => { setAppealsPage(p => p - 1); }} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: appealsPage === 1 ? "#555" : "white", padding: "8px 16px", borderRadius: "100px", cursor: appealsPage === 1 ? "not-allowed" : "pointer", fontWeight: "bold" }}>Prev</button>
+                  <span style={{ fontSize: "14px", fontWeight: "bold", padding: "8px 16px", background: "rgba(255,85,0,0.1)", borderRadius: "100px", color: "#FF5500" }}>Page {appealsPage} of {appealsTotalPages}</span>
+                  <button disabled={appealsPage === appealsTotalPages} onClick={() => { setAppealsPage(p => p + 1); }} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: appealsPage === appealsTotalPages ? "#555" : "white", padding: "8px 16px", borderRadius: "100px", cursor: appealsPage === appealsTotalPages ? "not-allowed" : "pointer", fontWeight: "bold" }}>Next</button>
                 </div>
               )}
 
@@ -5347,7 +5276,7 @@ const Admin = () => {
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px", paddingBottom: "60px" }}>
-                  
+
                   {/* Category 1: Record & Attempt Videos */}
                   <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px" }}>
                     <div style={{ background: "rgba(255,85,0,0.1)", width: "48px", height: "48px", borderRadius: "12px", display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "20px" }}>
@@ -5500,7 +5429,7 @@ const Admin = () => {
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "12px" }}>
-                  <button 
+                  <button
                     onClick={() => setIsPromoteModalOpen(true)}
                     style={{ background: "#FF5500", color: "white", border: "none", padding: "12px 24px", borderRadius: "100px", fontSize: "13px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 20px rgba(255,85,0,0.3)", transition: "transform 0.2s" }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
@@ -5508,7 +5437,7 @@ const Admin = () => {
                   >
                     <Plus size={16} /> PROMOTE JUDGE
                   </button>
-                  <button 
+                  <button
                     onClick={() => { fetchData(); alert("Active roster and telemetry synchronized with database."); }}
                     style={{ background: "rgba(255,255,255,0.05)", color: "white", border: "1px solid rgba(255,255,255,0.1)", padding: "12px 20px", borderRadius: "100px", fontSize: "13px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
                   >
@@ -5555,12 +5484,12 @@ const Admin = () => {
                     <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", flex: 1 }}>
                       <div style={{ position: "relative", width: "100%", maxWidth: "300px" }}>
                         <Search size={16} color="#666" style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)" }} />
-                        <input 
-                          type="text" 
-                          placeholder="Search name, email, member #..." 
+                        <input
+                          type="text"
+                          placeholder="Search name, email, member #..."
                           value={judgesSearchQuery}
                           onChange={(e) => setJudgesSearchQuery(e.target.value)}
-                          style={{ width: "100%", background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "100px", padding: "12px 16px 12px 44px", color: "white", fontSize: "13px", outline: "none" }} 
+                          style={{ width: "100%", background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "100px", padding: "12px 16px 12px 44px", color: "white", fontSize: "13px", outline: "none" }}
                         />
                       </div>
                       <select
@@ -5620,7 +5549,7 @@ const Admin = () => {
                               ((j.member_number || j.memberNumber) && (j.member_number || j.memberNumber).toLowerCase().includes(q)) ||
                               (j.certificationLevel && j.certificationLevel.toLowerCase().includes(q)) ||
                               (j.account_status && j.account_status.toLowerCase().includes(q));
-                            
+
                             const s = judgesFilterStatus;
                             const status = j.account_status || 'active';
                             const matchesStatus = s === "all" || (s === "active" && status === "active") || (s === "inactive" && status === "inactive") || (s === "suspended" && ['suspended', 'banned'].includes(status));
@@ -5632,7 +5561,7 @@ const Admin = () => {
                             const stats = j.stats || { assigned: 0, pending: 0, completed: 0, verified: 0, rejected: 0, averageSpeed: "1.2 days" };
                             const verPercent = stats.completed > 0 ? Math.round((stats.verified / stats.completed) * 100) : 50;
                             const p = judgesFilterPerf;
-                            const matchesPerf = p === "all" || 
+                            const matchesPerf = p === "all" ||
                               (p === "top_performers" && (stats.completed > 10 && verPercent >= 80)) ||
                               (p === "high_caseload" && stats.pending > 5);
 
@@ -5762,7 +5691,7 @@ const Admin = () => {
                                 </div>
                                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
                                   <label style={{ fontSize: "10px", fontWeight: "900", color: "#666", textTransform: "uppercase" }}>Assign Adjudicator:</label>
-                                  <select 
+                                  <select
                                     onChange={(e) => handleAssignRecord(rec.id, e.target.value)}
                                     defaultValue=""
                                     style={{ width: "100%", background: "#161616", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "8px 12px", color: "white", fontSize: "12px", outline: "none" }}
@@ -5836,13 +5765,13 @@ const Admin = () => {
                                       <td style={{ padding: "16px 20px", textAlign: "right" }}>
                                         {!isVerdictSubmitted ? (
                                           <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-                                            <button 
+                                            <button
                                               onClick={() => handleSimulateJudgeVerdict(rec.id, 'verified', 'Verified: Athlete metadata and evidence video conforms with official timing codes. Recommendation: VERIFY.')}
                                               style={{ background: "rgba(34,197,94,0.1)", border: "none", color: "#22c55e", padding: "6px 10px", borderRadius: "6px", fontSize: "10px", fontWeight: "800", cursor: "pointer" }}
                                             >
                                               Simulate Verify
                                             </button>
-                                            <button 
+                                            <button
                                               onClick={() => handleSimulateJudgeVerdict(rec.id, 'rejected', 'Rejected: Attempt timing failed to clear historical limits, or camera angle blocked full form validation.')}
                                               style={{ background: "rgba(239,68,68,0.1)", border: "none", color: "#ef4444", padding: "6px 10px", borderRadius: "6px", fontSize: "10px", fontWeight: "800", cursor: "pointer" }}
                                             >
@@ -5918,13 +5847,13 @@ const Admin = () => {
 
                               {/* Action button triggers */}
                               <div style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "flex-end" }}>
-                                <button 
+                                <button
                                   onClick={() => handleApproveOversightDecision(rec)}
                                   style={{ width: "100%", maxWidth: "220px", background: isApprove ? "#22c55e" : "#ef4444", color: "white", border: "none", padding: "12px 20px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", boxShadow: `0 4px 15px ${isApprove ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}
                                 >
                                   APPROVE & PUBLISH LIVE
                                 </button>
-                                <button 
+                                <button
                                   onClick={() => { setSelectedOversightRecord(rec); setOversightRevertFeedback(""); setIsOversightRevertModalOpen(true); }}
                                   style={{ width: "100%", maxWidth: "220px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "12px 20px", borderRadius: "100px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}
                                 >
@@ -5950,19 +5879,19 @@ const Admin = () => {
 
                     <div style={{ position: "relative" }}>
                       <Search size={16} color="#666" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-                      <input 
-                        type="text" 
-                        placeholder="Search standard athletes..." 
+                      <input
+                        type="text"
+                        placeholder="Search standard athletes..."
                         value={promoteSearchQuery}
                         onChange={(e) => setPromoteSearchQuery(e.target.value)}
-                        style={{ width: "100%", background: "#161616", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "10px", padding: "10px 12px 10px 36px", color: "white", fontSize: "13px", outline: "none" }} 
+                        style={{ width: "100%", background: "#161616", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "10px", padding: "10px 12px 10px 36px", color: "white", fontSize: "13px", outline: "none" }}
                       />
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "300px", overflowY: "auto", paddingRight: "4px" }}>
                       {users
                         .filter(u => u.role !== 'judge' && (
-                          u.name?.toLowerCase().includes(promoteSearchQuery.toLowerCase()) || 
+                          u.name?.toLowerCase().includes(promoteSearchQuery.toLowerCase()) ||
                           u.email?.toLowerCase().includes(promoteSearchQuery.toLowerCase()) ||
                           u.username?.toLowerCase().includes(promoteSearchQuery.toLowerCase()) ||
                           (u.member_number || u.memberNumber)?.toLowerCase().includes(promoteSearchQuery.toLowerCase())
@@ -5974,7 +5903,7 @@ const Admin = () => {
                               <div style={{ fontWeight: "800", color: "white", fontSize: "13px" }}>{athlete.name}</div>
                               <div style={{ color: "#666", fontSize: "11px" }}>{athlete.email}</div>
                             </div>
-                            <button 
+                            <button
                               onClick={() => handlePromoteToJudge(athlete)}
                               style={{ background: "#FF5500", color: "white", border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "900", cursor: "pointer" }}
                             >
@@ -6014,7 +5943,7 @@ const Admin = () => {
 
                     <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
                       <button onClick={() => setIsJudgeNotesModalOpen(false)} style={{ background: "transparent", border: "none", color: "#888", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>Cancel</button>
-                      <button 
+                      <button
                         onClick={handleSaveJudgeNotes}
                         style={{ background: "#FF5500", color: "white", border: "none", padding: "10px 20px", borderRadius: "100px", fontSize: "13px", fontWeight: "900", cursor: "pointer" }}
                       >
@@ -6049,7 +5978,7 @@ const Admin = () => {
 
                     <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
                       <button onClick={() => setIsOversightRevertModalOpen(false)} style={{ background: "transparent", border: "none", color: "#888", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>Cancel</button>
-                      <button 
+                      <button
                         onClick={handleRevertOversightDecision}
                         style={{ background: "#FF5500", color: "white", border: "none", padding: "10px 20px", borderRadius: "100px", fontSize: "13px", fontWeight: "900", cursor: "pointer" }}
                       >
@@ -6225,7 +6154,7 @@ const Admin = () => {
                           >
                             <td style={{ padding: "16px 20px" }} onClick={() => { setSelectedVqRecord(r); setVqIsWorldRecord(r.is_world_record || false); setVqAdminNote(""); setIsVqDetailOpen(true); }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                <img src={`https://ui-avatars.com/api/?name=${r.user?.name || 'A'}&background=random&size=40`} alt="" style={{ width: "36px", height: "36px", borderRadius: "50%", border: "2px solid rgba(255,85,0,0.3)" }} />
+                                <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${r.user?.name || 'A'}&background=random&size=40`} alt="" style={{ width: "36px", height: "36px", borderRadius: "50%", border: "2px solid rgba(255,85,0,0.3)" }} />
                                 <div>
                                   <div style={{ fontWeight: "800", fontSize: "13px", color: "white" }}>{r.user?.name || "Unknown Athlete"}</div>
                                   <div style={{ fontSize: "11px", color: "#555", marginTop: "1px" }}>{r.user?.email || ""}</div>
@@ -6432,8 +6361,8 @@ const Admin = () => {
                             />
                             <div style={{ fontSize: "11px", color: "#666", marginTop: "6px" }}>Award points to this athlete upon approval to boost their rank.</div>
                             <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,215,0,0.05)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,215,0,0.2)" }}>
-                              <input 
-                                type="checkbox" 
+                              <input
+                                type="checkbox"
                                 id="isWorldRecordCheckbox"
                                 checked={vqIsWorldRecord}
                                 onChange={e => setVqIsWorldRecord(e.target.checked)}
@@ -6480,7 +6409,7 @@ const Admin = () => {
           {/* ==================== 5D. AI VERIFICATION CONTROLS ==================== */}
           {activeTab === "aiVerification" && (() => {
             const threshold = parseFloat(aiSettings.ai_min_confidence_threshold || "80.00");
-            
+
             const getAIScanStatus = (scan) => {
               if (scan.override_status && scan.override_status !== "none") {
                 return scan.override_status === "approved" ? "Overridden (Approved)" : "Overridden (Rejected)";
@@ -6554,9 +6483,9 @@ const Admin = () => {
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                         <label style={{ fontSize: "12px", color: "#aaa", fontWeight: "800", textTransform: "uppercase" }}>Authenticity Sensitivity Threshold</label>
-                        <span style={{ 
-                          fontSize: "14px", 
-                          fontWeight: "900", 
+                        <span style={{
+                          fontSize: "14px",
+                          fontWeight: "900",
                           color: threshold >= 85 ? "#ef4444" : threshold >= 75 ? "#FF5500" : "#22c55e",
                           background: threshold >= 85 ? "rgba(239,68,68,0.12)" : threshold >= 75 ? "rgba(255,85,0,0.12)" : "rgba(34,197,94,0.12)",
                           padding: "2px 10px",
@@ -6565,21 +6494,21 @@ const Admin = () => {
                           {threshold}%
                         </span>
                       </div>
-                      <input 
-                        type="range" 
-                        min="50" 
-                        max="98" 
-                        value={threshold} 
+                      <input
+                        type="range"
+                        min="50"
+                        max="98"
+                        value={threshold}
                         onChange={e => handleSaveAiSettings({ ...aiSettings, ai_min_confidence_threshold: parseFloat(e.target.value).toFixed(2) })}
-                        style={{ 
-                          width: "100%", 
-                          accentColor: "#FF5500", 
-                          background: "rgba(255,255,255,0.06)", 
-                          height: "6px", 
-                          borderRadius: "10px", 
+                        style={{
+                          width: "100%",
+                          accentColor: "#FF5500",
+                          background: "rgba(255,255,255,0.06)",
+                          height: "6px",
+                          borderRadius: "10px",
                           cursor: "pointer",
                           marginBottom: "16px"
-                        }} 
+                        }}
                       />
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#555", fontWeight: "800" }}>
                         <span>50% (LOW FILTRATION)</span>
@@ -6597,7 +6526,7 @@ const Admin = () => {
                       ].map(check => {
                         const isChecked = aiSettings[check.key] === "true";
                         return (
-                          <div 
+                          <div
                             key={check.key}
                             onClick={() => handleSaveAiSettings({ ...aiSettings, [check.key]: isChecked ? "false" : "true" })}
                             style={{
@@ -6683,12 +6612,6 @@ const Admin = () => {
                         const scoreColor = score >= 85 ? "#22c55e" : score >= 70 ? "#eab308" : "#ef4444";
                         const scoreBg = score >= 85 ? "rgba(34,197,94,0.12)" : score >= 70 ? "rgba(234,179,8,0.12)" : "rgba(239,68,68,0.12)";
 
-                        // Check badge colors helper
-                        const getCheckBadge = (val) => {
-                          if (val === "passed") return { color: "#22c55e", label: "PASS" };
-                          if (val === "flagged") return { color: "#eab308", label: "WARN" };
-                          return { color: "#ef4444", label: "FAIL" };
-                        };
 
                         const deepfakeBadge = getCheckBadge(scan.deepfake_check);
                         const videoBadge = getCheckBadge(scan.video_tamper_check);
@@ -6702,11 +6625,11 @@ const Admin = () => {
                           >
                             <td style={{ padding: "16px 20px" }} onClick={() => { setSelectedAiScan(scan); setAiOverrideStatus(scan.override_status); setAiOverrideReason(scan.override_reason || ""); setIsAiDetailModalOpen(true); }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                <img src={`https://ui-avatars.com/api/?name=${rec.user?.name || 'A'}&background=random&size=40`} alt="" style={{ width: "36px", height: "36px", borderRadius: "50%", border: "2px solid rgba(255,85,0,0.3)" }} />
+                                <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${rec.user?.name || 'A'}&background=random&size=40`} alt="" style={{ width: "36px", height: "36px", borderRadius: "50%", border: "2px solid rgba(255,85,0,0.3)" }} />
                                 <div>
                                   <div style={{ fontWeight: "800", fontSize: "13px", color: "white" }}>{rec.user?.name || "Unknown Athlete"}</div>
                                   <div style={{ fontSize: "10px", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
-                                    <span style={{ 
+                                    <span style={{
                                       background: rec.record_type === "challenge" ? "rgba(168,85,247,0.15)" : "rgba(59,130,246,0.15)",
                                       color: rec.record_type === "challenge" ? "#a855f7" : "#3b82f6",
                                       padding: "1px 6px",
@@ -6772,18 +6695,18 @@ const Admin = () => {
                                 <button
                                   onClick={() => handleAIScanFlag(scan.record_id, !isSuspicious)}
                                   title={isSuspicious ? "Clear Flag" : "Flag Suspicious ⚠️"}
-                                  style={{ 
-                                    background: isSuspicious ? "rgba(255,204,0,0.2)" : "transparent", 
-                                    border: `1px solid ${isSuspicious ? "rgba(255,204,0,0.4)" : "rgba(255,255,255,0.08)"}`, 
-                                    color: isSuspicious ? "#ffcc00" : "#555", 
-                                    width: "30px", 
-                                    height: "30px", 
-                                    borderRadius: "8px", 
-                                    cursor: "pointer", 
-                                    display: "flex", 
-                                    alignItems: "center", 
+                                  style={{
+                                    background: isSuspicious ? "rgba(255,204,0,0.2)" : "transparent",
+                                    border: `1px solid ${isSuspicious ? "rgba(255,204,0,0.4)" : "rgba(255,255,255,0.08)"}`,
+                                    color: isSuspicious ? "#ffcc00" : "#555",
+                                    width: "30px",
+                                    height: "30px",
+                                    borderRadius: "8px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
                                     justifyContent: "center",
-                                    transition: "all 0.2s" 
+                                    transition: "all 0.2s"
                                   }}
                                 ><Flag size={14} /></button>
                                 <button
@@ -6805,10 +6728,10 @@ const Admin = () => {
                   const rec = selectedAiScan.record || {};
                   const score = parseFloat(selectedAiScan.confidence_score);
                   const isSuspicious = selectedAiScan.suspicious_flagged;
-                  
+
                   // Use characteristic of record to draw unique waveforms procedurally
                   const seed = (rec.id || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                  
+
                   return (
                     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1500, padding: "20px" }}>
                       <div style={{ background: "#0e0e0e", border: "1px solid rgba(255,85,0,0.2)", borderRadius: "28px", width: "100%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto", padding: "36px" }}>
@@ -6826,7 +6749,7 @@ const Admin = () => {
                         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 2fr", gap: "24px", marginBottom: "28px" }}>
                           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "20px", padding: "24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                             <div style={{ fontSize: "10px", color: "#666", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "14px" }}>Authenticity Index</div>
-                            
+
                             {/* Circular meter */}
                             <div style={{ position: "relative", width: "120px", height: "120px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                               <svg style={{ transform: "rotate(-90deg)", width: "120px", height: "120px" }}>
@@ -6843,7 +6766,7 @@ const Admin = () => {
                           {/* Procedural Visual Graphs */}
                           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "20px", padding: "20px 24px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                             <div style={{ fontSize: "10px", color: "#666", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "10px" }}>Signal Spectral Analysis</div>
-                            
+
                             {/* SVG Audio Wave/Tamper Graph */}
                             <div style={{ height: "70px", width: "100%", background: "#050505", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.03)", display: "flex", alignItems: "center", padding: "0 10px", overflow: "hidden", position: "relative" }}>
                               <svg width="100%" height="100%" style={{ stroke: score >= 85 ? "#22c55e" : score >= 70 ? "#eab308" : "#ef4444", strokeWidth: 1.5, fill: "none" }}>
@@ -6900,7 +6823,7 @@ const Admin = () => {
                         {/* Admin Action Override Station */}
                         <div style={{ background: "rgba(255,85,0,0.03)", border: "1px solid rgba(255,85,0,0.1)", borderRadius: "20px", padding: "24px" }}>
                           <div style={{ fontSize: "12px", color: "#FF5500", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "16px" }}>⚡ Administrative Decision Override</div>
-                          
+
                           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 2fr", gap: "20px" }}>
                             {/* Override Choice */}
                             <div>
@@ -7085,7 +7008,7 @@ const Admin = () => {
           {/* ==================== 5G. MEDIA LIBRARY (PHASE 2) ==================== */}
           {activeTab === "mediaLibrary" && (() => {
             const recordVideos = records.filter(r => r.evidence_url && r.evidence_url.trim() !== '' && r.evidence_url !== 'pending_upload');
-            
+
             return (
             <div>
               <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -7103,7 +7026,7 @@ const Admin = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "20px" }}>
                    {mediaAssets.map(asset => (
                      <div key={asset.id} style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
-                       <img src={asset.file_url} style={{ width: "100%", height: "140px", objectFit: "cover" }} />
+                       <img loading="lazy" decoding="async" src={asset.file_url} style={{ width: "100%", height: "140px", objectFit: "cover" }} />
                        <div style={{ padding: "12px" }}>
                          <div style={{ fontSize: "13px", fontWeight: "bold", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.title}</div>
                          <div style={{ fontSize: "11px", color: "#888", display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
@@ -7124,19 +7047,19 @@ const Admin = () => {
                      <div key={record.id} style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column" }}>
                        <div style={{ width: "100%", height: "180px", background: "#000", position: "relative" }}>
                          {record.evidence_url.includes('youtube.com') || record.evidence_url.includes('youtu.be') ? (
-                           <iframe 
-                             width="100%" 
-                             height="100%" 
-                             src={record.evidence_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} 
-                             title="YouTube video player" 
-                             frameBorder="0" 
-                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                           <iframe
+                             width="100%"
+                             height="100%"
+                             src={record.evidence_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                             title="YouTube video player"
+                             frameBorder="0"
+                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                              allowFullScreen
                              style={{ border: 'none' }}
                            ></iframe>
                          ) : (
-                           <video 
-                             controls 
+                           <video preload="metadata"
+                             controls
                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                            >
                              <source src={record.evidence_url} type="video/mp4" />
@@ -7147,19 +7070,19 @@ const Admin = () => {
                        <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
                          <div style={{ fontSize: "15px", fontWeight: "900", color: "white", marginBottom: "4px" }}>{record.title}</div>
                          <div style={{ fontSize: "13px", color: "#aaa", marginBottom: "12px" }}>By {record.user?.name || "Unknown User"}</div>
-                         
+
                          <div style={{ marginTop: "auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                           <span style={{ 
-                             fontSize: "11px", 
-                             fontWeight: "800", 
-                             padding: "4px 8px", 
+                           <span style={{
+                             fontSize: "11px",
+                             fontWeight: "800",
+                             padding: "4px 8px",
                              borderRadius: "4px",
                              textTransform: "uppercase",
-                             background: record.status === 'verified' ? "rgba(34, 197, 94, 0.1)" : 
-                                         record.status === 'rejected' ? "rgba(239, 68, 68, 0.1)" : 
+                             background: record.status === 'verified' ? "rgba(34, 197, 94, 0.1)" :
+                                         record.status === 'rejected' ? "rgba(239, 68, 68, 0.1)" :
                                          "rgba(255, 204, 0, 0.1)",
-                             color: record.status === 'verified' ? "#22c55e" : 
-                                    record.status === 'rejected' ? "#ef4444" : 
+                             color: record.status === 'verified' ? "#22c55e" :
+                                    record.status === 'rejected' ? "#ef4444" :
                                     "#ffcc00"
                            }}>
                              {record.status}
@@ -7522,7 +7445,7 @@ const Admin = () => {
                       const flag = fd.get('flag');
                       try {
                         const token = JSON.parse(localStorage.getItem('userInfo'))?.token;
-                        const res = await fetch('http://localhost:5002/api/countries', {
+                        const res = await fetch(`${API_URL}/countries`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ name, code, flag })
@@ -7668,7 +7591,7 @@ const Admin = () => {
                 (s.company_name && s.company_name.toLowerCase().includes(q)) ||
                 (s.package_type && s.package_type.toLowerCase().includes(q)) ||
                 (s.placement && s.placement.toLowerCase().includes(q));
-              
+
               const isExpired = s.end_date && new Date(s.end_date) < now;
               const isFeatured = s.placement === 'featured';
               const isPending = !s.active_status && !isExpired;
@@ -7719,8 +7642,8 @@ const Admin = () => {
 
                 const token = user.token;
                 const url = sponsorFormMode === "edit"
-                  ? `${import.meta.env.VITE_API_BASE_URL || ''}/api/admin/monetization/sponsors/${sponsorForm.id}`
-                  : `${import.meta.env.VITE_API_BASE_URL || ''}/api/admin/monetization/sponsors`;
+                  ? `${API_URL}/admin/monetization/sponsors/${sponsorForm.id}`
+                  : `${API_URL}/admin/monetization/sponsors`;
                 const method = sponsorFormMode === "edit" ? "PUT" : "POST";
 
                 const res = await fetch(url, {
@@ -7755,7 +7678,7 @@ const Admin = () => {
                 const fd = new FormData();
                 fd.append("activeStatus", !s.active_status);
                 fd.append("companyName", s.company_name);
-                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/admin/monetization/sponsors/${s.id}`, {
+                const res = await fetch(`${API_URL}/admin/monetization/sponsors/${s.id}`, {
                   method: "PUT",
                   headers: { Authorization: `Bearer ${user.token}` },
                   body: fd
@@ -7843,14 +7766,14 @@ const Admin = () => {
                         <input type="file" accept="image/jpg,image/jpeg,image/png,image/webp"
                           onChange={e => setSponsorForm(p => ({ ...p, _bannerFile: e.target.files[0], banner_url: e.target.files[0] ? URL.createObjectURL(e.target.files[0]) : p.banner_url }))}
                           style={{ ...inputStyle, padding: "8px" }} />
-                        {sponsorForm.banner_url && <img src={sponsorForm.banner_url} alt="Banner Preview" style={{ marginTop: "8px", maxHeight: "60px", borderRadius: "6px", objectFit: "cover" }} />}
+                        {sponsorForm.banner_url && <img loading="lazy" decoding="async" src={sponsorForm.banner_url} alt="Banner Preview" style={{ marginTop: "8px", maxHeight: "60px", borderRadius: "6px", objectFit: "cover" }} />}
                       </div>
                       <div>
                         <label style={labelStyle}>Upload Logo (JPG/PNG/WEBP)</label>
                         <input type="file" accept="image/jpg,image/jpeg,image/png,image/webp"
                           onChange={e => setSponsorForm(p => ({ ...p, _logoFile: e.target.files[0], logo_url: e.target.files[0] ? URL.createObjectURL(e.target.files[0]) : p.logo_url }))}
                           style={{ ...inputStyle, padding: "8px" }} />
-                        {sponsorForm.logo_url && <img src={sponsorForm.logo_url} alt="Logo Preview" style={{ marginTop: "8px", maxHeight: "50px", borderRadius: "6px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "6px" }} />}
+                        {sponsorForm.logo_url && <img loading="lazy" decoding="async" src={sponsorForm.logo_url} alt="Logo Preview" style={{ marginTop: "8px", maxHeight: "50px", borderRadius: "6px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "6px" }} />}
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
                         <label style={labelStyle}>Description</label>
@@ -7885,7 +7808,7 @@ const Admin = () => {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
                       <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
                         {selectedSponsor.logo_url
-                          ? <img src={selectedSponsor.logo_url} alt="Logo" style={{ width: "72px", height: "72px", borderRadius: "12px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "8px", border: "1px solid rgba(255,255,255,0.1)" }} />
+                          ? <img loading="lazy" decoding="async" src={selectedSponsor.logo_url} alt="Logo" style={{ width: "72px", height: "72px", borderRadius: "12px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "8px", border: "1px solid rgba(255,255,255,0.1)" }} />
                           : <div style={{ width: "72px", height: "72px", borderRadius: "12px", background: "linear-gradient(135deg, #FF5500, #b53c00)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", fontWeight: "900", color: "white" }}>{selectedSponsor.company_name?.charAt(0)}</div>
                         }
                         <div>
@@ -7916,7 +7839,7 @@ const Admin = () => {
                     {selectedSponsor.banner_url && (
                       <div style={{ marginBottom: "20px" }}>
                         <div style={{ fontSize: "10px", color: "#555", fontWeight: "900", marginBottom: "8px", textTransform: "uppercase" }}>Banner Image</div>
-                        <img src={selectedSponsor.banner_url} alt="Sponsor Banner" style={{ width: "100%", maxHeight: "140px", objectFit: "cover", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)" }} />
+                        <img loading="lazy" decoding="async" src={selectedSponsor.banner_url} alt="Sponsor Banner" style={{ width: "100%", maxHeight: "140px", objectFit: "cover", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)" }} />
                       </div>
                     )}
 
@@ -7990,14 +7913,14 @@ const Admin = () => {
 
                           {/* Banner */}
                           {sponsor.banner_url
-                            ? <img src={sponsor.banner_url} alt="Banner" style={{ width: "100%", height: "90px", objectFit: "cover" }} />
+                            ? <img loading="lazy" decoding="async" src={sponsor.banner_url} alt="Banner" style={{ width: "100%", height: "90px", objectFit: "cover" }} />
                             : <div style={{ width: "100%", height: "90px", background: "linear-gradient(135deg, #1a1a1a, #111)", display: "flex", alignItems: "center", justifyContent: "center", color: "#333", fontSize: "12px" }}>No Banner</div>
                           }
 
                           <div style={{ padding: "16px" }}>
                             <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
                               {sponsor.logo_url
-                                ? <img src={sponsor.logo_url} alt="Logo" style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "4px" }} />
+                                ? <img loading="lazy" decoding="async" src={sponsor.logo_url} alt="Logo" style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "4px" }} />
                                 : <div style={{ width: "40px", height: "40px", borderRadius: "8px", background: "linear-gradient(135deg, #FF5500, #b53c00)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "900", color: "white", fontSize: "16px" }}>{sponsor.company_name?.charAt(0)}</div>
                               }
                               <div style={{ flex: 1 }}>
@@ -8085,10 +8008,10 @@ const Admin = () => {
           )}
 
           {/* ==================== 6. TICKETS & REVENUE FINANCIAL SUITE ==================== */}
-          
+
 
           {/* ==================== COUPONS MANAGEMENT ==================== */}
-          
+
           {/* ==================== HOMEPAGE CONTROL ==================== */}
           {activeTab === "homepageControl" && (
             <div>
@@ -8098,14 +8021,14 @@ const Admin = () => {
                   <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Manage which records appear in specific sections on the front page.</p>
                 </div>
               </div>
-              
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "32px" }}>
                 {['featured', 'newly_verified', 'recent_uploads', 'top_ranked'].map(sectionName => (
                   <div key={sectionName} style={{ background: "#111", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.05)", padding: "24px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                       <h3 style={{ fontSize: "16px", fontWeight: "900", margin: 0, textTransform: "uppercase", color: "#FF5500" }}>{sectionName.replace('_', ' ')} Records</h3>
                     </div>
-                    
+
                     {homepageRecords[sectionName] && homepageRecords[sectionName].length > 0 ? (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
                         {homepageRecords[sectionName].map((record, index) => (
@@ -8113,7 +8036,7 @@ const Admin = () => {
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
                               <span style={{ fontSize: "14px", fontWeight: "900", color: "white" }}>{record.title}</span>
                               <button onClick={() => {
-                                  apiCall(`/admin/homepage/records/${record.id}/section`, "PUT", { section: null, order: 0 }, user.token)
+                                  apiCall(`/admin/records/${record.id}/homepage`, "DELETE", null, user.token)
                                     .then(() => { alert("Removed from homepage"); fetchData(); })
                                     .catch(e => alert("Error removing: " + e.message));
                                 }} style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "none", borderRadius: "6px", padding: "4px 8px", fontSize: "10px", fontWeight: "bold", cursor: "pointer" }}>
@@ -8128,11 +8051,11 @@ const Admin = () => {
                     ) : (
                       <div style={{ color: "#666", fontSize: "13px", padding: "16px", background: "rgba(255,255,255,0.01)", borderRadius: "8px", textAlign: "center" }}>No records assigned to this section.</div>
                     )}
-                    
+
                     <div style={{ marginTop: "16px", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "16px" }}>
                       <select onChange={(e) => {
                           if(!e.target.value) return;
-                          apiCall(`/admin/homepage/records/${e.target.value}/section`, "PUT", { section: sectionName, order: (homepageRecords[sectionName]?.length || 0) + 1 }, user.token)
+                          apiCall(`/admin/records/${e.target.value}/homepage`, "PUT", { homepageSection: sectionName, homepageOrder: (homepageRecords[sectionName]?.length || 0) + 1 }, user.token)
                             .then(() => { alert("Added to section"); fetchData(); e.target.value = ""; })
                             .catch(err => alert("Error adding: " + err.message));
                         }} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "white", padding: "10px", fontSize: "12px" }}>
@@ -8163,7 +8086,7 @@ const Admin = () => {
 
               <div style={{ display: "flex", gap: "24px", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "0px", marginBottom: "32px" }}>
                 {["all_submissions", "newest", "featured", "highlights"].map(sub => (
-                  <button 
+                  <button
                     key={sub}
                     onClick={() => setVideoManagementSubTab(sub)}
                     style={{ background: "transparent", border: "none", color: videoManagementSubTab === sub ? "#FF5500" : "#888", fontWeight: videoManagementSubTab === sub ? "900" : "700", fontSize: "14px", cursor: "pointer", textTransform: "uppercase", padding: "12px 6px", borderBottom: videoManagementSubTab === sub ? "3px solid #FF5500" : "3px solid transparent", outline: "none", transition: "all 0.2s" }}
@@ -8178,7 +8101,7 @@ const Admin = () => {
                   <div key={vid.id} onClick={() => setSelectedVideoForViewing(vid)} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", overflow: "hidden", cursor: "pointer", transition: "all 0.3s", transform: "scale(1)" }} onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.borderColor = "rgba(255,85,0,0.4)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; const overlay = e.currentTarget.querySelector('.hover-play-overlay'); if(overlay) overlay.style.opacity = "1"; }} onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; const overlay = e.currentTarget.querySelector('.hover-play-overlay'); if(overlay) overlay.style.opacity = "0"; }}>
                     <div style={{ height: "160px", background: "#000", position: "relative" }}>
                       {vid.thumbnail_url || vid.thumbnailUrl ? (
-                        <img src={vid.thumbnail_url || vid.thumbnailUrl} alt="Thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img loading="lazy" decoding="async" src={vid.thumbnail_url || vid.thumbnailUrl} alt="Thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
                         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Video size={32} color="#444" /></div>
                       )}
@@ -8194,14 +8117,21 @@ const Admin = () => {
                     <div style={{ padding: "16px" }}>
                       <h4 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: "900", color: "white" }}>{vid.title}</h4>
                       <p style={{ color: "#888", fontSize: "12px", margin: "0 0 16px 0", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{vid.description}</p>
-                      
+
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", gap: "8px" }}>
                           {vid.is_featured && <span style={{ background: "rgba(255,85,0,0.1)", color: "#FF5500", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "bold" }}>FEATURED</span>}
                           {vid.is_newly_uploaded && <span style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", padding: "2px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: "bold" }}>NEW</span>}
                         </div>
-                        <button onClick={() => {
-                          apiCall(`/admin/videos/${videoManagementSubTab}/${vid.id}`, "DELETE", null, user.token)
+                        <button onClick={(ev) => {
+                          ev.stopPropagation();
+                          // Items with "sub-" ids are record submissions, not videos: manage them under Records.
+                          if (String(vid.id).startsWith("sub-")) {
+                            alert("This video belongs to a record submission. Manage it from the Records / Submissions tab.");
+                            return;
+                          }
+                          const typeRoute = { newest: "newest", featured: "featured", highlights: "record" }[videoManagementSubTab] || (vid.video_type === "newest_record" ? "newest" : vid.video_type === "record" ? "record" : "featured");
+                          apiCall(`/admin/videos/${typeRoute}/${vid.id}`, "DELETE", null, user.token)
                             .then(() => { alert("Video removed successfully"); fetchData(); })
                             .catch(e => alert("Error removing video: " + e.message));
                         }} style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "bold", cursor: "pointer" }}>
@@ -8267,7 +8197,7 @@ const Admin = () => {
                     <h3 style={{ fontSize: "24px", fontWeight: "950", color: "white", margin: 0, textTransform: "uppercase", letterSpacing: "-0.5px" }}>
                       COUPON INVENTORY
                     </h3>
-                    <button 
+                    <button
                       onClick={(e) => { e.preventDefault(); openModal("add"); }}
                       style={{ background: "#FF5500", color: "white", border: "none", padding: "10px 20px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}
                     >
@@ -8278,12 +8208,12 @@ const Admin = () => {
                   {/* Coupon Search */}
                   <div style={{ position: "relative", marginBottom: "32px" }}>
                     <Search size={16} color="#666" style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)" }} />
-                    <input 
-                      type="text" 
-                      placeholder="SEARCH COUPON CODES..." 
+                    <input
+                      type="text"
+                      placeholder="SEARCH COUPON CODES..."
                       value={couponSearchQuery}
                       onChange={(e) => setCouponSearchQuery(e.target.value)}
-                      style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "none", borderRadius: "100px", padding: "16px 16px 16px 48px", color: "white", fontSize: "11px", fontWeight: "800", outline: "none", letterSpacing: "1px" }} 
+                      style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "none", borderRadius: "100px", padding: "16px 16px 16px 48px", color: "white", fontSize: "11px", fontWeight: "800", outline: "none", letterSpacing: "1px" }}
                     />
                   </div>
 
@@ -8347,7 +8277,7 @@ const Admin = () => {
                                   {coupon.expiration_date ? new Date(coupon.expiration_date).toLocaleDateString() : 'Never'}
                                 </td>
                                 <td style={{ padding: "20px 24px" }}>
-                                  <button 
+                                  <button
                                     onClick={async (e) => {
                                       e.preventDefault();
                                       try {
@@ -8358,9 +8288,9 @@ const Admin = () => {
                                         showToast(`Toggle failed: ${err.message}`, "error");
                                       }
                                     }}
-                                    style={{ 
-                                      background: isValid ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", 
-                                      color: isValid ? "#22c55e" : "#ef4444", 
+                                    style={{
+                                      background: isValid ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                                      color: isValid ? "#22c55e" : "#ef4444",
                                       padding: "6px 12px", borderRadius: "100px", fontWeight: "900", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1px",
                                       border: `1px solid ${isValid ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`, cursor: "pointer", outline: "none"
                                     }}
@@ -8370,13 +8300,13 @@ const Admin = () => {
                                 </td>
                                 <td style={{ padding: "20px 24px", textAlign: "right" }}>
                                   <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                                    <button 
+                                    <button
                                       onClick={(e) => { e.preventDefault(); openModal("edit", coupon); }}
                                       style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
                                     >
                                       <Edit3 size={12} /> Edit
                                     </button>
-                                    <button 
+                                    <button
                                       onClick={(e) => { e.preventDefault(); handleDelete(coupon.id); }}
                                       style={{ background: "rgba(239,68,68,0.1)", border: "none", color: "#ef4444", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
                                     >
@@ -8413,7 +8343,7 @@ const Admin = () => {
                     <br />OVERSIGHT
                   </h2>
                 </div>
-                <button 
+                <button
                   onClick={(e) => { e.preventDefault(); handleExportLedger(); }}
                   style={{ background: "#FF5500", color: "white", border: "none", padding: "14px 28px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "1px", marginTop: "12px", boxShadow: "0 4px 14px rgba(255,85,0,0.4)" }}
                 >
@@ -8423,19 +8353,19 @@ const Admin = () => {
 
               {/* Revenue Sub Tabs navigation */}
               <div style={{ display: "flex", gap: "24px", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "0px", marginBottom: "40px" }}>
-                <button 
+                <button
                   onClick={(e) => { e.preventDefault(); setRevenueSubTab("ledger"); }}
                   style={{ background: "transparent", border: "none", color: revenueSubTab === "ledger" ? "#FF5500" : "#888", fontWeight: revenueSubTab === "ledger" ? "900" : "700", fontSize: "14px", cursor: "pointer", textTransform: "uppercase", padding: "12px 6px", borderBottom: revenueSubTab === "ledger" ? "3px solid #FF5500" : "3px solid transparent", outline: "none", transition: "all 0.2s" }}
                 >
                   Transaction Ledger
                 </button>
-                <button 
+                <button
                   onClick={(e) => { e.preventDefault(); setRevenueSubTab("coupons"); }}
                   style={{ background: "transparent", border: "none", color: revenueSubTab === "coupons" ? "#FF5500" : "#888", fontWeight: revenueSubTab === "coupons" ? "900" : "700", fontSize: "14px", cursor: "pointer", textTransform: "uppercase", padding: "12px 6px", borderBottom: revenueSubTab === "coupons" ? "3px solid #FF5500" : "3px solid transparent", outline: "none", transition: "all 0.2s" }}
                 >
                   Discount Coupons
                 </button>
-                <button 
+                <button
                   onClick={(e) => { e.preventDefault(); setRevenueSubTab("tickets"); }}
                   style={{ background: "transparent", border: "none", color: revenueSubTab === "tickets" ? "#FF5500" : "#888", fontWeight: revenueSubTab === "tickets" ? "900" : "700", fontSize: "14px", cursor: "pointer", textTransform: "uppercase", padding: "12px 6px", borderBottom: revenueSubTab === "tickets" ? "3px solid #FF5500" : "3px solid transparent", outline: "none", transition: "all 0.2s" }}
                 >
@@ -8448,7 +8378,7 @@ const Admin = () => {
                   {/* Financial Revenue Grid Cards */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px", marginBottom: "40px" }}>
                     {/* Card 1: Net Paid Revenue */}
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterStatus("paid"); setPaymentsFilterType("all"); }}
                       style={{ background: "rgba(255,255,255,0.02)", borderRadius: "24px", padding: "32px", position: "relative", overflow: "hidden", border: paymentsFilterStatus === "paid" && paymentsFilterType === "all" ? "1px solid #FF5500" : "1px solid rgba(255,255,255,0.05)", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", backdropFilter: "blur(12px)", cursor: "pointer", transition: "all 0.2s" }}
                       className="hover-scale-glow"
@@ -8463,7 +8393,7 @@ const Admin = () => {
                     </div>
 
                     {/* Card 2: Transactions Breakdown */}
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterStatus("all"); setPaymentsFilterType("all"); }}
                       style={{ background: "rgba(255,255,255,0.02)", borderRadius: "24px", padding: "32px", position: "relative", overflow: "hidden", border: paymentsFilterStatus === "all" && paymentsFilterType === "all" ? "1px solid #FF5500" : "1px solid rgba(255,255,255,0.05)", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", backdropFilter: "blur(12px)", cursor: "pointer", transition: "all 0.2s" }}
                       className="hover-scale-glow"
@@ -8485,7 +8415,7 @@ const Admin = () => {
                     </div>
 
                     {/* Card 3: Escrow / Adjustments */}
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterStatus("refunded"); setPaymentsFilterType("all"); }}
                       style={{ background: "rgba(255,255,255,0.02)", borderRadius: "24px", padding: "32px", position: "relative", overflow: "hidden", border: paymentsFilterStatus === "refunded" && paymentsFilterType === "all" ? "1px solid #ef4444" : "1px solid rgba(255,255,255,0.05)", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", backdropFilter: "blur(12px)", cursor: "pointer", transition: "all 0.2s" }}
                       className="hover-scale-glow"
@@ -8502,42 +8432,42 @@ const Admin = () => {
 
                   {/* Payment Streams Detailed Aggregates bar */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "16px", marginBottom: "40px", background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "20px", padding: "20px" }}>
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterType("membership"); setPaymentsFilterStatus("all"); }}
                       style={{ textAlign: "center", cursor: "pointer", padding: "8px", borderRadius: "10px", background: paymentsFilterType === "membership" ? "rgba(255,85,0,0.08)" : "transparent", transition: "all 0.2s" }}
                     >
                       <div style={{ fontSize: "10px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "4px" }}>MEMBERSHIPS</div>
                       <div style={{ fontSize: "14px", fontWeight: "950", color: "white" }}>${(ledgerMetrics?.membershipRevenue || 0).toFixed(2)}</div>
                     </div>
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterType("shop"); setPaymentsFilterStatus("all"); }}
                       style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", padding: "8px", borderRadius: "10px", background: paymentsFilterType === "shop" ? "rgba(255,85,0,0.08)" : "transparent", transition: "all 0.2s" }}
                     >
                       <div style={{ fontSize: "10px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "4px" }}>SHOP SALES</div>
                       <div style={{ fontSize: "14px", fontWeight: "950", color: "white" }}>${(ledgerMetrics?.shopRevenue || 0).toFixed(2)}</div>
                     </div>
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterType("ticket"); setPaymentsFilterStatus("all"); }}
                       style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", padding: "8px", borderRadius: "10px", background: paymentsFilterType === "ticket" ? "rgba(255,85,0,0.08)" : "transparent", transition: "all 0.2s" }}
                     >
                       <div style={{ fontSize: "10px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "4px" }}>TICKET SALES</div>
                       <div style={{ fontSize: "14px", fontWeight: "950", color: "white" }}>${(ledgerMetrics?.ticketRevenue || 0).toFixed(2)}</div>
                     </div>
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterType("submission"); setPaymentsFilterStatus("all"); }}
                       style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", padding: "8px", borderRadius: "10px", background: paymentsFilterType === "submission" ? "rgba(255,85,0,0.08)" : "transparent", transition: "all 0.2s" }}
                     >
                       <div style={{ fontSize: "10px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "4px" }}>SUBMISSIONS</div>
                       <div style={{ fontSize: "14px", fontWeight: "950", color: "white" }}>${(ledgerMetrics?.submissionRevenue || 0).toFixed(2)}</div>
                     </div>
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterType("challenge"); setPaymentsFilterStatus("all"); }}
                       style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", padding: "8px", borderRadius: "10px", background: paymentsFilterType === "challenge" ? "rgba(255,85,0,0.08)" : "transparent", transition: "all 0.2s" }}
                     >
                       <div style={{ fontSize: "10px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "4px" }}>CHALLENGES</div>
                       <div style={{ fontSize: "14px", fontWeight: "950", color: "white" }}>${(ledgerMetrics?.challengeRevenue || 0).toFixed(2)}</div>
                     </div>
-                    <div 
+                    <div
                       onClick={() => { setPaymentsFilterStatus("pending"); setPaymentsFilterType("all"); }}
                       style={{ textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", padding: "8px", borderRadius: "10px", background: paymentsFilterStatus === "pending" ? "rgba(234,179,8,0.1)" : "transparent", transition: "all 0.2s" }}
                     >
@@ -8548,13 +8478,13 @@ const Admin = () => {
 
                   {/* Interactive Roster Controls */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginBottom: "32px" }}>
-                    
+
                     {/* Header with quick stream filter bar */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
                       <h3 style={{ fontSize: "20px", fontWeight: "950", color: "white", margin: 0, textTransform: "uppercase", letterSpacing: "-0.5px" }}>
                         💳 REGISTRY TRANSACTIONS
                       </h3>
-                      
+
                       {/* Payment Type Streams Selector */}
                       <div style={{ display: "flex", gap: "6px", background: "rgba(255,255,255,0.02)", padding: "4px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", flexWrap: "wrap" }}>
                         {[
@@ -8590,7 +8520,7 @@ const Admin = () => {
 
                     {/* Filter by Status & Search Bar Row */}
                     <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center", width: "100%" }}>
-                      
+
                       {/* Search Input Box with Action Buttons */}
                       <div style={{ display: "flex", gap: "10px", flex: 1, minWidth: "280px", alignItems: "center" }}>
                         <div style={{ position: "relative", flex: 1 }}>
@@ -8620,7 +8550,7 @@ const Admin = () => {
                             }}
                           />
                         </div>
-                        
+
                         {/* Search Button */}
                         <button
                           onClick={(e) => { e.preventDefault(); setPaymentsSearchApplied(paymentsSearchQuery); }}
@@ -8641,7 +8571,7 @@ const Admin = () => {
                         >
                           Search
                         </button>
-                        
+
                         {/* Clear Search Button */}
                         <button
                           onClick={(e) => {
@@ -8718,7 +8648,7 @@ const Admin = () => {
                         {ledgerPayments.filter(p => {
                           const searchMatch = !paymentsSearchApplied.trim() || (() => {
                             const q = paymentsSearchApplied.toLowerCase();
-                            return (p.customerName || "").toLowerCase().includes(q) || 
+                            return (p.customerName || "").toLowerCase().includes(q) ||
                                    (p.customerEmail || "").toLowerCase().includes(q) ||
                                    (p.id || "").toLowerCase().includes(q) ||
                                    (p.referenceId && p.referenceId.toLowerCase().includes(q)) ||
@@ -8728,27 +8658,27 @@ const Admin = () => {
                                    (p.title && p.title.toLowerCase().includes(q)) ||
                                    (p.category && p.category.toLowerCase().includes(q));
                           })();
-                            
+
                           const typeMatch = paymentsFilterType === 'all' || p.paymentType === paymentsFilterType;
                           const statusMatch = paymentsFilterStatus === 'all' || p.status === paymentsFilterStatus;
-                          
+
                           return searchMatch && typeMatch && statusMatch;
                         }).map((row, idx) => {
-                          const typeLabel = 
-                            row.paymentType === 'membership' ? 'ELITE MEMBERSHIP' : 
-                            row.paymentType === 'shop' ? 'SHOP MERCHANDISE' : 
-                            row.paymentType === 'ticket' ? 'EVENT TICKET' : 
+                          const typeLabel =
+                            row.paymentType === 'membership' ? 'ELITE MEMBERSHIP' :
+                            row.paymentType === 'shop' ? 'SHOP MERCHANDISE' :
+                            row.paymentType === 'ticket' ? 'EVENT TICKET' :
                             row.paymentType === 'challenge' ? 'CHALLENGE FEE' : 'SUBMISSION FEE';
 
-                          const typeColor = 
-                            row.paymentType === 'membership' ? '#a855f7' : 
-                            row.paymentType === 'shop' ? '#3b82f6' : 
-                            row.paymentType === 'ticket' ? '#ec4899' : 
+                          const typeColor =
+                            row.paymentType === 'membership' ? '#a855f7' :
+                            row.paymentType === 'shop' ? '#3b82f6' :
+                            row.paymentType === 'ticket' ? '#ec4899' :
                             row.paymentType === 'challenge' ? '#eab308' : '#14b8a6';
 
                           return (
                             <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)", transition: "background 0.2s" }} className="table-row-hover">
-                              
+
                               {/* Athlete / Customer details */}
                               <td style={{ padding: "20px 24px", display: "flex", alignItems: "center", gap: "16px" }}>
                                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: `linear-gradient(135deg, ${typeColor}22 0%, ${typeColor}44 100%)`, border: `1px solid ${typeColor}44`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "950", color: typeColor, fontSize: "12px" }}>
@@ -8797,7 +8727,7 @@ const Admin = () => {
                               {/* Action Trigger Buttons */}
                               <td style={{ padding: "20px 24px", textAlign: "right" }}>
                                 <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", alignItems: "center" }}>
-                                  
+
                                   {/* VIEW DETAILS ACTION */}
                                   <button
                                     onClick={(e) => {
@@ -8927,7 +8857,7 @@ const Admin = () => {
                         {ledgerPayments.filter(p => {
                           const searchMatch = !paymentsSearchApplied.trim() || (() => {
                             const q = paymentsSearchApplied.toLowerCase();
-                            return (p.customerName || "").toLowerCase().includes(q) || 
+                            return (p.customerName || "").toLowerCase().includes(q) ||
                                    (p.customerEmail || "").toLowerCase().includes(q) ||
                                    (p.id || "").toLowerCase().includes(q) ||
                                    (p.referenceId && p.referenceId.toLowerCase().includes(q)) ||
@@ -8937,10 +8867,10 @@ const Admin = () => {
                                    (p.title && p.title.toLowerCase().includes(q)) ||
                                    (p.category && p.category.toLowerCase().includes(q));
                           })();
-                            
+
                           const typeMatch = paymentsFilterType === 'all' || p.paymentType === paymentsFilterType;
                           const statusMatch = paymentsFilterStatus === 'all' || p.status === paymentsFilterStatus;
-                          
+
                           return searchMatch && typeMatch && statusMatch;
                         }).length === 0 && (
                           <tr>
@@ -8957,7 +8887,7 @@ const Admin = () => {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "48px", alignItems: "center" }}>
                     <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: "20px", padding: "32px", border: "1px solid rgba(255,255,255,0.05)" }}>
                       <h4 style={{ fontSize: "18px", fontWeight: "950", color: "white", margin: "0 0 24px 0", textTransform: "uppercase", letterSpacing: "-0.5px" }}>PAYOUT VELOCITY</h4>
-                      
+
                       <div style={{ marginBottom: "20px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                           <span style={{ fontSize: "10px", color: "#888", fontWeight: "900", letterSpacing: "1px" }}>VERIFIED TRANSFERS</span>
@@ -8978,7 +8908,7 @@ const Admin = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <p style={{ color: "#FF8866", fontSize: "14px", lineHeight: "1.6", fontWeight: "600", marginBottom: "24px" }}>
                         Financial oversight operations are running dynamically at peak system optimization. We have aggregated real-time database transactions from all membership tiers, catalog orders, livestream spectator tickets, and adjudication submissions into a central ledger.
@@ -8991,7 +8921,7 @@ const Admin = () => {
                 </>
               )}
 
-              
+
 
               {/* Ticket Sales Tab */}
               {revenueSubTab === "tickets" && (
@@ -8999,9 +8929,9 @@ const Admin = () => {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
                     <div style={{ position: "relative", width: "400px" }}>
                       <Search size={16} color="#888" style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)" }} />
-                      <input 
-                        type="text" 
-                        placeholder="Search by Order ID, Name, Email, or Member Number..." 
+                      <input
+                        type="text"
+                        placeholder="Search by Order ID, Name, Email, or Member Number..."
                         value={ticketSearchQuery}
                         onChange={(e) => setTicketSearchQuery(e.target.value)}
                         style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", padding: "14px 14px 14px 44px", borderRadius: "12px", color: "white", fontSize: "12px", fontWeight: "600", outline: "none", boxSizing: "border-box" }}
@@ -9024,7 +8954,7 @@ const Admin = () => {
                       <tbody>
                         {tickets.filter(t => {
                           const query = ticketSearchQuery.toLowerCase();
-                          return !query || 
+                          return !query ||
                             t.accessCode?.toLowerCase().includes(query) ||
                             t.user?.name?.toLowerCase().includes(query) ||
                             t.user?.email?.toLowerCase().includes(query) ||
@@ -9144,7 +9074,7 @@ const Admin = () => {
       {isModalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000, padding: "20px" }}>
           <div style={{ background: "#0c0c0e", border: "1px solid rgba(255, 85, 0, 0.15)", width: "100%", maxWidth: "640px", maxHeight: "calc(100vh - 40px)", borderRadius: "28px", overflow: "hidden", display: "flex", flexDirection: "column", animation: "modalFadeIn 0.3s ease-out" }}>
-            
+
             {/* Modal Header */}
             <div style={{ padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -9159,7 +9089,7 @@ const Admin = () => {
             {/* Modal Scrollable Body */}
             <form onSubmit={handleFormSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
               <div style={{ padding: "32px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
-                
+
                 {/* 1. RECORDS TAB FORM */}
                 {activeTab === "records" && recordsSubTab === "submissions" && (
                   <>
@@ -9295,22 +9225,22 @@ const Admin = () => {
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                           <label style={{ fontSize: "10px", fontWeight: "900", color: "#555" }}>USER ROLE</label>
-                          <span style={{ 
-                            fontSize: "10px", 
-                            fontWeight: "900", 
-                            color: userForm.role === 'system_admin' ? '#FF5500' : 
-                                   userForm.role === 'moderator' ? '#3b82f6' : 
-                                   userForm.role === 'judge' ? '#ffcc00' : '#22c55e' 
+                          <span style={{
+                            fontSize: "10px",
+                            fontWeight: "900",
+                            color: userForm.role === 'system_admin' ? '#FF5500' :
+                                   userForm.role === 'moderator' ? '#3b82f6' :
+                                   userForm.role === 'judge' ? '#ffcc00' : '#22c55e'
                           }}>
                             ACCESS LEVEL: {
-                              userForm.role === 'system_admin' ? 'FULL ADMIN' : 
-                              userForm.role === 'moderator' ? 'MODERATOR' : 
+                              userForm.role === 'system_admin' ? 'FULL ADMIN' :
+                              userForm.role === 'moderator' ? 'MODERATOR' :
                               userForm.role === 'judge' ? 'OFFICIAL JUDGE' : 'STANDARD'
                             }
                           </span>
                         </div>
-                        <select 
-                          value={userForm.role || "athlete"} 
+                        <select
+                          value={userForm.role || "athlete"}
                           onChange={(e) => {
                             const newRole = e.target.value;
                             if (['moderator', 'judge', 'system_admin'].includes(newRole)) {
@@ -9319,14 +9249,14 @@ const Admin = () => {
                                 `• This grants access to sensitive platform controls, user management, and configuration tools.\n` +
                                 `• Standard athletes should NEVER be assigned this role.\n\n` +
                                 `Are you absolutely certain you want to proceed and authorize this elevation?`;
-                              
+
                               if (window.confirm(alertMsg)) {
                                 setUserForm({ ...userForm, role: newRole });
                               }
                             } else {
                               setUserForm({ ...userForm, role: newRole });
                             }
-                          }} 
+                          }}
                           style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }}
                         >
                           <option value="athlete">Regular Athlete</option>
@@ -9338,13 +9268,13 @@ const Admin = () => {
                     </div>
 
                     {/* Access Level Description Card */}
-                    <div style={{ 
-                      background: userForm.role === 'system_admin' ? 'rgba(255,85,0,0.05)' : 
-                                  userForm.role === 'moderator' ? 'rgba(59,130,246,0.05)' : 
+                    <div style={{
+                      background: userForm.role === 'system_admin' ? 'rgba(255,85,0,0.05)' :
+                                  userForm.role === 'moderator' ? 'rgba(59,130,246,0.05)' :
                                   userForm.role === 'judge' ? 'rgba(255,204,0,0.05)' : 'rgba(255,255,255,0.01)',
                       border: `1px solid ${
-                        userForm.role === 'system_admin' ? 'rgba(255,85,0,0.2)' : 
-                        userForm.role === 'moderator' ? 'rgba(59,130,246,0.2)' : 
+                        userForm.role === 'system_admin' ? 'rgba(255,85,0,0.2)' :
+                        userForm.role === 'moderator' ? 'rgba(59,130,246,0.2)' :
                         userForm.role === 'judge' ? 'rgba(255,204,0,0.2)' : 'rgba(255,255,255,0.05)'
                       }`,
                       borderRadius: "12px",
@@ -9355,12 +9285,12 @@ const Admin = () => {
                       gap: "8px"
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div style={{ 
-                          width: "8px", 
-                          height: "8px", 
-                          borderRadius: "50%", 
-                          background: userForm.role === 'system_admin' ? '#FF5500' : 
-                                      userForm.role === 'moderator' ? '#3b82f6' : 
+                        <div style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: userForm.role === 'system_admin' ? '#FF5500' :
+                                      userForm.role === 'moderator' ? '#3b82f6' :
                                       userForm.role === 'judge' ? '#ffcc00' : '#22c55e'
                         }} />
                         <span style={{ fontSize: "11px", fontWeight: "900", color: "white", textTransform: "uppercase", letterSpacing: "0.5px" }}>
@@ -9369,11 +9299,11 @@ const Admin = () => {
                       </div>
                       <p style={{ margin: 0, fontSize: "12px", color: "#aaa", lineHeight: "1.4" }}>
                         {
-                          userForm.role === 'system_admin' ? 
+                          userForm.role === 'system_admin' ?
                           "🔒 FULL ACCESS: Absolute platform ownership. Authorized to read/write database, manage billing, change server configs, and grant or revoke admin permissions." :
-                          userForm.role === 'moderator' ? 
+                          userForm.role === 'moderator' ?
                           "🛡️ MODERATION ACCESS: Authorized for content oversight. Can audit/remove comments, standard forum posts, handle support tickets, and review flagged material." :
-                          userForm.role === 'judge' ? 
+                          userForm.role === 'judge' ?
                           "⚖️ ADJUDICATOR ACCESS: Timing & validation oversight. Authorized to inspect, approve, or reject official record attempts, timing sheets, and upload results." :
                           "🏃 STANDARD ACCESS: Standard platform interaction. Can participate in challenges, post attempts, track personal records, shop products, and update basic profile."
                         }
@@ -9383,9 +9313,9 @@ const Admin = () => {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>MEMBERSHIP TYPE</label>
-                        <select 
-                          value={userForm.membershipType || "free_athlete"} 
-                          onChange={(e) => setUserForm({ ...userForm, membershipType: e.target.value })} 
+                        <select
+                          value={userForm.membershipType || "free_athlete"}
+                          onChange={(e) => setUserForm({ ...userForm, membershipType: e.target.value })}
                           style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }}
                         >
                           <option value="free_athlete">Free Athlete</option>
@@ -9403,9 +9333,9 @@ const Admin = () => {
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>ACCOUNT STATUS</label>
-                        <select 
-                          value={userForm.accountStatus || "active"} 
-                          onChange={(e) => setUserForm({ ...userForm, accountStatus: e.target.value })} 
+                        <select
+                          value={userForm.accountStatus || "active"}
+                          onChange={(e) => setUserForm({ ...userForm, accountStatus: e.target.value })}
                           style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }}
                         >
                           <option value="active">Active</option>
@@ -9464,7 +9394,7 @@ const Admin = () => {
                   <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                     {/* Header: Profile Picture & Core Info */}
                     <div style={{ display: "flex", gap: "20px", alignItems: "center", background: "rgba(255,255,255,0.02)", padding: "24px", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                      <img src={modalTarget.profile_pic || `https://ui-avatars.com/api/?name=${modalTarget.name}&background=random&size=128`} alt={modalTarget.name} style={{ width: "96px", height: "96px", borderRadius: "50%", objectFit: "cover", border: "2px solid #FF5500" }} />
+                      <img loading="lazy" decoding="async" src={modalTarget.profile_pic || `https://ui-avatars.com/api/?name=${modalTarget.name}&background=random&size=128`} alt={modalTarget.name} style={{ width: "96px", height: "96px", borderRadius: "50%", objectFit: "cover", border: "2px solid #FF5500" }} />
                       <div style={{ flex: 1 }}>
                         <h2 style={{ fontSize: "24px", fontWeight: "950", margin: "0 0 4px 0", color: "white" }}>{modalTarget.name}</h2>
                         <div style={{ color: "#888", fontSize: "14px", marginBottom: "8px" }}>{modalTarget.email} | {modalTarget.username || 'No Username'}</div>
@@ -9485,15 +9415,15 @@ const Admin = () => {
                     {/* Navigation Tabs */}
                     <div style={{ display: "flex", gap: "16px", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "12px", overflowX: "auto" }}>
                       {['overview', 'activity', 'submissions', 'payments', 'ranking', 'challenges'].map(tab => (
-                        <button 
+                        <button
                           key={tab}
                           onClick={(e) => { e.preventDefault(); setRecordsSubTab(tab); }}
-                          style={{ 
-                            background: "transparent", 
-                            border: "none", 
-                            color: recordsSubTab === tab ? "#FF5500" : "#888", 
-                            fontWeight: recordsSubTab === tab ? "900" : "700", 
-                            fontSize: "13px", 
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: recordsSubTab === tab ? "#FF5500" : "#888",
+                            fontWeight: recordsSubTab === tab ? "900" : "700",
+                            fontSize: "13px",
                             cursor: "pointer",
                             textTransform: "uppercase",
                             padding: "4px 8px",
@@ -9580,12 +9510,12 @@ const Admin = () => {
                                     <div style={{ color: "#888", fontSize: "12px" }}>{r.category} • {r.value} {r.unit}</div>
                                   </div>
                                   <div>
-                                    <span style={{ 
-                                      background: r.status === 'verified' || r.status === 'approved' ? "rgba(34,197,94,0.1)" : r.status === 'rejected' || r.status === 'denied' ? "rgba(239,68,68,0.1)" : "rgba(255,204,0,0.1)", 
-                                      color: r.status === 'verified' || r.status === 'approved' ? "#22c55e" : r.status === 'rejected' || r.status === 'denied' ? "#ef4444" : "#ffcc00", 
-                                      padding: "4px 8px", 
-                                      borderRadius: "100px", 
-                                      fontSize: "10px", 
+                                    <span style={{
+                                      background: r.status === 'verified' || r.status === 'approved' ? "rgba(34,197,94,0.1)" : r.status === 'rejected' || r.status === 'denied' ? "rgba(239,68,68,0.1)" : "rgba(255,204,0,0.1)",
+                                      color: r.status === 'verified' || r.status === 'approved' ? "#22c55e" : r.status === 'rejected' || r.status === 'denied' ? "#ef4444" : "#ffcc00",
+                                      padding: "4px 8px",
+                                      borderRadius: "100px",
+                                      fontSize: "10px",
                                       fontWeight: "bold",
                                       textTransform: "uppercase"
                                     }}>
@@ -9644,7 +9574,7 @@ const Admin = () => {
                   <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                     {/* Header */}
                     <div style={{ display: "flex", gap: "20px", alignItems: "center", background: "rgba(255,255,255,0.02)", padding: "24px", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                      <img src={modalTarget.profile_pic || `https://ui-avatars.com/api/?name=${modalTarget.name}&background=random&size=128`} alt={modalTarget.name} style={{ width: "96px", height: "96px", borderRadius: "50%", objectFit: "cover", border: "2px solid #FF5500" }} />
+                      <img loading="lazy" decoding="async" src={modalTarget.profile_pic || `https://ui-avatars.com/api/?name=${modalTarget.name}&background=random&size=128`} alt={modalTarget.name} style={{ width: "96px", height: "96px", borderRadius: "50%", objectFit: "cover", border: "2px solid #FF5500" }} />
                       <div style={{ flex: 1 }}>
                         <h2 style={{ fontSize: "24px", fontWeight: "950", margin: "0 0 4px 0", color: "white" }}>{modalTarget.name}</h2>
                         <div style={{ color: "#888", fontSize: "14px", marginBottom: "8px" }}>{modalTarget.email} | Member #{modalTarget.member_number || modalTarget.memberNumber || 'Pending'}</div>
@@ -9662,15 +9592,15 @@ const Admin = () => {
                     {/* Navigation Tabs */}
                     <div style={{ display: "flex", gap: "16px", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "12px" }}>
                       {['performance', 'history'].map(tab => (
-                        <button 
+                        <button
                           key={tab}
                           onClick={(e) => { e.preventDefault(); setRecordsSubTab(tab); }}
-                          style={{ 
-                            background: "transparent", 
-                            border: "none", 
-                            color: recordsSubTab === tab ? "#FF5500" : "#888", 
-                            fontWeight: recordsSubTab === tab ? "900" : "700", 
-                            fontSize: "13px", 
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: recordsSubTab === tab ? "#FF5500" : "#888",
+                            fontWeight: recordsSubTab === tab ? "900" : "700",
+                            fontSize: "13px",
                             cursor: "pointer",
                             textTransform: "uppercase",
                             padding: "4px 8px",
@@ -9696,7 +9626,7 @@ const Admin = () => {
                           <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>APPEAL INVOLVEMENT</div>
                           <div style={{ fontSize: "24px", color: "#f59e0b", fontWeight: "950" }}>{modalTarget.stats?.appeals || 0}</div>
                         </div>
-                        
+
                         <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px", textAlign: "center" }}>
                           <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>APPROVED RECORDS</div>
                           <div style={{ fontSize: "24px", color: "#22c55e", fontWeight: "950" }}>{modalTarget.stats?.verified || 0}</div>
@@ -9758,12 +9688,12 @@ const Admin = () => {
                     {/* Paid/Free Event Toggle Section */}
                     <div style={{ background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.2)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
                       <label style={{ fontSize: "11px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.5px", textTransform: "uppercase" }}>SPECTATOR ACCESS SETTINGS</label>
-                      
+
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: "rgba(0,0,0,0.2)", padding: "12px 14px", borderRadius: "8px", border: eventForm.isPaid ? "1px solid rgba(255,106,0,0.4)" : "1px solid rgba(0,255,0,0.3)" }}>
-                        <input 
-                          type="checkbox" 
-                          id="isPaid" 
-                          checked={eventForm.isPaid} 
+                        <input
+                          type="checkbox"
+                          id="isPaid"
+                          checked={eventForm.isPaid}
                           onChange={e => setEventForm({...eventForm, isPaid: e.target.checked})}
                           style={{ cursor: "pointer", width: "18px", height: "18px" }}
                         />
@@ -9777,22 +9707,22 @@ const Admin = () => {
                           <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#FF6A00", marginBottom: "6px", letterSpacing: "0.5px" }}>TICKET PRICE (USD)</label>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <span style={{ fontSize: "14px", fontWeight: "900", color: "#FF6A00" }}>$</span>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               step="0.01"
-                              placeholder="49.99" 
-                              value={eventForm.ticketPrice} 
-                              onChange={e => setEventForm({...eventForm, ticketPrice: parseFloat(e.target.value) || 0})} 
-                              style={{ 
-                                width: "100%", 
-                                background: "rgba(0,0,0,0.4)", 
-                                border: "1px solid rgba(255,106,0,0.3)", 
-                                borderRadius: "8px", 
-                                padding: "10px 14px", 
+                              placeholder="49.99"
+                              value={eventForm.ticketPrice}
+                              onChange={e => setEventForm({...eventForm, ticketPrice: parseFloat(e.target.value) || 0})}
+                              style={{
+                                width: "100%",
+                                background: "rgba(0,0,0,0.4)",
+                                border: "1px solid rgba(255,106,0,0.3)",
+                                borderRadius: "8px",
+                                padding: "10px 14px",
                                 color: "#FF6A00",
                                 fontWeight: "700",
                                 fontSize: "14px"
-                              }} 
+                              }}
                             />
                           </div>
                           <p style={{ fontSize: "10px", color: "#888", margin: "8px 0 0 0", fontStyle: "italic" }}>Users must purchase a valid spectator pass to access this livestream</p>
@@ -9803,7 +9733,7 @@ const Admin = () => {
                 )}
 
                 {/* 4. PRODUCTS TAB FORM */}
-                
+
                 {/* 10. VIDEO UPLOAD FORM */}
                 {activeTab === "videoManagement" && (
                   <>
@@ -9897,8 +9827,8 @@ const Admin = () => {
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>UPLOAD PRODUCT IMAGE</label>
-                      <input 
-                        type="file" 
+                      <input
+                        type="file"
                         ref={adminProductFileInputRef}
                         accept=".jpg,.jpeg,.png,.webp"
                         style={{ display: "none" }}
@@ -9922,7 +9852,7 @@ const Admin = () => {
                           }
                         }}
                       />
-                      
+
                       <div
                         onDragEnter={(e) => { e.preventDefault(); setAdminProductDragActive(true); }}
                         onDragOver={(e) => { e.preventDefault(); setAdminProductDragActive(true); }}
@@ -9963,10 +9893,10 @@ const Admin = () => {
                       >
                         {(productForm.imagePreview || productForm.imageUrl) ? (
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", position: "relative" }}>
-                            <img 
-                              src={productForm.imagePreview || formatProductImage(productForm.imageUrl)} 
-                              alt="Product Preview" 
-                              style={{ maxWidth: "160px", maxHeight: "110px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.06)" }} 
+                            <img loading="lazy" decoding="async"
+                              src={productForm.imagePreview || formatProductImage(productForm.imageUrl)}
+                              alt="Product Preview"
+                              style={{ maxWidth: "160px", maxHeight: "110px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.06)" }}
                             />
                             <div style={{ fontSize: "11px", color: "white", fontWeight: "700" }}>
                               {productForm.imageFile ? productForm.imageFile.name : "Current Image (Click to change)"}
@@ -10014,7 +9944,7 @@ const Admin = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Sizes, Pricing, and Stock Sub-form */}
                     <div style={{ background: "rgba(255,85,0,0.02)", border: "1px dashed rgba(255,85,0,0.15)", borderRadius: "12px", padding: "16px", marginTop: "12px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -10153,7 +10083,7 @@ const Admin = () => {
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EXPIRATION DATE</label>
-                      <input type="date" max={new Date().toISOString().split('T')[0]} value={couponForm.expirationDate} onChange={(e) => setCouponForm({ ...couponForm, expirationDate: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      <input type="date" min={new Date().toISOString().split('T')[0]} value={couponForm.expirationDate} onChange={(e) => setCouponForm({ ...couponForm, expirationDate: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "16px" }}>
                       <input type="checkbox" checked={couponForm.active} onChange={(e) => setCouponForm({ ...couponForm, active: e.target.checked })} />
@@ -10170,29 +10100,29 @@ const Admin = () => {
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                           <div>
                             <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>COUPON CODE</label>
-                            <input 
-                              type="text" 
-                              value={couponForm.code} 
-                              onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })} 
-                              required={!couponForm.autoGenerate} 
+                            <input
+                              type="text"
+                              value={couponForm.code}
+                              onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
+                              required={!couponForm.autoGenerate}
                               disabled={couponForm.autoGenerate}
                               placeholder={couponForm.autoGenerate ? "ROGUE-XXXXX" : "e.g. ROGUE30"}
-                              style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", textTransform: "uppercase" }} 
+                              style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", textTransform: "uppercase" }}
                             />
                           </div>
                           <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <input 
-                                type="checkbox" 
-                                id="autoGenerate" 
-                                checked={couponForm.autoGenerate} 
+                              <input
+                                type="checkbox"
+                                id="autoGenerate"
+                                checked={couponForm.autoGenerate}
                                 onChange={(e) => {
                                   setCouponForm({
                                     ...couponForm,
                                     autoGenerate: e.target.checked,
                                     code: e.target.checked ? "AUTO-GENERATED" : ""
                                   });
-                                }} 
+                                }}
                                 style={{ width: "16px", height: "16px", cursor: "pointer" }}
                               />
                               <label htmlFor="autoGenerate" style={{ color: "#aaa", fontSize: "11px", cursor: "pointer", fontWeight: "700" }}>AUTO-GENERATE CODE</label>
@@ -10273,15 +10203,15 @@ const Admin = () => {
                         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
                           <div>
                             <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EXPIRATION DATE</label>
-                            <input type="date" max={new Date().toISOString().split('T')[0]} value={couponForm.expirationDate} onChange={(e) => setCouponForm({ ...couponForm, expirationDate: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", colorScheme: "dark" }} />
+                            <input type="date" min={new Date().toISOString().split('T')[0]} value={couponForm.expirationDate} onChange={(e) => setCouponForm({ ...couponForm, expirationDate: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", colorScheme: "dark" }} />
                           </div>
                           <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <input 
-                                type="checkbox" 
-                                id="couponActive" 
-                                checked={couponForm.active} 
-                                onChange={(e) => setCouponForm({ ...couponForm, active: e.target.checked })} 
+                              <input
+                                type="checkbox"
+                                id="couponActive"
+                                checked={couponForm.active}
+                                onChange={(e) => setCouponForm({ ...couponForm, active: e.target.checked })}
                                 style={{ width: "16px", height: "16px", cursor: "pointer" }}
                               />
                               <label htmlFor="couponActive" style={{ color: "#aaa", fontSize: "12px", cursor: "pointer", fontWeight: "700" }}>COUPON IS ACTIVE / ENABLED</label>
@@ -10293,42 +10223,42 @@ const Admin = () => {
                       <>
                         {/* High-Fidelity Manual Revenue Entry Form */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                          
+
                           {/* SECTION 1: CUSTOMER INFORMATION */}
                           <div style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "16px", padding: "20px" }}>
                             <h4 style={{ fontSize: "11px", fontWeight: "950", color: "#FF5500", letterSpacing: "1px", margin: "0 0 16px 0", textTransform: "uppercase" }}>1. Customer & Account Details</h4>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>User / Customer Name <span style={{ color: "#FF5500" }}>*</span></label>
-                                <input 
-                                  type="text" 
-                                  value={revenueForm.customerName} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, customerName: e.target.value })} 
-                                  required 
+                                <input
+                                  type="text"
+                                  value={revenueForm.customerName}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, customerName: e.target.value })}
+                                  required
                                   placeholder="e.g. John Doe"
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px", transition: "border-color 0.2s" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px", transition: "border-color 0.2s" }}
                                 />
                               </div>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Email Address <span style={{ color: "#FF5500" }}>*</span></label>
-                                <input 
-                                  type="email" 
-                                  value={revenueForm.customerEmail} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, customerEmail: e.target.value })} 
-                                  required 
+                                <input
+                                  type="email"
+                                  value={revenueForm.customerEmail}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, customerEmail: e.target.value })}
+                                  required
                                   placeholder="e.g. john@example.com"
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 />
                               </div>
                             </div>
                             <div style={{ marginTop: "16px" }}>
                               <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Member Number (Optional)</label>
-                              <input 
-                                type="text" 
-                                value={revenueForm.memberNumber} 
-                                onChange={(e) => setRevenueForm({ ...revenueForm, memberNumber: e.target.value })} 
+                              <input
+                                type="text"
+                                value={revenueForm.memberNumber}
+                                onChange={(e) => setRevenueForm({ ...revenueForm, memberNumber: e.target.value })}
                                 placeholder="e.g. APEX-100234"
-                                style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                               />
                             </div>
                           </div>
@@ -10338,21 +10268,21 @@ const Admin = () => {
                             <h4 style={{ fontSize: "11px", fontWeight: "950", color: "#FF5500", letterSpacing: "1px", margin: "0 0 16px 0", textTransform: "uppercase" }}>2. Revenue & Stream Details</h4>
                             <div style={{ marginBottom: "16px" }}>
                               <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Revenue Title <span style={{ color: "#FF5500" }}>*</span></label>
-                              <input 
-                                type="text" 
-                                value={revenueForm.title} 
-                                onChange={(e) => setRevenueForm({ ...revenueForm, title: e.target.value })} 
-                                required 
+                              <input
+                                type="text"
+                                value={revenueForm.title}
+                                onChange={(e) => setRevenueForm({ ...revenueForm, title: e.target.value })}
+                                required
                                 placeholder="e.g. Rogue Powerlifting Submission Payment"
-                                style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                               />
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Revenue Category <span style={{ color: "#FF5500" }}>*</span></label>
-                                <select 
-                                  value={revenueForm.category} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, category: e.target.value })} 
+                                <select
+                                  value={revenueForm.category}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, category: e.target.value })}
                                   style={{ width: "100%", background: "#0c0c0e", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 >
                                   <option value="Record Submission Fee">Record Submission Fee</option>
@@ -10370,34 +10300,34 @@ const Admin = () => {
                               </div>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Amount ($) <span style={{ color: "#FF5500" }}>*</span></label>
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
+                                <input
+                                  type="number"
+                                  step="0.01"
                                   min="0"
-                                  value={revenueForm.amount} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, amount: e.target.value })} 
-                                  required 
+                                  value={revenueForm.amount}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, amount: e.target.value })}
+                                  required
                                   placeholder="0.00"
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 />
                               </div>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Date Received <span style={{ color: "#FF5500" }}>*</span></label>
-                                <input 
-                                  type="date" max={new Date().toISOString().split('T')[0]} 
-                                  value={revenueForm.dateReceived} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, dateReceived: e.target.value })} 
-                                  required 
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px", colorScheme: "dark" }} 
+                                <input
+                                  type="date" max={new Date().toISOString().split('T')[0]}
+                                  value={revenueForm.dateReceived}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, dateReceived: e.target.value })}
+                                  required
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px", colorScheme: "dark" }}
                                 />
                               </div>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Payment Method <span style={{ color: "#FF5500" }}>*</span></label>
-                                <select 
-                                  value={revenueForm.paymentMethod} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, paymentMethod: e.target.value })} 
+                                <select
+                                  value={revenueForm.paymentMethod}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, paymentMethod: e.target.value })}
                                   style={{ width: "100%", background: "#0c0c0e", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 >
                                   <option value="Credit Card">Credit Card</option>
@@ -10419,32 +10349,32 @@ const Admin = () => {
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Transaction ID (Optional)</label>
-                                <input 
-                                  type="text" 
-                                  value={revenueForm.transactionId} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, transactionId: e.target.value })} 
+                                <input
+                                  type="text"
+                                  value={revenueForm.transactionId}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, transactionId: e.target.value })}
                                   placeholder="e.g. ch_3M5BvGLkdQv..."
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 />
                               </div>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Order Number (Optional)</label>
-                                <input 
-                                  type="text" 
-                                  value={revenueForm.orderNumber} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, orderNumber: e.target.value })} 
+                                <input
+                                  type="text"
+                                  value={revenueForm.orderNumber}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, orderNumber: e.target.value })}
                                   placeholder="e.g. APEX-ORD-8941"
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 />
                               </div>
                             </div>
                             <div>
                               <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Notes / Description</label>
-                              <textarea 
-                                value={revenueForm.notes} 
-                                onChange={(e) => setRevenueForm({ ...revenueForm, notes: e.target.value })} 
+                              <textarea
+                                value={revenueForm.notes}
+                                onChange={(e) => setRevenueForm({ ...revenueForm, notes: e.target.value })}
                                 placeholder="Enter any additional details, description, or payment notes..."
-                                style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px", minHeight: "80px", fontFamily: "inherit" }} 
+                                style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px", minHeight: "80px", fontFamily: "inherit" }}
                               />
                             </div>
                           </div>
@@ -10455,18 +10385,18 @@ const Admin = () => {
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "20px", alignItems: "center" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#888", marginBottom: "6px", textTransform: "uppercase" }}>Pasted Receipt URL</label>
-                                <input 
-                                  type="url" 
-                                  value={revenueForm.receiptUrl && !revenueForm.receiptUrl.startsWith("data:") ? revenueForm.receiptUrl : ""} 
-                                  onChange={(e) => setRevenueForm({ ...revenueForm, receiptUrl: e.target.value })} 
+                                <input
+                                  type="url"
+                                  value={revenueForm.receiptUrl && !revenueForm.receiptUrl.startsWith("data:") ? revenueForm.receiptUrl : ""}
+                                  onChange={(e) => setRevenueForm({ ...revenueForm, receiptUrl: e.target.value })}
                                   placeholder="https://imgur.com/..."
-                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }} 
+                                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                                 />
                                 <div style={{ fontSize: "9px", color: "#555", marginTop: "4px", fontWeight: "800" }}>OR DRAG/SELECT LOCAL IMAGE DIRECTLY</div>
                               </div>
                               <div>
-                                <input 
-                                  type="file" 
+                                <input
+                                  type="file"
                                   accept="image/*,application/pdf"
                                   onChange={(e) => {
                                     const file = e.target.files[0];
@@ -10486,18 +10416,18 @@ const Admin = () => {
                                   style={{ display: "none" }}
                                   id="receipt-file-upload"
                                 />
-                                <label 
-                                  htmlFor="receipt-file-upload" 
-                                  style={{ 
-                                    display: "flex", 
-                                    flexDirection: "column", 
-                                    alignItems: "center", 
-                                    justifyContent: "center", 
-                                    border: "2px dashed rgba(255,85,0,0.2)", 
-                                    borderRadius: "12px", 
-                                    padding: "20px", 
-                                    cursor: "pointer", 
-                                    background: "rgba(255,85,0,0.02)", 
+                                <label
+                                  htmlFor="receipt-file-upload"
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    border: "2px dashed rgba(255,85,0,0.2)",
+                                    borderRadius: "12px",
+                                    padding: "20px",
+                                    cursor: "pointer",
+                                    background: "rgba(255,85,0,0.02)",
                                     textAlign: "center",
                                     transition: "all 0.2s"
                                   }}
@@ -10506,7 +10436,7 @@ const Admin = () => {
                                   {revenueForm.receiptUrl ? (
                                     revenueForm.receiptUrl.startsWith("data:") ? (
                                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-                                        <img src={revenueForm.receiptUrl} alt="Receipt Preview" style={{ maxWidth: "100%", maxHeight: "80px", borderRadius: "6px", objectFit: "contain", border: "1px solid rgba(255,255,255,0.1)" }} />
+                                        <img loading="lazy" decoding="async" src={revenueForm.receiptUrl} alt="Receipt Preview" style={{ maxWidth: "100%", maxHeight: "80px", borderRadius: "6px", objectFit: "contain", border: "1px solid rgba(255,255,255,0.1)" }} />
                                         <span style={{ fontSize: "9px", color: "#22c55e", fontWeight: "900" }}>✓ LOCAL IMAGE LOADED</span>
                                       </div>
                                     ) : (
@@ -10556,7 +10486,7 @@ const Admin = () => {
       {isRecordDetailModalOpen && selectedRecordDetail && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 3000, padding: "20px" }}>
           <div style={{ background: "#0c0c0e", border: "1px solid rgba(255, 85, 0, 0.2)", width: "100%", maxWidth: "700px", maxHeight: "calc(100vh - 40px)", borderRadius: "28px", overflow: "hidden", display: "flex", flexDirection: "column", animation: "modalFadeIn 0.3s ease-out" }}>
-            
+
             {/* Modal Header */}
             <div style={{ padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -10570,7 +10500,7 @@ const Admin = () => {
 
             {/* Modal Body */}
             <div style={{ padding: "32px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "24px" }}>
-              
+
               {/* Row 1: Title, Category, and Status */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
                 <div>
@@ -10638,11 +10568,11 @@ const Admin = () => {
                     const embedUrl = `https://www.youtube.com/embed/${videoId}`;
                     return (
                       <div style={{ borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", background: "#000", position: "relative", paddingTop: "56.25%" }}>
-                        <iframe 
+                        <iframe
                           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-                          src={embedUrl} 
-                          title="Evidence Video player" 
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                          src={embedUrl}
+                          title="Evidence Video player"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
                         ></iframe>
                       </div>
@@ -10650,7 +10580,7 @@ const Admin = () => {
                   } else if (url.match(/\.(mp4|webm|ogg|mov)$/i)) {
                     return (
                       <div style={{ borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", background: "#000", padding: "8px" }}>
-                        <video controls style={{ width: "100%", display: "block", borderRadius: "8px" }}>
+                        <video preload="metadata" controls style={{ width: "100%", display: "block", borderRadius: "8px" }}>
                           <source src={url} />
                           Your browser does not support the video tag.
                         </video>
@@ -10679,7 +10609,7 @@ const Admin = () => {
                     selectedRecordDetail.additional_evidence,
                     selectedRecordDetail.image_url,
                   ];
-                  
+
                   let photos = [];
                   photoFields.forEach(field => {
                     if (!field) return;
@@ -10691,7 +10621,7 @@ const Admin = () => {
                       photos.push(field);
                     }
                   });
-                  
+
                   // Filter to image-like URLs only (exclude video/pdf)
                   photos = photos.filter(url => typeof url === 'string' && (url.match(/\.(jpg|jpeg|png|gif|webp)/i) || url.includes('unsplash') || url.includes('storage') || url.includes('supabase')));
 
@@ -10703,12 +10633,12 @@ const Admin = () => {
                       </div>
                     );
                   }
-                  
+
                   return (
                     <div style={{ display: "grid", gridTemplateColumns: photos.length === 1 ? "1fr" : "1fr 1fr", gap: "12px" }}>
                       {photos.map((url, pIdx) => (
                         <a key={pIdx} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block", borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)", height: "160px", position: "relative", cursor: "pointer", textDecoration: "none" }}>
-                          <img src={url} alt={`Photo Evidence ${pIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.parentElement.style.display='none'; }} />
+                          <img loading="lazy" decoding="async" src={url} alt={`Photo Evidence ${pIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.parentElement.style.display='none'; }} />
                           <div style={{ position: "absolute", bottom: "8px", left: "8px", background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", padding: "3px 10px", borderRadius: "6px", fontSize: "9px", color: "white", fontWeight: "900", letterSpacing: "0.5px" }}>
                             PHOTO {pIdx + 1} — CLICK TO ENLARGE
                           </div>
@@ -10731,7 +10661,7 @@ const Admin = () => {
                       parsedWitnesses = selectedRecordDetail.witnesses;
                     }
                   }
-                  
+
                   if (parsedWitnesses.length === 0) {
                     return (
                       <div style={{ padding: "12px", color: "#555", fontSize: "11px", fontStyle: "italic", background: "rgba(255,255,255,0.01)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.03)" }}>
@@ -10762,52 +10692,52 @@ const Admin = () => {
 
             {/* Modal Actions */}
             <div style={{ padding: "24px 32px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.2)", display: "flex", justifyContent: "flex-end", gap: "12px", flexWrap: "wrap" }}>
-              <button 
-                type="button" 
-                onClick={() => setIsRecordDetailModalOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setIsRecordDetailModalOpen(false)}
                 style={{ background: "rgba(255,255,255,0.04)", color: "#ccc", border: "1px solid rgba(255,255,255,0.05)", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}
               >
                 CLOSE REVIEW SHEET
               </button>
-              
+
               {selectedRecordDetail.status === "pending" && (
                 <>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       alert("Status changed to Pending Review.");
                       setIsRecordDetailModalOpen(false);
-                    }} 
+                    }}
                     style={{ background: "transparent", border: "1px solid #3b82f6", color: "#3b82f6", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}
                   >
                     MARK PENDING REVIEW
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       alert("Requested more info from the athlete.");
                       setIsRecordDetailModalOpen(false);
-                    }} 
+                    }}
                     style={{ background: "transparent", border: "1px solid #ffcc00", color: "#ffcc00", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}
                   >
                     REQUEST MORE INFO
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       handleQuickAdjudicate(selectedRecordDetail.id, "rejected");
                       setIsRecordDetailModalOpen(false);
-                    }} 
+                    }}
                     style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}
                   >
                     DENY SUBMISSION
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       handleQuickAdjudicate(selectedRecordDetail.id, "verified");
                       setIsRecordDetailModalOpen(false);
-                    }} 
+                    }}
                     style={{ background: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)", color: "white", border: "none", padding: "12px 28px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", boxShadow: "0 10px 20px rgba(34, 197, 94, 0.2)" }}
                   >
                     APPROVE SUBMISSION
@@ -10821,7 +10751,7 @@ const Admin = () => {
       )}
 
       {/* ==================== USER ACTION MODALS ==================== */}
-      
+
       {/* SUSPEND USER MODAL */}
       {userActionModal.isOpen && userActionModal.type === "suspend" && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2100, padding: "20px" }}>
@@ -11013,7 +10943,7 @@ const Admin = () => {
               Are you absolutely sure you want to permanently ban <strong>{userActionModal.userName}</strong>? This will revoke all platform access and cannot be easily reversed.
             </p>
             <div style={{ display: "flex", gap: "12px" }}>
-              <button 
+              <button
                 onClick={async () => {
                   try {
                     await apiCall(`/dashboard/users/${userActionModal.userId}/ban`, "PUT", {}, user.token);
@@ -11023,7 +10953,7 @@ const Admin = () => {
                   } catch (err) {
                     alert(`Failed to ban user: ${err.message}`);
                   }
-                }} 
+                }}
                 style={{ flex: 1, background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", border: "none", color: "white", padding: "12px", borderRadius: "8px", fontWeight: "900", cursor: "pointer", fontSize: "12px" }}
               >
                 CONFIRM BAN
@@ -11040,16 +10970,16 @@ const Admin = () => {
           <div style={{ background: "#0c0c0e", border: "1px solid rgba(59, 130, 246, 0.25)", width: "100%", maxWidth: "480px", borderRadius: "20px", padding: "32px", animation: "modalFadeIn 0.3s ease-out" }}>
             <h3 style={{ fontSize: "18px", fontWeight: "950", margin: "0 0 16px 0", color: "#3b82f6", textTransform: "uppercase" }}>🔑 RESET USER PASSWORD</h3>
             <p style={{ fontSize: "13px", color: "#aaa", margin: "0 0 24px 0" }}>Set a new temporary password for {userActionModal.userName}</p>
-            
+
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
               <div>
                 <label style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>NEW TEMPORARY PASSWORD</label>
-                <input 
-                  type="text" 
-                  value={tempPassword} 
-                  onChange={(e) => setTempPassword(e.target.value)} 
-                  placeholder="Enter temporary password (min 6 chars)..." 
-                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "8px", padding: "10px 14px", color: "white" }} 
+                <input
+                  type="text"
+                  value={tempPassword}
+                  onChange={(e) => setTempPassword(e.target.value)}
+                  placeholder="Enter temporary password (min 6 chars)..."
+                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "8px", padding: "10px 14px", color: "white" }}
                 />
               </div>
             </div>
@@ -11070,14 +11000,14 @@ const Admin = () => {
           position: "fixed",
           bottom: "24px",
           right: "24px",
-          background: toast.type === "success" ? "rgba(10, 45, 20, 0.9)" : 
+          background: toast.type === "success" ? "rgba(10, 45, 20, 0.9)" :
                       toast.type === "error" ? "rgba(50, 10, 10, 0.9)" : "rgba(20, 20, 30, 0.9)",
           border: `1px solid ${
-            toast.type === "success" ? "rgba(34, 197, 94, 0.4)" : 
+            toast.type === "success" ? "rgba(34, 197, 94, 0.4)" :
             toast.type === "error" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)"
           }`,
           boxShadow: `0 8px 32px 0 ${
-            toast.type === "success" ? "rgba(0, 200, 0, 0.15)" : 
+            toast.type === "success" ? "rgba(0, 200, 0, 0.15)" :
             toast.type === "error" ? "rgba(200, 0, 0, 0.15)" : "rgba(0, 0, 200, 0.15)"
           }`,
           borderRadius: "16px",
@@ -11091,7 +11021,7 @@ const Admin = () => {
           animation: "toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           maxWidth: "400px"
         }}>
-          {toast.type === "success" ? <CheckCircle size={20} color="#22c55e" /> : 
+          {toast.type === "success" ? <CheckCircle size={20} color="#22c55e" /> :
            toast.type === "error" ? <AlertTriangle size={20} color="#ef4444" /> : <ShieldAlert size={20} color="#3b82f6" />}
           <span style={{ fontSize: "13px", fontWeight: "900", letterSpacing: "0.2px" }}>{toast.message}</span>
         </div>
@@ -11106,19 +11036,19 @@ const Admin = () => {
               {confirmModal.title}
             </h3>
             <p style={{ fontSize: "13px", color: "#aaa", margin: "0 0 24px 0", lineHeight: "1.5" }}>{confirmModal.message}</p>
-            
+
             <div style={{ display: "flex", gap: "12px" }}>
-              <button 
+              <button
                 onClick={() => {
                   if (confirmModal.onConfirm) confirmModal.onConfirm();
                   setConfirmModal({ isOpen: false, title: "", message: "", onConfirm: null });
-                }} 
+                }}
                 style={{ flex: 1, background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", border: "none", color: "white", padding: "12px", borderRadius: "8px", fontWeight: "900", cursor: "pointer", fontSize: "12px", textTransform: "uppercase" }}
               >
                 CONFIRM
               </button>
-              <button 
-                onClick={() => setConfirmModal({ isOpen: false, title: "", message: "", onConfirm: null })} 
+              <button
+                onClick={() => setConfirmModal({ isOpen: false, title: "", message: "", onConfirm: null })}
                 style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#aaa", padding: "12px", borderRadius: "8px", fontWeight: "900", cursor: "pointer", fontSize: "12px" }}
               >
                 CANCEL
@@ -11136,7 +11066,7 @@ const Admin = () => {
       {selectedAppeal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(20px)", zIndex: 10000, display: "flex", justifyContent: "center", alignItems: "center", animation: "modalFadeIn 0.2s ease-out" }}>
           <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "24px", width: "95%", maxWidth: "900px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
-            
+
             {/* Modal Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <div>
@@ -11144,8 +11074,8 @@ const Admin = () => {
                 <h3 style={{ fontSize: "24px", fontWeight: "900", color: "white", margin: 0 }}>Appeal {selectedAppeal.id.substring(0,8).toUpperCase()}</h3>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                <span style={{ 
-                  background: ['Approved', 'Closed'].includes(selectedAppeal.status) ? "rgba(34,197,94,0.1)" : selectedAppeal.status === 'Denied' ? "rgba(239,68,68,0.1)" : selectedAppeal.status === 'Pending' ? "rgba(255,106,0,0.1)" : "rgba(255,204,0,0.1)", 
+                <span style={{
+                  background: ['Approved', 'Closed'].includes(selectedAppeal.status) ? "rgba(34,197,94,0.1)" : selectedAppeal.status === 'Denied' ? "rgba(239,68,68,0.1)" : selectedAppeal.status === 'Pending' ? "rgba(255,106,0,0.1)" : "rgba(255,204,0,0.1)",
                   color: ['Approved', 'Closed'].includes(selectedAppeal.status) ? "#22c55e" : selectedAppeal.status === 'Denied' ? "#ef4444" : selectedAppeal.status === 'Pending' ? "#FF6A00" : "#ffcc00",
                   padding: "6px 16px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", border: "1px solid currentColor"
                 }}>
@@ -11159,18 +11089,18 @@ const Admin = () => {
 
             {/* Modal Content */}
             <div style={{ padding: "32px", overflowY: "auto", display: "grid", gridTemplateColumns: "1fr 300px", gap: "40px" }}>
-              
+
               {/* Left Column: Details & Evidence */}
               <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
-                
+
                 {/* User Info */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px" }}>
                   <h4 style={{ fontSize: "12px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "16px" }}>APPELLANT INFO</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                     <div>
                       <div style={{ fontSize: "10px", color: "#555", fontWeight: "900", marginBottom: "4px" }}>NAME (USER PROFILE)</div>
-                      <div 
-                        style={{ fontSize: "14px", color: "white", fontWeight: "700", cursor: "pointer", textDecoration: "underline" }} 
+                      <div
+                        style={{ fontSize: "14px", color: "white", fontWeight: "700", cursor: "pointer", textDecoration: "underline" }}
                         onClick={() => { setActiveTab("users"); setSelectedAppeal(null); setTimeout(fetchData, 100); }}
                       >
                         {selectedAppeal.user?.name || 'Unknown'}
@@ -11186,7 +11116,7 @@ const Admin = () => {
                     </div>
                     <div>
                       <div style={{ fontSize: "10px", color: "#555", fontWeight: "900", marginBottom: "4px" }}>RECORD SUBMISSION</div>
-                      <div 
+                      <div
                         style={{ fontSize: "14px", color: "white", fontWeight: "700", cursor: "pointer", textDecoration: "underline" }}
                         onClick={() => { setActiveTab("records"); setSelectedAppeal(null); setTimeout(fetchData, 100); }}
                       >
@@ -11225,7 +11155,7 @@ const Admin = () => {
 
               {/* Right Column: Actions & Resolution */}
               <div style={{ display: "flex", flexDirection: "column", gap: "24px", borderLeft: "1px solid rgba(255,255,255,0.05)", paddingLeft: "40px" }}>
-                
+
                 {/* Status Actions */}
                 <div>
                   <h4 style={{ fontSize: "12px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "16px" }}>ADJUDICATION ACTIONS</h4>
@@ -11254,7 +11184,7 @@ const Admin = () => {
                 {/* Admin Notes */}
                 <div>
                   <h4 style={{ fontSize: "12px", color: "#888", fontWeight: "900", letterSpacing: "1px", marginBottom: "16px" }}>ADMIN NOTES</h4>
-                  <textarea 
+                  <textarea
                     defaultValue={selectedAppeal.admin_notes}
                     onBlur={(e) => handleUpdateAppealNotes(selectedAppeal.id, e.target.value)}
                     placeholder="Add internal notes here... (Saves automatically on blur)"
@@ -11307,7 +11237,7 @@ const Admin = () => {
               <button onClick={() => setActiveAdjudicatorModal(null)} style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer" }}><X size={20} /></button>
             </div>
             <div style={{ padding: "32px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
-              
+
               {activeAdjudicatorModal === 'assign' && (
                 <>
                   <p style={{ color: "#aaa", fontSize: "13px" }}>Select a pending case to assign to {adjudicatorActionTarget.name}.</p>
@@ -11383,10 +11313,10 @@ const Admin = () => {
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>MESSAGE BODY</label>
                     <textarea value={adjudicatorMessageText} onChange={e => setAdjudicatorMessageText(e.target.value)} placeholder="Type your message here..." style={{ width: "100%", height: "120px", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", resize: "none" }}></textarea>
                   </div>
-                  <button onClick={() => { 
+                  <button onClick={() => {
                     if (!adjudicatorMessageText.trim()) return alert("Message body cannot be empty");
-                    alert("Mock: Message Sent Successfully!"); 
-                    setActiveAdjudicatorModal(null); 
+                    alert("Mock: Message Sent Successfully!");
+                    setActiveAdjudicatorModal(null);
                   }} style={{ marginTop: "16px", background: "#FF5500", color: "white", padding: "12px", borderRadius: "8px", border: "none", fontWeight: "800", cursor: "pointer" }}>SEND MESSAGE</button>
                 </>
               )}
@@ -11400,7 +11330,7 @@ const Admin = () => {
       {selectedVideoForViewing && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5000, padding: "20px" }}>
           <div style={{ width: "100%", maxWidth: "900px", maxHeight: "90vh", display: "flex", flexDirection: "column", background: "rgba(13,13,16,0.8)", borderRadius: "20px", border: "1px solid rgba(255,85,0,0.2)", overflow: "hidden" }}>
-            
+
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.3)" }}>
               <div>
@@ -11421,12 +11351,12 @@ const Admin = () => {
                   selectedVideoForViewing.video_url,
                   selectedVideoForViewing.videoUrl
                 ].filter(Boolean);
-                
+
                 const uniqueLinks = [...new Set(evidenceLinks)].filter(link => link !== "pending_upload");
-                
-                const images = uniqueLinks.filter(src => 
-                  src.match(/\.(jpeg|jpg|gif|png|webp|svg|heic|heif)(\?.*)?$/i) || 
-                  src.includes('ui-avatars') || 
+
+                const images = uniqueLinks.filter(src =>
+                  src.match(/\.(jpeg|jpg|gif|png|webp|svg|heic|heif)(\?.*)?$/i) ||
+                  src.includes('ui-avatars') ||
                   src.includes('unsplash') ||
                   src === selectedVideoForViewing.thumbnailUrl ||
                   src === selectedVideoForViewing.thumbnail_url
@@ -11439,7 +11369,7 @@ const Admin = () => {
                     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                       {images.length > 0 ? images.map((src, idx) => (
                         <div key={`img-${idx}`} style={{ width: "100%", aspectRatio: "1/1", display: "flex", justifyContent: "center", background: "#111", borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={formatProductImage(src)}
                             alt="Evidence Image"
                             style={{ width: "100%", height: "100%", objectFit: "contain" }}
@@ -11452,7 +11382,7 @@ const Admin = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Second Column: Video */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                       {videos.length > 0 ? videos.map((src, idx) => {

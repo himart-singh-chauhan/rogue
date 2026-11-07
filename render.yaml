@@ -6,6 +6,7 @@ services:
     rootDir: server
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -13,5 +14,11 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
+      - key: CLIENT_URLS
+        sync: false
+      - key: MAX_VIDEO_MB
+        value: "50"

@@ -28,10 +28,12 @@ const getAppeals = async (req, res) => {
 
     // Search is complex in Supabase via JS, so we'll fetch and filter in memory if there's a search term
     // Alternatively, we could use an RPC, but we'll stick to a simple approach for now.
-    
+
     // Pagination
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 100);
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
     query = query.order('created_at', { ascending: false }).range(from, to);
 
     const { data: appeals, count, error } = await query;
@@ -39,6 +41,9 @@ const getAppeals = async (req, res) => {
     if (error) {
       console.error('Error fetching appeals:', error);
       // Fallback: If table doesn't exist, return empty array rather than breaking the UI
+      if (error.code === 'PGRST103') {
+        return res.json({ appeals: [], count: count || 0, totalPages: Math.ceil((count || 0) / limitNum), currentPage: pageNum });
+      }
       if (error.code === '42P01') {
          return res.json({ appeals: [], count: 0, totalPages: 0, currentPage: 1, _fallback: true });
       }
@@ -46,11 +51,11 @@ const getAppeals = async (req, res) => {
     }
 
     let filteredAppeals = appeals;
-    
+
     // Basic in-memory search if needed
     if (search) {
       const s = search.toLowerCase();
-      filteredAppeals = appeals.filter(a => 
+      filteredAppeals = appeals.filter(a =>
         (a.id && a.id.toLowerCase().includes(s)) ||
         (a.user?.name && a.user.name.toLowerCase().includes(s)) ||
         (a.user?.email && a.user.email.toLowerCase().includes(s)) ||
@@ -99,10 +104,10 @@ const getAppealById = async (req, res) => {
 const updateAppealStatus = async (req, res) => {
   try {
     const { status, resolution_note } = req.body;
-    
+
     // Fetch current appeal to get resolution history
     const { data: appeal } = await supabase.from('appeals').select('resolution_history').eq('id', req.params.id).single();
-    
+
     const history = appeal?.resolution_history || [];
     history.push({
       status,
@@ -111,8 +116,8 @@ const updateAppealStatus = async (req, res) => {
       admin_id: req.user.id
     });
 
-    const updates = { 
-      status, 
+    const updates = {
+      status,
       resolution_history: history,
       updated_at: new Date().toISOString()
     };
@@ -152,7 +157,7 @@ const updateAppealStatus = async (req, res) => {
 const updateAppealNotes = async (req, res) => {
   try {
     const { admin_notes } = req.body;
-    
+
     const { data: updatedAppeal, error } = await supabase
       .from('appeals')
       .update({ admin_notes, updated_at: new Date().toISOString() })

@@ -37,22 +37,20 @@ const createVideo = async (videoData) => {
       youtubeVideoId, // For YouTube videos
       duration, // Duration in seconds
       isPublished = true,
+      category,
+      isFeatured,
+      isNewlyUploaded,
     } = videoData;
 
-    let finalRecordId = recordId;
-    if (!finalRecordId && !attemptId) {
-      const { data: records } = await supabase.from('records').select('id').limit(1);
-      if (records && records.length > 0) {
-        finalRecordId = records[0].id;
-      }
-    }
+    // Featured / newest videos are standalone; they no longer get attached to an arbitrary record.
+    const finalRecordId = recordId || null;
 
     const { data, error } = await supabase
       .from('videos')
       .insert({
         record_id: finalRecordId,
-        attempt_id: attemptId,
-        user_id: userId,
+        attempt_id: attemptId || null,
+        user_id: userId || null,
         video_type: videoType,
         title,
         description,
@@ -60,8 +58,11 @@ const createVideo = async (videoData) => {
         thumbnail_url: thumbnailUrl,
         source,
         youtube_video_id: youtubeVideoId,
-        duration,
+        duration: duration ? parseInt(duration, 10) || null : null,
         is_published: isPublished,
+        category: category || null,
+        is_featured: isFeatured !== undefined ? !!isFeatured : videoType === VIDEO_TYPES.FEATURED,
+        is_newly_uploaded: isNewlyUploaded !== undefined ? !!isNewlyUploaded : videoType === VIDEO_TYPES.NEWEST_RECORD,
         created_at: new Date(),
         updated_at: new Date(),
       })

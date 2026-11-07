@@ -2,7 +2,12 @@
  * Upload Configuration
  * Handles file uploads for videos, thumbnails, evidence, and product images
  * Now integrates directly with Supabase Storage to prevent ephemeral data loss on Render.
+ *
+ * NOTE: these routes stream the file THROUGH this server. Prefer the direct-to-storage flow
+ * (POST /api/uploads/sign) for videos; these limits are kept in line with Supabase's
+ * per-file cap (50 MB on the free plan, configurable with MAX_VIDEO_MB).
  */
+const MAX_VIDEO_BYTES = (parseInt(process.env.MAX_VIDEO_MB, 10) || 50) * 1024 * 1024;
 
 const multer = require('multer');
 const path = require('path');
@@ -10,7 +15,7 @@ const supabase = require('./supabase');
 
 function SupabaseStorage(opts) {
   this.getDestination = opts.destination || function(req, file, cb) { cb(null, '') };
-  this.getFilename = opts.filename || function(req, file, cb) { 
+  this.getFilename = opts.filename || function(req, file, cb) {
     const u = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, file.fieldname + '-' + u + path.extname(file.originalname).toLowerCase());
   };
@@ -21,32 +26,45 @@ SupabaseStorage.prototype._handleFile = function _handleFile(req, file, cb) {
     if (err) return cb(err);
     this.getFilename(req, file, async function(err, filename) {
       if (err) return cb(err);
-      
+
       const folderName = destination ? destination.split('/').pop() || 'misc' : 'misc';
       const finalPath = `${folderName}/${filename}`;
-      
+
       try {
         const chunks = [];
+        let failed = false;
+        file.stream.on('error', (streamErr) => {
+          failed = true;
+          cb(streamErr);
+        });
+        file.stream.on('limit', () => {
+          // multer raises LIMIT_FILE_SIZE itself; just make sure the truncated file isn't uploaded
+          failed = true;
+        });
         file.stream.on('data', chunk => chunks.push(chunk));
         file.stream.on('end', async () => {
+          if (failed) return;
           const buffer = Buffer.concat(chunks);
-          
+
           const { data, error } = await supabase.storage
             .from('uploads')
             .upload(finalPath, buffer, {
               contentType: file.mimetype,
-              upsert: true
+              upsert: false
             });
-            
+
           if (error) {
             console.error('Supabase upload error:', error);
-            return cb(error);
+            const tooBig = /exceeded|too large|maximum allowed size/i.test(error.message || '');
+            const friendly = new Error(tooBig ? 'File is too large for storage.' : 'Upload to storage failed. Please try again.');
+            if (tooBig) friendly.code = 'LIMIT_FILE_SIZE';
+            return cb(friendly);
           }
-          
+
           const { data: publicData } = supabase.storage
             .from('uploads')
             .getPublicUrl(finalPath);
-            
+
           cb(null, {
             path: publicData.publicUrl,
             size: buffer.length,
@@ -115,7 +133,7 @@ const challengeStorage = new SupabaseStorage({
 // ── File filters ─────────────────────────────────────────────────────────────
 
 const videoFilter = (req, file, cb) => {
-  const allowed = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
+  const allowed = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm', 'video/x-msvideo'];
   allowed.includes(file.mimetype)
     ? cb(null, true)
     : cb(new Error(`Invalid video format. Allowed: ${allowed.join(', ')}`), false);
@@ -162,7 +180,7 @@ const challengeFilter = (req, file, cb) => {
 const videoUpload = multer({
   storage: videoStorage,
   fileFilter: videoFilter,
-  limits: { fileSize: 500 * 1024 * 1024 },
+  limits: { fileSize: MAX_VIDEO_BYTES },
 });
 
 const thumbnailUpload = multer({
@@ -174,7 +192,7 @@ const thumbnailUpload = multer({
 const evidenceUpload = multer({
   storage: evidenceStorage,
   fileFilter: evidenceFilter,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_VIDEO_BYTES },
 });
 
 const productImageUpload = multer({
@@ -192,7 +210,7 @@ const bannerUpload = multer({
 const challengeUpload = multer({
   storage: challengeStorage,
   fileFilter: challengeFilter,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: MAX_VIDEO_BYTES },
 });
 
 module.exports = {

@@ -1,3 +1,5 @@
+-- ⚠️ SUPERSEDED — DO NOT RUN. Use server/database/schema.sql instead (complete, up to date, RLS enabled).
+
 -- Disable RLS on all tables to allow the backend (using Anon key) to read/write data freely
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE records DISABLE ROW LEVEL SECURITY;

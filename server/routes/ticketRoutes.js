@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  purchaseTicket, 
-  verifyTicket, 
+const {
+  purchaseTicket,
+  verifyTicket,
   getTicketDetails,
   revokeTicket,
   grantFreeAccess,
@@ -12,12 +12,12 @@ const {
 } = require('../controllers/ticketController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
-// Public routes
+// Logged-in users
 router.get('/verify/:eventId', protect, verifyTicket);
+router.get('/:ticketId', protect, getTicketDetails); // ownership checked in controller
 
-// Private routes (logged in users)
-router.post('/', protect, purchaseTicket);
-router.get('/:ticketId', protect, getTicketDetails);
+// Issuing a paid ticket is admin-only until a payment gateway confirms payment.
+router.post('/', protect, admin, purchaseTicket);
 
 // Admin routes
 router.put('/:ticketId/revoke', protect, admin, revokeTicket);

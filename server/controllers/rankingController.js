@@ -1,142 +1,117 @@
-const { createClient } = require('@supabase/supabase-js');
+const supabase = require('../config/supabase');
+const { awardPoints, toInt } = require('../utils/rankings');
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const SORTABLE = new Set(['total_points', 'global_rank', 'verified_records_count', 'world_records_count', 'updated_at', 'created_at']);
+const RANKING_SELECT = '*, users!inner(id, name, display_name:name, username, profile_image, country, state, city)';
+
+const pageParams = (q) => {
+  const limit = Math.min(Math.max(toInt(q.limit, 50), 1), 200);
+  const offset = Math.max(toInt(q.offset, 0), 0);
+  return { limit, offset };
+};
+
+// Build a user_rankings query with location filters (location lives on users).
+const rankingsQuery = (q) => {
+  const sortBy = SORTABLE.has(q.sortBy) ? q.sortBy : 'total_points';
+  const ascending = q.order === 'asc';
+  let query = supabase.from('user_rankings').select(RANKING_SELECT, { count: 'exact' });
+  if (q.country) query = query.eq('users.country', q.country);
+  if (q.state) query = query.eq('users.state', q.state);
+  if (q.city) query = query.eq('users.city', q.city);
+  if (q.search) query = query.ilike('users.name', `%${String(q.search).replace(/[%,()]/g, '')}%`);
+  return query.order(sortBy, { ascending });
+};
 
 // Get global rankings with filters
 exports.getGlobalRankings = async (req, res) => {
   try {
-    const { limit = 50, offset = 0, search = '', sortBy = 'total_points', order = 'desc', country = '', state = '', city = '' } = req.query;
+    const { limit, offset } = pageParams(req.query);
+    const { data, count, error } = await rankingsQuery(req.query).range(offset, offset + limit - 1);
+    if (error && error.code !== 'PGRST103') throw error;
 
-    let query = supabase
-      .from('user_rankings')
-      .select('*, users(name, profile_image)', { count: 'exact' });
+    let rankings = data || [];
 
-    if (country) query = query.eq('country', country);
-    if (state) query = query.eq('state', state);
-    if (city) query = query.eq('city', city);
-
-    const orderDirection = order === 'asc' ? { ascending: true } : { ascending: false };
-    query = query.order(sortBy, orderDirection).range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
-    if (error) {
-      if (error.code === 'PGRST205' || error.message.includes('schema cache')) {
-        console.warn('Ranking table not found, please run SQL script in Supabase.');
-        return res.json({ rankings: [], total: 0, limit: parseInt(limit), offset: parseInt(offset), warning: 'Ranking tables not initialized.' });
-      }
-      throw error;
-    }
-
-    let filtered = data || [];
-    console.log("Ranking data length:", filtered.length);
-
-    // FALLBACK LOGIC: If table is empty (e.g. because of RLS), dynamically compute from records
-    if (filtered.length === 0) {
-      console.log("Running fallback logic...");
-      const { data: recordsData, error: recordsError } = await supabase
-        .from('records')
-        .select('user_id, users!records_user_id_fkey(name, profile_image)')
-        .eq('status', 'verified');
-        
-      console.log("Records fallback fetched, error:", recordsError);
-
-      if (recordsData && recordsData.length > 0) {
+    // Fallback for a fresh database where user_rankings hasn't been populated yet:
+    // rank athletes by verified record count. Only used when the table is completely empty.
+    if (!count && !req.query.search && !req.query.country && !req.query.state && !req.query.city) {
+      const { count: anyRows } = await supabase.from('user_rankings').select('id', { count: 'exact', head: true });
+      if (!anyRows) {
+        const { data: recordsData } = await supabase
+          .from('records')
+          .select('user_id, users!records_user_id_fkey(id, name, username, profile_image, country, state, city)')
+          .eq('status', 'verified');
         const usersMap = {};
-        recordsData.forEach(r => {
+        (recordsData || []).forEach((r) => {
           if (!r.user_id || !r.users) return;
-          if (!usersMap[r.user_id]) {
-            usersMap[r.user_id] = {
-              user_id: r.user_id,
-              total_points: 0,
-              verified_records_count: 0,
-              users: r.users,
-              global_rank: 0,
-              category_id: null
-            };
-          }
+          usersMap[r.user_id] = usersMap[r.user_id] || {
+            user_id: r.user_id,
+            total_points: 0,
+            verified_records_count: 0,
+            world_records_count: 0,
+            users: { ...r.users, display_name: r.users.name },
+            global_rank: 0,
+            tier_badge: 'Challenger',
+          };
           usersMap[r.user_id].verified_records_count += 1;
-          usersMap[r.user_id].total_points += 5000; // Assigning dynamic 5000 points per record
+          usersMap[r.user_id].total_points += 5000;
         });
-        
-        let dynamicRankings = Object.values(usersMap).sort((a,b) => b.total_points - a.total_points);
-        dynamicRankings.forEach((r, idx) => r.global_rank = idx + 1);
-        
-        if (search) {
-          dynamicRankings = dynamicRankings.filter(r =>
-            r.users.name?.toLowerCase().includes(search.toLowerCase())
-          );
-        }
-        
-        console.log("Returning dynamic rankings:", dynamicRankings.length);
-        return res.json({ rankings: dynamicRankings, total: dynamicRankings.length, limit: parseInt(limit), offset: parseInt(offset), warning: 'Using dynamic fallback data.' });
-      } else {
-         console.log("Records data is empty in fallback");
+        const dynamic = Object.values(usersMap).sort((a, b) => b.total_points - a.total_points);
+        dynamic.forEach((r, idx) => { r.global_rank = idx + 1; });
+        return res.json({ rankings: dynamic.slice(offset, offset + limit), total: dynamic.length, limit, offset, warning: 'Using dynamic fallback data.' });
       }
     }
 
-    if (search) {
-      filtered = filtered.filter(r =>
-        r.users.name?.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    res.json({ rankings: filtered, total: count, limit: parseInt(limit), offset: parseInt(offset) });
+    res.json({ rankings, total: count || 0, limit, offset });
   } catch (error) {
     console.error('Get rankings error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not load rankings', error: error.message });
   }
 };
 
 // Get local rankings
 exports.getLocalRankings = async (req, res) => {
   try {
-    const { country, state, city, limit = 50, offset = 0, sortBy = 'total_points', order = 'desc' } = req.query;
-
-    let query = supabase.from('user_rankings').select('*, users(name, profile_image)', { count: 'exact' });
-
-    if (country) query = query.eq('country', country);
-    if (state) query = query.eq('state', state);
-    if (city) query = query.eq('city', city);
-
-    const orderDirection = order === 'asc' ? { ascending: true } : { ascending: false };
-    query = query.order(sortBy, orderDirection).range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
-    if (error) throw error;
-
-    res.json({ rankings: data, total: count, limit: parseInt(limit), offset: parseInt(offset) });
+    const { limit, offset } = pageParams(req.query);
+    const { data, count, error } = await rankingsQuery(req.query).range(offset, offset + limit - 1);
+    if (error && error.code !== 'PGRST103') throw error;
+    res.json({ rankings: data || [], total: count || 0, limit, offset });
   } catch (error) {
     console.error('Get local rankings error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not load local rankings', error: error.message });
   }
 };
 
-// Get category rankings
+// Get category rankings (category_id may be a uuid, slug or name)
 exports.getCategoryRankings = async (req, res) => {
   try {
     const { category_id } = req.params;
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit, offset } = pageParams(req.query);
 
-    const { data: records, error: recordsError } = await supabase
-      .from('records').select('user_id, category_id').eq('category_id', category_id).eq('status', 'verified');
-
+    const isUUID = /^[0-9a-f-]{36}$/i.test(category_id);
+    let recordsQuery = supabase.from('records').select('user_id').eq('status', 'verified');
+    if (isUUID) {
+      recordsQuery = recordsQuery.eq('category_id', category_id);
+    } else {
+      recordsQuery = recordsQuery.ilike('category', String(category_id).replace(/-/g, ' '));
+    }
+    const { data: records, error: recordsError } = await recordsQuery;
     if (recordsError) throw recordsError;
 
-    const userIds = [...new Set(records.map(r => r.user_id))];
-    if (userIds.length === 0) return res.json({ rankings: [], total: 0 });
+    const userIds = [...new Set((records || []).map((r) => r.user_id).filter(Boolean))].slice(0, 500);
+    if (userIds.length === 0) return res.json({ rankings: [], total: 0, category_id, limit });
 
     const { data, count, error } = await supabase
       .from('user_rankings')
-      .select('*, users(name)', { count: 'exact' })
+      .select('*, users(id, name, display_name:name, username, profile_image, country)', { count: 'exact' })
       .in('user_id', userIds)
       .order('total_points', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    res.json({ rankings: data, total: count, category_id, limit: parseInt(limit) });
+    res.json({ rankings: data || [], total: count || 0, category_id, limit });
   } catch (error) {
     console.error('Get category rankings error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not load category rankings', error: error.message });
   }
 };
 
@@ -144,139 +119,99 @@ exports.getCategoryRankings = async (req, res) => {
 exports.getUserRankingDetails = async (req, res) => {
   try {
     const { user_id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(user_id)) return res.status(404).json({ message: 'User not found' });
 
-    const { data: ranking, error: rankingError } = await supabase
-      .from('user_rankings').select('*, users(name, email)').eq('user_id', user_id).single();
+    const [{ data: ranking, error: rankingError }, { data: pointsHistory, error: historyError }, { data: records }] = await Promise.all([
+      supabase.from('user_rankings').select('*, users(name, username, profile_image, country)').eq('user_id', user_id).maybeSingle(),
+      supabase.from('user_points_history').select('*').eq('user_id', user_id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('records').select('id, title, category, category_id, value, unit, status').eq('user_id', user_id).eq('status', 'verified').limit(10),
+    ]);
 
     if (rankingError) throw rankingError;
-
-    const { data: pointsHistory, error: historyError } = await supabase
-      .from('user_points_history').select('*').eq('user_id', user_id).order('created_at', { ascending: false }).limit(20);
-
     if (historyError) throw historyError;
 
-    const { data: records } = await supabase
-      .from('records').select('id, name, category_id, total_score, status').eq('user_id', user_id).eq('status', 'verified').limit(10);
-
-    res.json({ ranking, recentPoints: pointsHistory, verifiedRecords: records });
+    res.json({ ranking: ranking || null, recentPoints: pointsHistory || [], verifiedRecords: records || [] });
   } catch (error) {
     console.error('Get user ranking details error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not load ranking details', error: error.message });
   }
 };
 
-// Add points
+// Add points (admin only, enforced by route)
 exports.addUserPoints = async (req, res) => {
   try {
     const { user_id, points, source, reference_id, reason } = req.body;
-    if (!user_id || !points || !source) return res.status(400).json({ error: 'Missing required fields' });
-
-    await supabase.from('user_points_history').insert([{
-      user_id, points_awarded: points, source, reference_id, reason, admin_id: req.user?.id, is_manual: false
-    }]);
-
-    const { data: currentRanking } = await supabase.from('user_rankings').select('total_points').eq('user_id', user_id).single().catch(() => ({ data: null }));
-
-    const newTotal = (currentRanking?.total_points || 0) + points;
-    let tier = 'Challenger';
-    if (newTotal >= 50000) tier = 'Grand Champion';
-    else if (newTotal >= 20000) tier = 'Elite Master';
-    else if (newTotal >= 5000) tier = 'Pro Competitor';
-
-    if (currentRanking) {
-      const { data: updated } = await supabase.from('user_rankings').update({
-        total_points: newTotal, tier_badge: tier, updated_at: new Date()
-      }).eq('user_id', user_id).select();
-
-      return res.json({ success: true, ranking: updated[0] });
-    } else {
-      const { data: created } = await supabase.from('user_rankings').insert([{
-        user_id, total_points: newTotal, tier_badge: tier
-      }]).select();
-
-      return res.json({ success: true, ranking: created[0] });
+    if (!user_id || points === undefined || points === null || !source) {
+      return res.status(400).json({ message: 'Missing required fields' });
     }
+    const ranking = await awardPoints({
+      userId: user_id, points, source, referenceId: reference_id, reason, adminId: req.user.id, isManual: false,
+    });
+    res.json({ success: true, ranking });
   } catch (error) {
     console.error('Add points error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not add points', error: error.message });
   }
 };
 
 // Admin adjust points
 exports.adjustUserPoints = async (req, res) => {
   try {
-    if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin only' });
-
     const { user_id, points, reason, notes } = req.body;
-    if (!user_id || points === undefined || !reason) return res.status(400).json({ error: 'Missing required fields' });
+    if (!user_id || points === undefined || !reason) return res.status(400).json({ message: 'Missing required fields' });
 
-    await supabase.from('user_points_history').insert([{
-      user_id, points_awarded: points, source: 'admin_adjustment', reason, admin_notes: notes, admin_id: req.user.id, is_manual: true
-    }]);
-
-    const { data: currentRanking } = await supabase.from('user_rankings').select('total_points').eq('user_id', user_id).single().catch(() => ({ data: null }));
-
-    const newTotal = (currentRanking?.total_points || 0) + points;
-    let tier = 'Challenger';
-    if (newTotal >= 50000) tier = 'Grand Champion';
-    else if (newTotal >= 20000) tier = 'Elite Master';
-    else if (newTotal >= 5000) tier = 'Pro Competitor';
-
-    const { data: updated } = await supabase.from('user_rankings').update({
-      total_points: Math.max(0, newTotal), tier_badge: tier, updated_at: new Date()
-    }).eq('user_id', user_id).select();
-
-    res.json({ success: true, ranking: updated[0] });
+    const ranking = await awardPoints({
+      userId: user_id, points, source: 'admin_adjustment', reason, adminNotes: notes, adminId: req.user.id, isManual: true,
+    });
+    res.json({ success: true, ranking });
   } catch (error) {
     console.error('Adjust points error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not adjust points', error: error.message });
   }
 };
 
-// Recalculate rankings
+// Recalculate global rank positions (single SQL statement via RPC)
 exports.recalculateAllRankings = async (req, res) => {
   try {
-    if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin only' });
-
-    const { data: rankings } = await supabase.from('user_rankings').select('*').order('total_points', { ascending: false });
-
-    for (let i = 0; i < rankings.length; i++) {
-      await supabase.from('user_rankings').update({ global_rank: i + 1 }).eq('id', rankings[i].id);
-    }
-
-    res.json({ success: true, recalculatedCount: rankings.length });
+    const { data, error } = await supabase.rpc('recalculate_global_ranks');
+    if (error) throw error;
+    res.json({ success: true, recalculatedCount: data ?? 0 });
   } catch (error) {
     console.error('Recalculate rankings error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not recalculate rankings', error: error.message });
   }
 };
 
 // Get points rules
 exports.getPointsRules = async (req, res) => {
   try {
-    const { data } = await supabase.from('points_rules').select('*').order('points_value', { ascending: false });
-    res.json({ rules: data });
+    const { data, error } = await supabase.from('points_rules').select('*').order('points_value', { ascending: false });
+    if (error) throw error;
+    res.json({ rules: data || [] });
   } catch (error) {
     console.error('Get points rules error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not load points rules', error: error.message });
   }
 };
 
-// Update points rule
+// Update points rule (admin only, enforced by route)
 exports.updatePointsRule = async (req, res) => {
   try {
-    if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin only' });
-
     const { rule_name } = req.params;
-    const { points_value, description } = req.body;
+    const { points_value, description, active } = req.body;
 
-    const { data } = await supabase.from('points_rules').update({
-      points_value: points_value || undefined, description: description || undefined, updated_at: new Date()
-    }).eq('rule_name', rule_name).select();
+    const updates = { updated_at: new Date() };
+    if (points_value !== undefined && points_value !== '') updates.points_value = toInt(points_value);
+    if (description !== undefined) updates.description = description;
+    if (active !== undefined) updates.active = !!active;
+
+    const { data, error } = await supabase.from('points_rules').update(updates).eq('rule_name', rule_name).select();
+    if (error) throw error;
+    if (!data || !data.length) return res.status(404).json({ message: 'Rule not found' });
 
     res.json({ success: true, rule: data[0] });
   } catch (error) {
     console.error('Update points rule error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Could not update rule', error: error.message });
   }
 };

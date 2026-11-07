@@ -1,79 +1,91 @@
 const supabase = require('../config/supabase');
-const socialController = require('./socialController');
+const { awardPoints, toInt, pointsForVerifiedRecord } = require('../utils/rankings');
+
+const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+const str = (v) => (v === undefined || v === null ? '' : String(v));
+
+// Columns safe to show on public pages (no witness contacts, judge/admin notes or AI scan internals).
+const PUBLIC_RECORD_COLUMNS =
+  'id, slug, user_id, athlete_id, title, category, category_id, description, value, unit, status, record_type, evidence_url, thumbnail_url, video_url, video_type, venue_name, city, state, country, is_featured, views, likes_count, comments_count, date_set, created_at, updated_at';
+const PUBLIC_USER_EMBED = 'user:users!records_user_id_fkey(id, name, username, profile_image, country)';
+
+// record_meta has UNIQUE(record_id), so PostgREST embeds it as an object; the admin UI expects an array.
+const metaAsArray = (r) => ({ ...r, record_meta: Array.isArray(r.record_meta) ? r.record_meta : r.record_meta ? [r.record_meta] : [] });
+
+const slugify = (s) => str(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 80);
 
 // @desc    Get all verified records
 // @route   GET /api/records
 // @access  Public
 const getRecords = async (req, res) => {
   try {
-    const { is_featured, sort, limit } = req.query;
-    
+    const { is_featured, sort } = req.query;
+    const limit = Math.min(Math.max(toInt(req.query.limit, 100), 1), 500);
+
     let query = supabase
       .from('records')
-      .select('*, user:users!records_user_id_fkey(name, username, profile_image), ai_scan:ai_verification_scans(*)')
+      .select(`${PUBLIC_RECORD_COLUMNS}, ${PUBLIC_USER_EMBED}`)
       .eq('status', 'verified');
 
-    // Filter by featured status if provided
-    if (is_featured === 'true') {
-      query = query.eq('is_featured', true);
-    }
+    if (is_featured === 'true') query = query.eq('is_featured', true);
 
-    // Apply sorting
-    if (sort === 'newest') {
-      query = query.order('created_at', { ascending: false });
-    } else if (sort === 'mostViewed') {
-      query = query.order('view_count', { ascending: false });
-    } else if (sort === 'topRanked') {
-      query = query.order('value', { ascending: false });
-    }
+    if (sort === 'mostViewed') query = query.order('views', { ascending: false });
+    else if (sort === 'topRanked') query = query.order('likes_count', { ascending: false }).order('views', { ascending: false });
+    else query = query.order('created_at', { ascending: false });
 
-    // Apply limit
-    if (limit) {
-      query = query.limit(parseInt(limit) || 20);
-    }
-
-    const { data: records, error } = await query;
-    
-    if (error) {
-      return res.status(500).json({ message: error.message });
-    }
-    res.json(records);
+    const { data: records, error } = await query.limit(limit);
+    if (error) throw error;
+    res.json(records || []);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('getRecords error:', error);
+    res.status(500).json({ message: 'Could not load records' });
   }
 };
 
-// @desc    Get single record
+// @desc    Get single record (by uuid or slug)
 // @route   GET /api/records/:id
-// @access  Public
+// @access  Public (non-verified records only visible to their owner or an admin)
 const getRecordById = async (req, res) => {
-  const { data: record, error } = await supabase
-    .from('records')
-    .select('*, user:users!user_id(name, username, profile_image), ai_scan:ai_verification_scans(*)')
-    .eq('id', req.params.id)
-    .single();
+  try {
+    const { id } = req.params;
+    let query = supabase.from('records').select(`${PUBLIC_RECORD_COLUMNS}, ${PUBLIC_USER_EMBED}`);
+    query = isUUID(id) ? query.eq('id', id) : query.eq('slug', slugify(id));
+    const { data: record, error } = await query.maybeSingle();
 
-  if (record) {
+    if (error) throw error;
+    if (!record) return res.status(404).json({ message: 'Record not found' });
+
+    if (record.status !== 'verified') {
+      const viewer = req.user;
+      const allowed = viewer && (viewer.is_admin || String(viewer.id) === String(record.user_id));
+      if (!allowed) return res.status(404).json({ message: 'Record not found' });
+    }
+
     res.json(record);
-  } else {
-    res.status(404).json({ message: 'Record not found' });
+  } catch (error) {
+    console.error('getRecordById error:', error);
+    res.status(500).json({ message: 'Could not load record' });
   }
 };
 
 const generateScanResult = (recordBody) => {
-  const { title = '', description = '', value = '', witnesses = [], evidenceUrl = '' } = recordBody;
-  
+  const title = str(recordBody.title);
+  const description = str(recordBody.description);
+  const value = str(recordBody.value);
+  const evidenceUrl = str(recordBody.evidenceUrl);
+  const witnesses = Array.isArray(recordBody.witnesses) ? recordBody.witnesses : [];
+
   // 1. Check if incomplete
   const hasVideo = evidenceUrl && evidenceUrl !== 'pending_upload' && evidenceUrl.trim() !== '';
   const isMissingFields = !title.trim() || !value.trim() || !description.trim() || !hasVideo;
-  
+
   if (isMissingFields) {
     const missing = [];
     if (!title.trim()) missing.push('Title');
     if (!value.trim()) missing.push('Score');
     if (!description.trim()) missing.push('Description');
     if (!hasVideo) missing.push('Video evidence');
-    
+
     return {
       status: 'suspicious',
       confidence_score: 45.50,
@@ -88,13 +100,9 @@ const generateScanResult = (recordBody) => {
   // 2. Check if failed
   const scoreVal = parseFloat(value);
   const isUnrealisticScore = scoreVal > 10000 || scoreVal <= 0 || isNaN(scoreVal);
-  
-  // Check witnesses signed
-  const hasUnsignedWitness = Array.isArray(witnesses) && (witnesses.length === 0 || witnesses.some(w => !w.signed));
-  
-  // Check description for cheat/fake/test/hack/bypass keywords
+  const hasUnsignedWitness = witnesses.length === 0 || witnesses.some((w) => !w || !w.signed);
   const suspiciousKeywords = ['fake', 'cheat', 'test', 'hack', 'bypass'];
-  const hasSuspiciousText = suspiciousKeywords.some(kw => 
+  const hasSuspiciousText = suspiciousKeywords.some((kw) =>
     title.toLowerCase().includes(kw) || description.toLowerCase().includes(kw)
   );
 
@@ -127,110 +135,144 @@ const generateScanResult = (recordBody) => {
   };
 };
 
+// Find a free slug like "most-push-ups-in-60-seconds" / "...-2"
+const uniqueSlug = async (title) => {
+  const base = slugify(title) || 'record';
+  for (let i = 0; i < 20; i++) {
+    const candidate = i === 0 ? base : `${base}-${i + 1}`;
+    const { data } = await supabase.from('records').select('id').eq('slug', candidate).maybeSingle();
+    if (!data) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+};
+
 // @desc    Create a record submission
 // @route   POST /api/records
 // @access  Private
 const createRecord = async (req, res) => {
-  const { 
-    title, category, description, value, unit, 
-    evidenceUrl, thumbnailUrl, athleteId, venueName, 
-    city, witnesses, recordType 
+  const {
+    title, category, description, value, unit,
+    evidenceUrl, thumbnailUrl, athleteId, venueName,
+    city, state, country, witnesses, recordType,
   } = req.body;
 
   try {
+    if (!str(title).trim() || !str(category).trim()) {
+      return res.status(400).json({ message: 'Title and category are required' });
+    }
+
+    // Scan is computed before inserting so a bad field can never leave a half-created record.
+    const scanResult = generateScanResult(req.body);
+
+    // Users may only submit standard records or challenges; "world_record" is set by adjudication.
+    const safeRecordType = recordType === 'challenge' ? 'challenge' : 'standard';
+
+    // Link to the categories table when the name matches, so category rankings work.
+    let { data: categoryRow } = await supabase
+      .from('categories')
+      .select('id')
+      .ilike('name', str(category).trim())
+      .limit(1)
+      .maybeSingle();
+    if (!categoryRow) {
+      ({ data: categoryRow } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', slugify(category))
+        .limit(1)
+        .maybeSingle());
+    }
+
     const { data: createdRecord, error } = await supabase
       .from('records')
-      .insert([
-        {
-          user_id: req.user.id,
-          athlete_id: athleteId,
-          title,
-          category,
-          description,
-          value: value || '0',
-          unit: unit || '',
-          evidence_url: evidenceUrl || '',
-          thumbnail_url: thumbnailUrl || '',
-          venue_name: venueName,
-          city: city,
-          witnesses: witnesses || [],
-          status: 'pending',
-          record_type: recordType || 'standard'
-        }
-      ])
+      .insert([{
+        user_id: req.user.id,
+        athlete_id: str(athleteId) || req.user.username || null,
+        slug: await uniqueSlug(title),
+        title: str(title).trim(),
+        category: str(category).trim(),
+        category_id: categoryRow?.id || null,
+        description: str(description),
+        value: str(value) || '0',
+        unit: str(unit),
+        evidence_url: str(evidenceUrl),
+        thumbnail_url: thumbnailUrl && thumbnailUrl !== 'pending_upload' ? thumbnailUrl : '',
+        venue_name: venueName || null,
+        city: city || null,
+        state: state || null,
+        country: country || null,
+        witnesses: Array.isArray(witnesses) ? witnesses : [],
+        status: 'pending',
+        record_type: safeRecordType,
+      }])
       .select()
       .single();
 
     if (error) throw error;
 
-    // Create record_meta with pending payment status
-    await supabase.from('record_meta').insert([{
+    // record_meta with pending payment status
+    const { error: metaError } = await supabase.from('record_meta').insert([{
       record_id: createdRecord.id,
-      admin_notes: 'payment_status:pending_payment',
-      submission_fee: 0.00
+      payment_status: 'pending_payment',
+      submission_fee: 0.00,
     }]);
+    if (metaError) console.error(`[record_meta] seed failed for ${createdRecord.id}:`, metaError.message);
 
-    // Generate and seed biometric audit scan immediately
-    const scanResult = generateScanResult(req.body);
     const { error: scanError } = await supabase
       .from('ai_verification_scans')
-      .insert([{
-        record_id: createdRecord.id,
-        confidence_score: scanResult.confidence_score,
-        face_check: scanResult.face_check,
-        deepfake_check: scanResult.deepfake_check,
-        video_tamper_check: scanResult.video_tamper_check,
-        audio_tamper_check: scanResult.audio_tamper_check,
-        status: scanResult.status,
-        scan_notes: scanResult.scan_notes
-      }]);
-      
+      .upsert([{ record_id: createdRecord.id, ...scanResult }], { onConflict: 'record_id' });
     if (scanError) {
       console.error(`[Biometric Seeder] Failed to auto-seed scan for Record ${createdRecord.id}:`, scanError.message);
     }
 
     res.status(201).json(createdRecord);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('createRecord error:', error);
+    res.status(400).json({ message: 'Could not submit the record. Please check the form and try again.' });
   }
 };
 
 // @desc    Process checkout payment for a record
 // @route   POST /api/records/:id/checkout
-// @access  Private
+// @access  Private (record owner)
+// NOTE: there is no payment gateway yet; this marks the submission fee as paid.
+// It must be replaced by a Razorpay / Stripe webhook before going live.
 const processCheckout = async (req, res) => {
   try {
-    // Generate tracking number
-    const trackingNumber = `RWR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Record not found' });
 
-    // Update payment status in record_meta
-    const { data: updatedMeta, error: metaError } = await supabase
-      .from('record_meta')
-      .update({ 
-        admin_notes: 'payment_status:paid',
-        submission_fee: 3.50,
-        tracking_number: trackingNumber
-      })
-      .eq('record_id', req.params.id)
-      .select()
-      .single();
-
-    if (metaError) {
-      // If record_meta doesn't exist yet, insert it (fallback)
-      await supabase.from('record_meta').insert([{
-        record_id: req.params.id,
-        admin_notes: 'payment_status:paid',
-        submission_fee: 3.50,
-        tracking_number: trackingNumber
-      }]);
+    const { data: record, error: recordError } = await supabase
+      .from('records')
+      .select('id, user_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (recordError) throw recordError;
+    if (!record) return res.status(404).json({ message: 'Record not found' });
+    if (String(record.user_id) !== String(req.user.id) && !req.user.is_admin) {
+      return res.status(403).json({ message: 'You can only pay for your own submission' });
     }
 
-    // Simulate sending email
-    console.log(`[Email System] Sending Payment Receipt & Confirmation to user for Record ID: ${req.params.id}. Tracking Number: ${trackingNumber}`);
+    const trackingNumber = `RWR-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
+    const fee = Math.max(0, parseFloat(req.body.finalAmount ?? 3.50) || 0);
 
+    const { error: metaError } = await supabase
+      .from('record_meta')
+      .upsert([{
+        record_id: req.params.id,
+        payment_status: 'paid',
+        submission_fee: fee,
+        coupon_code: req.body.couponCode || null,
+        tracking_number: trackingNumber,
+        updated_at: new Date(),
+      }], { onConflict: 'record_id' });
+
+    if (metaError) throw metaError;
+
+    console.log(`[Email System] Payment receipt for record ${req.params.id}. Tracking Number: ${trackingNumber}`);
     res.status(200).json({ success: true, trackingNumber });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('processCheckout error:', error);
+    res.status(500).json({ message: 'Could not complete checkout' });
   }
 };
 
@@ -238,17 +280,19 @@ const processCheckout = async (req, res) => {
 // @route   GET /api/records/leaderboard
 // @access  Public
 const getLeaderboard = async (req, res) => {
-  const { data: leaderboard, error } = await supabase
-    .from('records')
-    .select('*, user:users!records_user_id_fkey(name, username, profile_image)')
-    .eq('status', 'verified')
-    .order('created_at', { ascending: false })
-    .limit(10);
-
-  if (error) {
-    return res.status(500).json({ message: error.message });
+  try {
+    const { data: leaderboard, error } = await supabase
+      .from('records')
+      .select(`${PUBLIC_RECORD_COLUMNS}, ${PUBLIC_USER_EMBED}`)
+      .eq('status', 'verified')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (error) throw error;
+    res.json(leaderboard || []);
+  } catch (error) {
+    console.error('getLeaderboard error:', error);
+    res.status(500).json({ message: 'Could not load leaderboard' });
   }
-  res.json(leaderboard);
 };
 
 // @desc    Get logged in user's records (pending, verified, rejected)
@@ -258,14 +302,15 @@ const getMySubmissions = async (req, res) => {
   try {
     const { data: records, error } = await supabase
       .from('records')
-      .select('*, ai_scan:ai_verification_scans(*)')
+      .select('*, ai_scan:ai_verification_scans(*), record_meta(payment_status, tracking_number, submission_fee)')
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(records);
+    res.json((records || []).map(metaAsArray));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('getMySubmissions error:', error);
+    res.status(500).json({ message: 'Could not load your submissions' });
   }
 };
 
@@ -276,33 +321,49 @@ const getAllSubmissionsForAdmin = async (req, res) => {
   try {
     const { data: records, error } = await supabase
       .from('records')
-      .select('*, user:users!records_user_id_fkey(name, email, username, profile_image), record_meta(*), ai_scan:ai_verification_scans(*)')
-      .order('created_at', { ascending: false });
+      .select('*, user:users!records_user_id_fkey(id, name, email, username, profile_image), record_meta(*), ai_scan:ai_verification_scans(*)')
+      .order('created_at', { ascending: false })
+      .limit(Math.min(Math.max(toInt(req.query.limit, 2000), 1), 5000));
 
     if (error) throw error;
-    res.json(records);
+    res.json((records || []).map(metaAsArray));
   } catch (error) {
+    console.error('getAllSubmissionsForAdmin error:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+const VERIFICATION_STATUSES = ['under_review', 'pending_review', 'needs_info', 'approved', 'denied', 'priority'];
 
 // @desc    Adjudicate (verify/reject) record submission
 // @route   PUT /api/records/admin/adjudicate/:id
 // @access  Private/Admin
 const adjudicateRecord = async (req, res) => {
-  const { status, points, is_world_record } = req.body;
-  
+  const { status, points, is_world_record, verification_status } = req.body;
+
   if (!['verified', 'rejected', 'pending'].includes(status)) {
     return res.status(400).json({ message: 'Invalid adjudication status' });
   }
 
   try {
-    const updateData = {
-      status,
-      updated_at: new Date()
-    };
+    const { data: before, error: beforeError } = await supabase
+      .from('records')
+      .select('id, user_id, status, record_type')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (beforeError) throw beforeError;
+    if (!before) return res.status(404).json({ message: 'Record not found' });
+
+    const updateData = { status, updated_at: new Date() };
     if (is_world_record !== undefined) {
-      updateData.record_type = is_world_record ? 'world_record' : 'standard';
+      updateData.record_type = is_world_record ? 'world_record' : (before.record_type === 'challenge' ? 'challenge' : 'standard');
+    }
+    if (verification_status !== undefined) {
+      updateData.verification_status = VERIFICATION_STATUSES.includes(verification_status) ? verification_status : null;
+    } else if (status === 'verified') {
+      updateData.verification_status = 'approved';
+    } else if (status === 'rejected') {
+      updateData.verification_status = 'denied';
     }
 
     const { data: updatedRecord, error } = await supabase
@@ -314,48 +375,31 @@ const adjudicateRecord = async (req, res) => {
 
     if (error) throw error;
 
-    // Award points if provided and record is verified
-    if (status === 'verified' && points > 0) {
+    // Award points only on the transition into "verified", so re-saving never double-counts.
+    const pts = toInt(points);
+    const becameVerified = status === 'verified' && before.status !== 'verified';
+    if (becameVerified && updatedRecord.user_id) {
       try {
-        const userId = updatedRecord.user_id;
-        
-        // Fetch current rankings
-        const { data: existingRanking } = await supabase
-          .from('user_rankings')
-          .select('id, total_points, verified_records_count')
-          .eq('user_id', userId)
-          .single();
-
-        let newPoints = points;
-        let newCount = 1;
-        
-        if (existingRanking) {
-          newPoints += existingRanking.total_points || 0;
-          newCount += existingRanking.verified_records_count || 0;
-        }
-        
-        let tier = 'Challenger';
-        if (newPoints >= 15000) tier = 'Grand Champion';
-        else if (newPoints >= 10000) tier = 'Elite Master';
-        else if (newPoints >= 5000) tier = 'Pro Competitor';
-
-        // Upsert ranking
-        await supabase.from('user_rankings').upsert([{
-          id: existingRanking ? existingRanking.id : undefined,
-          user_id: userId,
-          total_points: newPoints,
-          verified_records_count: newCount,
-          tier_badge: tier,
-          updated_at: new Date()
-        }], { onConflict: 'id' });
-
+        await awardPoints({
+          userId: updatedRecord.user_id,
+          points: pts > 0 ? pts : await pointsForVerifiedRecord(updatedRecord),
+          source: 'record_verified',
+          referenceId: updatedRecord.id,
+          reason: `Record verified: ${updatedRecord.title}`,
+          adminId: req.user.id,
+          counters: {
+            verified_records_count: 1,
+            world_records_count: updatedRecord.record_type === 'world_record' ? 1 : 0,
+          },
+        });
       } catch (pointsErr) {
-        console.warn("[Rankings Warning] Could not award points. Are ranking tables created?", pointsErr.message);
+        console.warn('[Rankings Warning] Could not award points:', pointsErr.message);
       }
     }
 
     res.json(updatedRecord);
   } catch (error) {
+    console.error('adjudicateRecord error:', error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -365,50 +409,29 @@ const adjudicateRecord = async (req, res) => {
 // @access  Private/Admin
 const toggleRecordFeatured = async (req, res) => {
   const { isFeatured } = req.body;
-  
+
   try {
-    // Get current record to determine if it's verified
     const { data: record, error: fetchError } = await supabase
       .from('records')
       .select('status')
       .eq('id', req.params.id)
-      .single();
+      .maybeSingle();
 
     if (fetchError) throw fetchError;
+    if (!record) return res.status(404).json({ message: 'Record not found' });
 
-    // Only allow featured for verified records
-    if (record.status !== 'verified') {
+    if (isFeatured && record.status !== 'verified') {
       return res.status(400).json({ message: 'Only verified records can be marked as featured' });
-    }
-
-    let updateData = {};
-    if (isFeatured) {
-      updateData = {
-        is_featured: true,
-        updated_at: new Date()
-      };
-    } else {
-      // Remove from featured
-      updateData = {
-        is_featured: false,
-        updated_at: new Date()
-      };
     }
 
     const { data: updatedRecord, error } = await supabase
       .from('records')
-      .update(updateData)
+      .update({ is_featured: !!isFeatured, updated_at: new Date() })
       .eq('id', req.params.id)
       .select()
       .single();
 
-    if (error) {
-      if (error.code === '42703' || error.message.includes('does not exist') || error.message.includes('schema cache')) {
-        // Fallback for missing is_featured column: return mock success
-        return res.json({ id: req.params.id, is_featured: isFeatured, ...updateData });
-      }
-      throw error;
-    }
+    if (error) throw error;
     res.json(updatedRecord);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -425,4 +448,6 @@ module.exports = {
   adjudicateRecord,
   processCheckout,
   toggleRecordFeatured,
+  PUBLIC_RECORD_COLUMNS,
+  PUBLIC_USER_EMBED,
 };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const protect = require('../middleware/authMiddleware').protect;
+const { protect, admin } = require('../middleware/authMiddleware');
 const {
   getAllCategories,
   getCategoryById,
@@ -11,10 +11,11 @@ const {
 } = require('../controllers/categoryController');
 
 router.get('/', getAllCategories);
-router.get('/seed', protect, seedDefaultCategories);
+router.get('/seed', protect, admin, seedDefaultCategories);
+router.post('/seed', protect, admin, seedDefaultCategories);
 router.get('/:id', getCategoryById);
-router.post('/', protect, createCategory);
-router.put('/:id', protect, updateCategory);
-router.delete('/:id', protect, deleteCategory);
+router.post('/', protect, admin, createCategory);
+router.put('/:id', protect, admin, updateCategory);
+router.delete('/:id', protect, admin, deleteCategory);
 
 module.exports = router;
