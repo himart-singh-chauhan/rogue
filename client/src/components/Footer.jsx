@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
+import SponsorBanner from "./SponsorBanner";
 
 const Footer = () => {
   const location = useLocation();
@@ -94,6 +95,7 @@ const Footer = () => {
         />
 
         {/* Bottom bar */}
+        <SponsorBanner variant="compact" placements={["footer", "footer_sponsor"]} />
         <div className="footer-bottom">
           <span>© {new Date().getFullYear()} Rogue World Records. All rights reserved.</span>
         </div>

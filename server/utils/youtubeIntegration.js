@@ -155,3 +155,10 @@ module.exports = {
   isValidYouTubeUrl,
   convertYouTubeWatchToEmbed,
 };
+
+// Thumbnail to store for a record/video: the uploaded one, else YouTube's own frame, else empty.
+module.exports.thumbnailFor = (videoUrl, uploadedThumbnail) => {
+  if (uploadedThumbnail && uploadedThumbnail !== 'pending_upload') return uploadedThumbnail;
+  const id = module.exports.extractYouTubeVideoId(videoUrl || '');
+  return id ? module.exports.generateYouTubeThumbnailUrl(id) : '';
+};

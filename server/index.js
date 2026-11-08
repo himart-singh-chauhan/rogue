@@ -91,6 +91,7 @@ app.use('/api/age-groups', require('./routes/ageGroupRoutes'));
 app.use('/api/coupons', require('./routes/couponRoutes'));
 app.use('/api/rankings', require('./routes/rankingRoutes'));
 app.use('/api/countries', require('./routes/countryRoutes'));
+app.use('/api/sponsors', require('./routes/sponsorRoutes'));
 app.use('/api/social', require('./routes/socialRoutes'));
 
 app.get('/', (req, res) => {

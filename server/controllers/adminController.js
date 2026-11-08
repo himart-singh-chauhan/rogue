@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { awardPoints, pointsForVerifiedRecord } = require('../utils/rankings');
+const { thumbnailFor } = require('../utils/youtubeIntegration');
 
 // ==========================================
 // 👥 USERS MANAGEMENT
@@ -98,7 +99,7 @@ const deleteUserByAdmin = async (req, res) => {
 const createRecordByAdmin = async (req, res) => {
   const {
     userId, title, category, description, value, unit,
-    status, evidenceUrl, venueName, city, recordType
+    status, evidenceUrl, venueName, city, recordType, thumbnailUrl
   } = req.body;
 
   try {
@@ -114,6 +115,7 @@ const createRecordByAdmin = async (req, res) => {
           unit,
           status: status || 'pending',
           evidence_url: evidenceUrl || '',
+          thumbnail_url: thumbnailFor(evidenceUrl, thumbnailUrl),
           venue_name: venueName,
           city: city,
           record_type: recordType || 'standard'
@@ -133,8 +135,15 @@ const createRecordByAdmin = async (req, res) => {
 // @route   PUT /api/admin/records/:id
 // @access  Private/Admin
 const updateRecordByAdmin = async (req, res) => {
-  const { title, category, description, value, unit, status, evidenceUrl, venueName, city, recordType } = req.body;
+  const { title, category, description, value, unit, status, evidenceUrl, venueName, city, recordType, thumbnailUrl } = req.body;
   try {
+    // Keep the existing thumbnail unless a new one was uploaded; YouTube links get YouTube's frame.
+    let thumbnail;
+    if (thumbnailUrl) thumbnail = thumbnailUrl;
+    else if (evidenceUrl !== undefined) {
+      const { data: current } = await supabase.from('records').select('thumbnail_url').eq('id', req.params.id).maybeSingle();
+      thumbnail = current?.thumbnail_url || thumbnailFor(evidenceUrl, null) || undefined;
+    }
     const { data: updatedRecord, error } = await supabase
       .from('records')
       .update({
@@ -145,6 +154,7 @@ const updateRecordByAdmin = async (req, res) => {
         unit,
         status,
         evidence_url: evidenceUrl,
+        thumbnail_url: thumbnail,
         venue_name: venueName,
         city: city,
         record_type: recordType,

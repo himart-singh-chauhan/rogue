@@ -226,6 +226,7 @@ const Admin = () => {
 
   // Dynamic Form states bound to inputs
   const [recordForm, setRecordForm] = useState({ title: "", category: "Strength", description: "", value: "", unit: "", status: "pending", evidenceUrl: "", venueName: "", city: "", recordType: "standard", userId: "" });
+  const [recordThumbFile, setRecordThumbFile] = useState(null);
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
   const [eventForm, setEventForm] = useState({ title: "", description: "", date: "", location: "", imageUrl: "", isPaid: false, ticketPrice: 0 });
   const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [], imageFile: null, imagePreview: "" });
@@ -1005,6 +1006,7 @@ const Admin = () => {
     if (activeTab === "records") {
       if (recordsSubTab === "submissions") {
         if (type === "edit" && item) {
+          setRecordThumbFile(null);
           setRecordForm({
             title: item.title || "",
             category: item.category || "Strength",
@@ -1019,6 +1021,7 @@ const Admin = () => {
             userId: item.user_id || ""
           });
         } else {
+          setRecordThumbFile(null);
           setRecordForm({ title: "", category: "Strength", description: "", value: "", unit: "", status: "pending", evidenceUrl: "", venueName: "", city: "", recordType: "standard", userId: users[0]?.id || "" });
         }
       } else if (recordsSubTab === "categories") {
@@ -1366,7 +1369,15 @@ const Admin = () => {
         } else if (activeTab === "records") {
           if (recordsSubTab === "submissions") {
             endpoint = `/admin/records${modalType === "edit" && modalTarget ? `/${modalTarget.id}` : ""}`;
-            payload = recordForm;
+            payload = { ...recordForm };
+            // Thumbnail goes straight to storage; YouTube links without one get YouTube's frame on the server.
+            if (recordThumbFile) {
+              try {
+                payload.thumbnailUrl = await uploadDirect(recordThumbFile, "admin-image", user.token);
+              } catch (uploadErr) {
+                throw new Error(`Thumbnail upload failed: ${uploadErr.message}`);
+              }
+            }
           } else if (recordsSubTab === "categories") {
             endpoint = `/categories${modalType === "edit" && modalTarget ? `/${modalTarget._id || modalTarget.id}` : ""}`;
             payload = {
@@ -9129,6 +9140,13 @@ const Admin = () => {
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EVIDENCE MEDIA URL</label>
                       <input type="url" value={recordForm.evidenceUrl} onChange={(e) => setRecordForm({ ...recordForm, evidenceUrl: e.target.value })} placeholder="https://youtube.com/watch?v=..." style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>THUMBNAIL IMAGE (OPTIONAL)</label>
+                      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setRecordThumbFile(e.target.files[0] || null)} style={{ color: "white", fontSize: "12px" }} />
+                      <p style={{ fontSize: "10px", color: "#666", margin: "6px 0 0 0" }}>JPG, PNG or WEBP, max 10MB. YouTube links get their video thumbnail automatically if none is uploaded.</p>
+                      {!recordThumbFile && modalType === "edit" && modalTarget?.thumbnail_url && <img loading="lazy" decoding="async" src={modalTarget.thumbnail_url} alt="Current thumbnail" style={{ display: "block", marginTop: "8px", height: "60px", borderRadius: "8px" }} />}
+                      {recordThumbFile && <p style={{ fontSize: "10px", color: "#22c55e", margin: "4px 0 0 0" }}>✓ {recordThumbFile.name}</p>}
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>RECORD DESCRIPTION</label>

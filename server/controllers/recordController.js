@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { awardPoints, toInt, pointsForVerifiedRecord } = require('../utils/rankings');
+const { thumbnailFor } = require('../utils/youtubeIntegration');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 const str = (v) => (v === undefined || v === null ? '' : String(v));
@@ -196,7 +197,7 @@ const createRecord = async (req, res) => {
         value: str(value) || '0',
         unit: str(unit),
         evidence_url: str(evidenceUrl),
-        thumbnail_url: thumbnailUrl && thumbnailUrl !== 'pending_upload' ? thumbnailUrl : '',
+        thumbnail_url: thumbnailFor(evidenceUrl, thumbnailUrl),
         venue_name: venueName || null,
         city: city || null,
         state: state || null,

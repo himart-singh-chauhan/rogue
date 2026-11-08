@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall, formatProductImage } from "../utils/api";
+import SponsorBanner from "../components/SponsorBanner";
 import { useAuth } from "../context/AuthContext";
 
 const Shop = () => {
@@ -217,6 +218,7 @@ const Shop = () => {
 
 
         {/* PRODUCT GRID */}
+        <SponsorBanner placements={["shop"]} />
         <section style={{ padding: "0 5% 100px", maxWidth: "1400px", margin: "0 auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px" }}>
             {products

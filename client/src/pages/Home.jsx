@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Play, Check, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Menu, X, Dumbbell, Zap, Timer, Gamepad2, Target, Infinity, Trophy, LayoutGrid, Activity, Waves, Settings, Brain, Gamepad, Search, Eye, Volume2, Maximize, Bike, Star, Palette, Baby, Globe } from "lucide-react";
 import { apiCall, formatProductImage } from "../utils/api";
+import SponsorBanner from "../components/SponsorBanner";
 import InfiniteSlider from "../components/InfiniteSlider";
 import FlowingMenu from "../components/FlowingMenu";
 import StackingSteps from "../components/StackingSteps";
@@ -822,6 +823,9 @@ const Home = () => {
         </footer>
 
       </header>
+
+      {/* Sponsors from Admin → Sponsorships (renders nothing when none are active) */}
+      <SponsorBanner placements={["homepage_top_banner", "homepage", "homepage_sidebar", "featured"]} />
 
       {/* ══════════════════ NEWEST RECORDS ACHIEVERS ══════════════════ */}
       <section className="section newest-section">

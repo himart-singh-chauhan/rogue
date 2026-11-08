@@ -62,8 +62,9 @@ exports.getHomepageSections = async (req, res) => {
     if (!featured.length) featured = records.filter((r) => r.is_featured);
     if (!featured.length) featured = records.slice(0, 5);
 
+    // Newest = the most recent verified records (they may also appear in Featured).
     let newlyVerified = bySection('newly_verified');
-    if (!newlyVerified.length) newlyVerified = records.filter((r) => !featured.includes(r)).slice(0, 10);
+    if (!newlyVerified.length) newlyVerified = records.slice(0, 10);
 
     let topRanked = bySection('top_ranked');
     if (!topRanked.length) {
