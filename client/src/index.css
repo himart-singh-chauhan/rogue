@@ -2084,6 +2084,10 @@ a:hover svg {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   z-index: 100;
   animation: slideDown 0.3s ease-out;
+  /* long admin menus scroll instead of running off the screen */
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes slideDown {

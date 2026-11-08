@@ -2016,7 +2016,7 @@ const Admin = () => {
   return (
     <>
       <Navbar />
-      <div style={{
+      <div className="admin-shell" style={{
         display: "flex", minHeight: "100vh", background: "#050505", color: "white", fontFamily: "'Outfit', sans-serif",
         overflow: "hidden"
       }}>
@@ -2024,7 +2024,7 @@ const Admin = () => {
         <main style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", position: "relative" }}>
 
           {/* Top Navbar */}
-          <header style={{ padding: "16px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "rgba(5,5,5,0.8)", backdropFilter: "blur(12px)", zIndex: 10 }}>
+          <header className="admin-header" style={{ padding: "16px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "rgba(5,5,5,0.8)", backdropFilter: "blur(12px)", zIndex: 10 }}>
           <div style={{ position: "relative", width: "400px" }}>
             <Search size={16} color="#666" style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)" }} />
             <input

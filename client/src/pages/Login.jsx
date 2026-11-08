@@ -27,9 +27,9 @@ const Login = () => {
     }
   };
   return (
-    <div style={{ background: "#0A0A0A", height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <div className="auth-page" style={{ background: "#0A0A0A", height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <Navbar />
-      <div style={{
+      <div className="auth-split" style={{
         background: "#0A0A0A",
         color: "white",
         fontFamily: "'Inter', sans-serif",
@@ -40,7 +40,7 @@ const Login = () => {
       }}>
 
         {/* LEFT SIDE - HERO */}
-        <div style={{
+        <div className="auth-hero" style={{
           flex: 1.2,
           position: "relative",
           display: "flex",
@@ -88,7 +88,7 @@ const Login = () => {
         </div>
 
         {/* RIGHT SIDE - LOGIN FORM */}
-        <div style={{
+        <div className="auth-form-side" style={{
           flex: 1,
           background: "#0A0A0A",
           display: "flex",

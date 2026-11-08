@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Play, Check, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Menu, X, Dumbbell, Zap, Timer, Gamepad2, Target, Infinity, Trophy, LayoutGrid, Activity, Waves, Settings, Brain, Gamepad, Search, Eye, Volume2, Maximize, Bike, Star, Palette, Baby, Globe } from "lucide-react";
 import { apiCall, formatProductImage } from "../utils/api";
@@ -19,11 +20,11 @@ const NewestCard = ({ img, cat, title, avatar, name, value, slug }) => {
   const cardSlug = slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   return (
     <Link to={`/record/${cardSlug}`} style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-      <div 
-        className="holder-card" 
-        style={{ 
-          width: '100%', 
-          height: '360px', 
+      <div
+        className="holder-card"
+        style={{
+          width: '100%',
+          height: '360px',
           cursor: 'pointer',
           transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease'
         }}
@@ -254,6 +255,13 @@ const STATIC_FEATURED = [
   { img: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=700&q=80", badge: "Track", name: "Marcus S.", records: "3", rank: 5, slug: "stair-climbing" }
 ];
 
+
+// "https://youtu.be/ID?si=..", "watch?v=ID", "/embed/ID", "/shorts/ID", "/live/ID" -> ID
+const youtubeIdFrom = (url = "") => {
+  const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+};
+
 const Home = () => {
   const navigate = useNavigate();
   const [showAllCats, setShowAllCats] = useState(false);
@@ -264,7 +272,12 @@ const Home = () => {
   // Live homepage data from admin controls
   const [newestRecords, setNewestRecords] = useState(STATIC_NEWEST);
   const [featuredHolders, setFeaturedHolders] = useState(STATIC_FEATURED);
-  const [sidebarVideos, setSidebarVideos] = useState([]);
+  // Sidebar: admin "Featured videos" win; otherwise featured records. Kept apart so the two
+  // requests can't overwrite each other (the list used to switch depending on which finished last).
+  const [adminSidebarVideos, setAdminSidebarVideos] = useState([]);
+  const [recordSidebarVideos, setRecordSidebarVideos] = useState([]);
+  const sidebarVideos = adminSidebarVideos.length ? adminSidebarVideos : recordSidebarVideos;
+  const [playingVideo, setPlayingVideo] = useState(null);
 
   useEffect(() => {
     // Fetch live homepage records from admin controls
@@ -321,7 +334,12 @@ const Home = () => {
           if (finalFeaturedRecords.length === 0) {
             const featuredRecs = sections.featured || [];
             const topRanked = sections.top_ranked || [];
-            finalFeaturedRecords = [...featuredRecs, ...topRanked];
+            const seen = new Set();
+            finalFeaturedRecords = [...featuredRecs, ...topRanked].filter((r) => {
+              if (!r || seen.has(r.id)) return false;
+              seen.add(r.id);
+              return true;
+            });
           }
 
           if (finalFeaturedRecords.length > 0) {
@@ -334,9 +352,9 @@ const Home = () => {
               rank: i + 1,
               slug: r.id
             })));
-            
-            // Populate sidebar videos with real records
-            setSidebarVideos(finalFeaturedRecords.slice(0, 6).map(r => ({
+
+            // Sidebar fallback: real records (used only when no admin featured videos exist)
+            setRecordSidebarVideos(finalFeaturedRecords.slice(0, 6).map(r => ({
               time: "1:00", // Default time
               img: r.thumbnail_url !== "pending_upload" ? formatProductImage(r.thumbnail_url) : "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=400&q=80",
               title: r.title || r.name,
@@ -355,7 +373,10 @@ const Home = () => {
       try {
         const videos = await apiCall("/videos/featured", "GET");
         if (videos && videos.length > 0) {
-          setSidebarVideos(videos.slice(0, 6).map(v => ({
+          setAdminSidebarVideos(videos.slice(0, 6).map(v => ({
+            isAdminVideo: true,
+            source: v.source,
+            youtubeId: v.youtube_video_id || youtubeIdFrom(v.video_url),
             time: v.duration ? `${Math.floor(v.duration / 60)}:${String(v.duration % 60).padStart(2, '0')}` : "0:30",
             img: v.thumbnail_url && v.thumbnail_url !== "pending_upload" ? formatProductImage(v.thumbnail_url) : "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=400&q=80",
             videoUrl: v.video_url,
@@ -447,14 +468,14 @@ const Home = () => {
       const current = videoRef.current.currentTime;
       const total = videoRef.current.duration;
       setProgress((current / total) * 100);
-      
+
       const formatTime = (time) => {
         if (isNaN(time)) return "00:00";
         const mins = Math.floor(time / 60);
         const secs = Math.floor(time % 60);
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       };
-      
+
       setCurrentTime(formatTime(current));
       setDuration(formatTime(total));
     }
@@ -557,6 +578,42 @@ const Home = () => {
             )}
           </aside>
 
+      {/* Pop-up player for admin featured videos (YouTube or uploaded file) */}
+      {playingVideo && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={playingVideo.title || "Video"}
+          onClick={() => setPlayingVideo(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 100000, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", width: "100%", maxWidth: "960px" }}>
+            <button
+              onClick={() => setPlayingVideo(null)}
+              aria-label="Close video"
+              style={{ position: "absolute", top: "-44px", right: 0, background: "transparent", border: "none", color: "white", fontSize: "28px", lineHeight: 1, cursor: "pointer", padding: "4px 8px" }}
+            >
+              ×
+            </button>
+            <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#000", borderRadius: "12px", overflow: "hidden" }}>
+              {playingVideo.youtubeId ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${playingVideo.youtubeId}?autoplay=1&rel=0&playsinline=1`}
+                  title={playingVideo.title || "Video"}
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+                />
+              ) : (
+                <video src={playingVideo.videoUrl} controls autoPlay playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+              )}
+            </div>
+            {playingVideo.title && <div style={{ color: "white", fontWeight: 800, fontSize: "16px", marginTop: "12px" }}>{playingVideo.title}</div>}
+          </div>
+        </div>,
+        document.body
+      )}
+
           {/* ── CENTER HERO CONTENT ── */}
           <main className="hero-v3-center" style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
 
@@ -595,7 +652,7 @@ const Home = () => {
                 loop
                 playsInline
               />
-              
+
               {!isPlaying && (
                 <img loading="lazy" decoding="async"
                   src={featuredStream ? (featuredStream.imageUrl || featuredStream.image || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80") : "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"}
@@ -676,7 +733,7 @@ const Home = () => {
                     <Play size={22} fill="white" />
                   )}
                 </div>
-                
+
                 <div onClick={toggleMute} style={{ cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }}>
                   {isMuted ? (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
@@ -694,11 +751,11 @@ const Home = () => {
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.5, whiteSpace: "nowrap", width: "40px" }}>{duration}</span>
                 </div>
-                
+
                 <div onClick={toggleSpeed} style={{ cursor: "pointer", opacity: 0.9, flexShrink: 0, display: "flex", alignItems: "center", fontSize: "14px", fontWeight: "700" }}>
                   {playbackSpeed}x
                 </div>
-                
+
                 <Maximize onClick={toggleFullscreen} size={18} style={{ cursor: "pointer", opacity: 0.9, flexShrink: 0 }} />
               </div>
             </article>
@@ -716,8 +773,18 @@ const Home = () => {
               {sidebarVideos.map((video, idx) => {
                 const recordSlug = video.slug || "deadlifts";
                 return (
-                  <Link to={`/record/${recordSlug}`} key={idx} style={{ textDecoration: "none" }}>
-                    <div 
+                  <Link
+                    to={`/record/${recordSlug}`}
+                    key={video.slug || idx}
+                    onClick={(e) => {
+                      if (video.isAdminVideo) {
+                        e.preventDefault();
+                        setPlayingVideo(video);
+                      }
+                    }}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <div
                       style={{ position: "relative", borderRadius: "12px", overflow: "hidden", height: "78px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", cursor: "pointer", flexShrink: 0, transition: "all 0.3s ease" }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = "translateY(-2px)";
@@ -773,15 +840,15 @@ const Home = () => {
               { label: "Countries", value: 1, suffix: "+", icon: <Target style={{ width: 16, height: 16 }} />, bg: "/assets/stats/countries_bg.webp" },
               { label: "Categories", value: 20, suffix: "+", icon: <Zap style={{ width: 16, height: 16 }} />, bg: "/assets/stats/categories_bg.webp" }
             ].map((stat, idx) => (
-              <div key={idx} style={{ 
-                background: "#222", 
-                border: "1.5px solid #FF6A00", 
-                padding: "20px", 
-                borderRadius: "16px", 
-                display: "flex", 
-                flexDirection: "column", 
-                justifyContent: "space-between", 
-                boxShadow: "0 4px 15px rgba(255,106,0,0.1)", 
+              <div key={idx} style={{
+                background: "#222",
+                border: "1.5px solid #FF6A00",
+                padding: "20px",
+                borderRadius: "16px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                boxShadow: "0 4px 15px rgba(255,106,0,0.1)",
                 aspectRatio: "1 / 1",
                 position: 'relative',
                 overflow: 'hidden'
@@ -797,7 +864,7 @@ const Home = () => {
                   mixBlendMode: 'luminosity',
                   zIndex: 0
                 }} />
-                
+
                 {/* Content */}
                 <div style={{ position: 'relative', zIndex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div style={{ background: "#333", width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#FF6A00" }}>
@@ -867,16 +934,16 @@ const Home = () => {
               <h2 className="section-title" style={{ color: "#FF6A00", marginBottom: 8, textAlign: "left" }}><ScrollReveal>Record Categories</ScrollReveal></h2>
               <p className="section-subtitle" style={{ color: "white", textAlign: "left" }}><ScrollReveal>Find your niche. Dominate your field.</ScrollReveal></p>
             </div>
-            <span 
+            <span
               onClick={() => setShowAllCats(!showAllCats)}
-              style={{ 
-                color: "white", 
-                fontSize: "13px", 
-                fontWeight: "700", 
-                cursor: "pointer", 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "8px", 
+              style={{
+                color: "white",
+                fontSize: "13px",
+                fontWeight: "700",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
                 textTransform: "uppercase",
                 transition: "color 0.2s ease"
               }}
@@ -905,10 +972,10 @@ const Home = () => {
               { i: <Palette />, n: "Creative", d: "Art, design, and unique creations. Breaking boundaries through creativity." },
               { i: <Baby />, n: "Youth", d: "Just for the next generation. Safe, fun, and highly competitive." }
             ].slice(0, showAllCats ? 13 : 8).map((cat, i) => (
-              <div 
-                key={i} 
-                className="cat-cell" 
-                role="button" 
+              <div
+                key={i}
+                className="cat-cell"
+                role="button"
                 tabIndex={0}
                 onClick={() => navigate('/categories', { state: { activeTab: i } })}
                 style={{ cursor: "pointer" }}
@@ -918,11 +985,11 @@ const Home = () => {
                   <h3 className="cat-cell-name">{cat.n}</h3>
                 </div>
                 <p className="cat-cell-desc" style={{ marginBottom: "20px" }}>{cat.d}</p>
-                <div style={{ 
-                  color: "#FF6A00", 
-                  fontSize: "12px", 
-                  fontWeight: "800", 
-                  textTransform: "uppercase", 
+                <div style={{
+                  color: "#FF6A00",
+                  fontSize: "12px",
+                  fontWeight: "800",
+                  textTransform: "uppercase",
                   letterSpacing: "0.1em",
                   display: "flex",
                   alignItems: "center",
@@ -1096,7 +1163,7 @@ const Home = () => {
                       e.currentTarget.style.boxShadow = "0 10px 30px rgba(0,0,0,0.2)";
                     }}
                   />
-                  <button 
+                  <button
                     type="submit"
                     style={{
                       position: "absolute",
@@ -1121,11 +1188,11 @@ const Home = () => {
               <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ color: "#666", fontSize: 13 }}>Popular:</span>
                 {["#Endurance", "#Strength", "#Speed", "#Gaming"].map(tag => (
-                  <span 
-                    key={tag} 
+                  <span
+                    key={tag}
                     onClick={() => navigate(`/explore?q=${encodeURIComponent(tag.replace("#", ""))}`)}
-                    style={{ color: "#aaa", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }} 
-                    onMouseEnter={(e) => e.currentTarget.style.color = "#FF6A00"} 
+                    style={{ color: "#aaa", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = "#FF6A00"}
                     onMouseLeave={(e) => e.currentTarget.style.color = "#aaa"}
                   >
                     {tag}

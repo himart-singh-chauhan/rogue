@@ -59,7 +59,7 @@ const PageNav = ({ breadcrumbs = [] }) => {
       </div>
 
       {/* Bottom Row: Tab Bar */}
-      <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto', display: 'flex', gap: '24px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ maxWidth: '1400px', width: '100%', minWidth: 0, margin: '0 auto', display: 'flex', gap: '24px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
         {[
           { icon: <Home size={14} />, label: 'Home', path: '/' },
           { icon: <Search size={14} />, label: 'Explore Records', path: '/explore-records' },

@@ -94,7 +94,7 @@ const Navbar = () => {
         </div>
 
         {/* Desktop nav pill - Center aligned */}
-        <div className="nav-pill" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        <div className="nav-pill" style={{ alignItems: "center", gap: "4px" }}>
           {navLinks.map((l) => (
             <Link 
               key={l.label} 
@@ -229,7 +229,7 @@ const Navbar = () => {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="mobile-menu" style={{ background: location.pathname === "/" ? "#FFF8F5" : "#0A0A0A" }}>
+        <div className="mobile-menu" data-lenis-prevent="true" style={{ background: location.pathname === "/" ? "#FFF8F5" : "#0A0A0A" }}>
           {navLinks.map(l => (
             <Link 
               key={l.label} 

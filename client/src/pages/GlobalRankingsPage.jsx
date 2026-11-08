@@ -147,6 +147,7 @@ export default function GlobalRankingsPage() {
                     borderRadius: '12px',
                     padding: '20px',
                     display: 'flex',
+                    flexWrap: 'wrap',
                     alignItems: 'center',
                     gap: '20px',
                     cursor: 'pointer',
@@ -162,7 +163,7 @@ export default function GlobalRankingsPage() {
                   </div>
 
                   {/* Profile */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '200px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 'min(200px, 100%)' }}>
                     <img loading="lazy" decoding="async"
                       src={member.profile_image ? (member.profile_image.includes('http') ? member.profile_image : formatProductImage(`/uploads/${member.profile_image}`)) : `https://ui-avatars.com/api/?name=${encodeURIComponent(member.display_name)}&background=FF6A00&color=fff`}
                       alt={member.display_name}
@@ -179,7 +180,7 @@ export default function GlobalRankingsPage() {
                   </div>
 
                   {/* Stats */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', minWidth: '280px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', minWidth: 'min(280px, 100%)' }}>
                     <div>
                       <div style={{ color: '#888', fontSize: '12px', marginBottom: '4px', fontWeight: '700' }}>POINTS</div>
                       <div style={{ color: '#FF5500', fontSize: '24px', fontWeight: '950' }}>

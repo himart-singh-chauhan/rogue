@@ -153,6 +153,8 @@ export const formatProductImage = (url) => {
     }
     return url;
   }
+  // Files bundled with the website itself (client/public) are served by the site, not the API
+  if (url.startsWith("/images/") || url.startsWith("/assets/")) return url;
   const backendBase = API_URL.replace("/api", "");
   return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
 };

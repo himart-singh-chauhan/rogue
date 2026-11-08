@@ -1,0 +1,163 @@
+/* =====================================================================================
+   RESPONSIVE LAYER
+   Most layouts in this app are written as inline styles (fixed grid columns, pixel widths,
+   big pixel font sizes) that never adapt to small screens. Inline styles can't be reached by
+   normal media queries, so these rules match the inline style text itself and override it
+   with !important — on small screens only. Desktop (> 1024px) is not affected.
+   ===================================================================================== */
+
+/* Long words and URLs never push the page sideways */
+h1, h2, h3, h4, p, span, a, td, th, label {
+  overflow-wrap: break-word;
+}
+img, video, iframe, canvas, svg {
+  max-width: 100%;
+}
+
+/* ---------- Tablets & small laptops (≤ 1024px) ---------- */
+@media (max-width: 1024px) {
+  /* Desktop-only navbar buttons (Login / Sign Up / Profile / Logout) live in the hamburger menu */
+  .navbar .desktop-only {
+    display: none !important;
+  }
+  /* 5–6 column stat rows → 3 columns (mosaics whose cards span columns keep their own grid) */
+  [style*="repeat(6, 1fr)"]:not(:has(> [style*="grid-column: span"])),
+  [style*="repeat(5, 1fr)"]:not(:has(> [style*="grid-column: span"])) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ---------- Narrow laptops & tablets (≤ 900px) ---------- */
+@media (max-width: 900px) {
+  /* Fixed-width sidebar + content, and table-like rows with fixed pixel columns, stack */
+  [style*="grid-template-columns: 350px 1fr"], [style*="grid-template-columns: 400px 1fr"],
+  [style*="grid-template-columns: 280px 1fr"], [style*="grid-template-columns: 150px 1fr"],
+  [style*="grid-template-columns: 150px 1fr 200px"],
+  [style*="grid-template-columns: 100px 1fr 180px"], [style*="grid-template-columns: 80px 1.5fr"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* Mosaics (cards spanning several columns): two even cards per row */
+  [style*="repeat(6, 1fr)"]:has(> [style*="grid-column: span"]),
+  [style*="repeat(5, 1fr)"]:has(> [style*="grid-column: span"]),
+  [style*="repeat(4, 1fr)"]:has(> [style*="grid-column: span"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  [style*="repeat(6, 1fr)"] > [style*="grid-column: span"],
+  [style*="repeat(5, 1fr)"] > [style*="grid-column: span"],
+  [style*="repeat(4, 1fr)"] > [style*="grid-column: span"] {
+    grid-column: auto !important;
+  }
+  [style*="repeat(6, 1fr)"] > [style*="grid-column: span 6"],
+  [style*="repeat(4, 1fr)"] > [style*="grid-column: span 4"] {
+    grid-column: 1 / -1 !important; /* full-width items (e.g. "no categories" message) stay full width */
+  }
+}
+
+/* ---------- Phones & portrait tablets (≤ 768px) ---------- */
+@media (max-width: 768px) {
+  /* Fixed pixel widths shrink to the screen */
+  [style*="width: 320px"], [style*="width: 400px"], [style*="width: 480px"],
+  [style*="width: 500px"], [style*="width: 600px"], [style*="width: 768px"],
+  [style*="width: 800px"], [style*="width: 1000px"] {
+    max-width: 100% !important;
+  }
+  [style*="min-width: 300px"] {
+    min-width: 0 !important;
+  }
+
+  /* Wide data tables scroll sideways inside their own box instead of being cut off */
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Header rows (title + buttons on one line) wrap instead of squeezing off-screen */
+  [style*="justify-content: space-between"]:not(.navbar *):not(.navbar) {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  /* Sign in / Sign up: stack the photo above the form, let the page scroll */
+  .auth-page { height: auto !important; min-height: 100vh; overflow: visible !important; }
+  .auth-split { flex-direction: column !important; overflow: visible !important; }
+  .auth-hero { flex: none !important; min-height: 200px; padding: 24px 20px !important; }
+  .auth-form-side { padding: 24px 16px 48px !important; }
+
+  /* Admin panel: content may scroll sideways rather than being silently clipped */
+  .admin-shell { overflow: visible !important; }
+  .admin-shell > main { overflow-x: hidden; }
+  .admin-header { padding: 12px 16px !important; flex-wrap: wrap; gap: 12px; }
+
+  /* Rows of tab / action buttons wrap onto a second line instead of running off-screen */
+  .admin-shell [style*="display: flex"]:has(> button),
+  .admin-shell [style*="display: flex"]:has(> a > button) {
+    flex-wrap: wrap !important;
+  }
+  .admin-shell select,
+  .admin-shell input:not([type="checkbox"]):not([type="radio"]) {
+    max-width: 100%;
+  }
+
+  /* Filter rows (search box + dropdowns) wrap; inputs in a row may shrink */
+  [style*="display: flex"]:has(> select):not(.navbar *),
+  [style*="display: flex"]:has(> input):not(.navbar *) {
+    flex-wrap: wrap;
+  }
+  [style*="display: flex"] > input:not([type="checkbox"]):not([type="radio"]) {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+}
+
+/* ---------- Phones (≤ 640px) ---------- */
+@media (max-width: 640px) {
+  /* Fixed multi-column grids become a single column */
+  [style*="grid-template-columns"]:not([style*="auto-fit"]):not([style*="auto-fill"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* Mosaic cards spanning several columns/rows would create sliver columns in a 1-column grid */
+  [style*="grid-column: span"], [style*="grid-column: 1 / -1"] {
+    grid-column: auto !important;
+  }
+  [style*="grid-row: span"] {
+    grid-row: auto !important;
+  }
+  /* …except stat-tile rows, which read better as 2 columns */
+  [style*="repeat(4, 1fr)"],
+  [style*="repeat(6, 1fr)"],
+  [style*="repeat(5, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  /* auto-fit / auto-fill cards whose minimum is wider than a phone */
+  [style*="minmax(260px"], [style*="minmax(280px"], [style*="minmax(300px"],
+  [style*="minmax(320px"], [style*="minmax(340px"], [style*="minmax(350px"],
+  [style*="minmax(380px"], [style*="minmax(400px"],
+  [style*="minmax(420px"], [style*="minmax(450px"], [style*="minmax(480px"],
+  [style*="minmax(500px"], [style*="minmax(550px"], [style*="minmax(600px"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* Mosaics (cards spanning several columns) show one card per row */
+  [style*="repeat(6, 1fr)"]:has(> [style*="grid-column: span"]),
+  [style*="repeat(5, 1fr)"]:has(> [style*="grid-column: span"]),
+  [style*="repeat(4, 1fr)"]:has(> [style*="grid-column: span"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Big headings scale with the screen so long words fit (≈ 10% of screen width) */
+  [style*="font-size: 40px"], [style*="font-size: 42px"], [style*="font-size: 48px"],
+  [style*="font-size: 52px"], [style*="font-size: 56px"], [style*="font-size: 60px"],
+  [style*="font-size: 64px"], [style*="font-size: 72px"], [style*="font-size: 80px"],
+  [style*="font-size: 96px"], [style*="font-size: 100px"], [style*="font-size: 120px"] {
+    font-size: min(10vw, 40px) !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  /* Generous desktop paddings eat half the screen on phones */
+  [style*="padding: 60px"], [style*="padding: 80px"], [style*="padding: 100px"],
+  [style*="padding: 48px"], [style*="padding: 40px"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
