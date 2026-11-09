@@ -35,9 +35,9 @@ export default function MemberProfilePage() {
       }
       try {
         setLoading(true);
-        
+
         const data = await apiCall(`/auth/profile/${username}`, 'GET');
-        
+
         if (data && data.profile) {
           const userObj = data.profile;
           setProfile({
@@ -45,7 +45,7 @@ export default function MemberProfilePage() {
             display_name: userObj.name || username,
             profile_picture: userObj.profile_image ? formatProductImage(userObj.profile_image) : ('https://ui-avatars.com/api/?name=' + encodeURIComponent(userObj.name || username) + '&background=FF6A00&color=fff'),
           });
-          
+
           if (data.ranking) {
             setRanking({
               global_rank: data.ranking.global_rank || '-',
@@ -56,17 +56,18 @@ export default function MemberProfilePage() {
               first_place_categories: data.ranking.first_place_categories || 0,
               top_10_placements: data.ranking.top_10_placements || 0,
               medals_earned: data.ranking.medals_earned || 0,
-              certificates_earned: data.ranking.certificates_earned || 0
+              certificates_earned: data.ranking.certificates_earned || 0,
+              vip: data.ranking.vip || null
             });
           }
-          
+
           if (data.records) {
              setRecords(data.records);
           }
         } else {
           setProfile(null);
         }
-        
+
         setPointsHistory([]);
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -103,8 +104,8 @@ export default function MemberProfilePage() {
             We couldn't find a profile for this user. The account might have been deleted, or the link may be broken.
           </p>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center', margin: '16px' }}>
-            <button 
-              onClick={() => navigate(-1)} 
+            <button
+              onClick={() => navigate(-1)}
               style={{ background: 'rgba(255,106,0,0.1)', border: '1px solid #FF6A00', color: '#FF6A00', padding: '12px 24px', borderRadius: '8px', fontWeight: '800', textTransform: 'uppercase', cursor: 'pointer' }}>
               Back to Previous Page
             </button>
@@ -136,9 +137,9 @@ export default function MemberProfilePage() {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0c0c0e 0%, #1a1a1f 100%)', paddingBottom: '60px' }}>
       <Navbar />
       <PageNav breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Explore Records', path: '/explore-records' }, { label: profile.display_name || profile.name || username }]} />
-      
+
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px 0' }}>
-        
+
         {/* Header */}
         <div style={{ background: 'rgba(255,85,0,0.1)', border: '1px solid rgba(255,85,0,0.2)', borderRadius: '20px', padding: '40px', marginBottom: '40px', display: 'grid', gridTemplateColumns: '150px 1fr', gap: '32px', alignItems: 'start' }}>
           <div>
@@ -154,8 +155,16 @@ export default function MemberProfilePage() {
 
           <div>
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#FF5500', fontWeight: '900', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#FF5500', fontWeight: '900', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {ranking?.tier_badge}
+                {ranking?.vip?.status && (
+                  <span style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', color: '#111', padding: '3px 10px', borderRadius: '100px', fontSize: '11px', letterSpacing: '0.5px' }}>
+                    {ranking.vip.status === 'legend' ? 'VIP Legend' : ranking.vip.status === 'elite' ? 'VIP Elite' : 'VIP'}
+                  </span>
+                )}
+                {ranking?.vip?.verified && (
+                  <span style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.4)', padding: '2px 10px', borderRadius: '100px', fontSize: '11px' }}>✓ Verified</span>
+                )}
               </div>
               <h1 style={{ fontSize: '48px', fontWeight: '950', color: 'white', margin: '0 0 8px 0', letterSpacing: '-1px' }}>
                 {profile.display_name}
@@ -281,7 +290,7 @@ export default function MemberProfilePage() {
 
         {activeTab === 'demographics' && (
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
               <div>
                 <div style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>FULL NAME</div>
@@ -301,8 +310,8 @@ export default function MemberProfilePage() {
               <div>
                 <div style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>ADDRESS</div>
                 <div style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>
-                  {profile.street_address || profile.city || profile.state || profile.zip_code ? 
-                    [profile.street_address, profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ") 
+                  {profile.street_address || profile.city || profile.state || profile.zip_code ?
+                    [profile.street_address, profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
                     : (profile.country || "Not Specified")}
                 </div>
               </div>
@@ -338,12 +347,12 @@ export default function MemberProfilePage() {
 
         {activeTab === 'achievements' && (() => {
           const achievementsList = [
-            { id: 'grand_champion', icon: '👑', label: 'Grand Champion', earned: ranking?.tier_badge === 'Grand Champion', desc: 'The highest echelon of athletic excellence in the ROGUE Network. Awarded only to elite athletes exceeding 5000 verified power points. True legends of the sport.', color: '#FF5500' },
+            { id: 'grand_champion', icon: '👑', label: 'Grand Champion', earned: ranking?.tier_badge === 'Grand Champion', desc: 'The highest echelon of athletic excellence in the AMPEX Network. Awarded only to elite athletes exceeding 5000 verified power points. True legends of the sport.', color: '#FF5500' },
             { id: 'elite_master', icon: '⭐', label: 'Elite Master', earned: ['Grand Champion', 'Elite Master'].includes(ranking?.tier_badge), desc: 'A seasoned world record holder with exceptional athletic performance and over 2500 power points. Highly respected in the community.', color: '#a200ff' },
-            { id: 'pro_competitor', icon: '🏆', label: 'Pro Competitor', earned: true, desc: 'An official ROGUE Network competitor who has successfully registered their athletic profile and is actively competing on the global stage.', color: '#3b82f6' },
+            { id: 'pro_competitor', icon: '🏆', label: 'Pro Competitor', earned: true, desc: 'An official AMPEX Network competitor who has successfully registered their athletic profile and is actively competing on the global stage.', color: '#3b82f6' },
             { id: 'first_place', icon: '🥇', label: 'First Place', earned: (ranking?.first_place_categories || 0) > 0, desc: `Currently holding First Place globally in ${ranking?.first_place_categories || 0} category(s). This athlete is an absolute pioneer pushing human limits!`, color: '#FFD700' },
             { id: 'top_10', icon: '🥈', label: 'Top 10 Rank', earned: (ranking?.top_10_placements || 0) > 0, desc: `Ranked in the Global Top 10 for ${ranking?.top_10_placements || 0} category(s). A testament to elite competitive capability.`, color: '#cbd5e1' },
-            { id: 'certified', icon: '📜', label: 'ROGUE Certified', earned: (ranking?.certificates_earned || 0) > 0, desc: `Successfully earned ${ranking?.certificates_earned || 0} Official ROGUE Certificates for verified, record-breaking performances.`, color: '#4ade80' }
+            { id: 'certified', icon: '📜', label: 'AMPEX Certified', earned: (ranking?.certificates_earned || 0) > 0, desc: `Successfully earned ${ranking?.certificates_earned || 0} Official AMPEX Certificates for verified, record-breaking performances.`, color: '#4ade80' }
           ];
 
           return (
@@ -473,14 +482,14 @@ export default function MemberProfilePage() {
                   const videoUrl = record.evidence_url || record.video_url || record.videoUrl;
                   const isYouTube = videoUrl.includes('youtube') || videoUrl.includes('youtu.be');
                   let embedUrl = videoUrl;
-                  
+
                   if (isYouTube) {
-                    const youtubeId = videoUrl.includes('youtube.com/watch?v=') 
-                      ? videoUrl.split('v=')[1]?.split('&')[0] 
+                    const youtubeId = videoUrl.includes('youtube.com/watch?v=')
+                      ? videoUrl.split('v=')[1]?.split('&')[0]
                       : videoUrl.split('youtu.be/')[1]?.split('?')[0];
                     embedUrl = `https://www.youtube.com/embed/${youtubeId}?autoplay=0`;
                   }
-                  
+
                   return (
                     <div key={record.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', overflow: 'hidden' }}>
                       <div style={{ width: '100%', position: 'relative', paddingTop: '56.25%', background: '#000', cursor: 'pointer' }} onClick={() => navigate(`/record/${record.id}`)}>
@@ -520,7 +529,7 @@ export default function MemberProfilePage() {
           </div>
         )}
       </div>
-      
+
       {/* Achievement Popup Modal */}
       {selectedAchievement && (
         <div style={{
@@ -547,7 +556,7 @@ export default function MemberProfilePage() {
             position: 'relative',
             animation: 'slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
           }} onClick={e => e.stopPropagation()}>
-            <button 
+            <button
               onClick={() => setSelectedAchievement(null)}
               style={{
                 position: 'absolute',
@@ -570,32 +579,32 @@ export default function MemberProfilePage() {
             >
               <X size={16} />
             </button>
-            
-            <div style={{ 
-              fontSize: '80px', 
-              marginBottom: '20px', 
+
+            <div style={{
+              fontSize: '80px',
+              marginBottom: '20px',
               filter: `drop-shadow(0 0 30px ${selectedAchievement.color})`,
               animation: 'pulse 2s infinite ease-in-out'
             }}>
               {selectedAchievement.icon}
             </div>
-            
+
             <div style={{ color: selectedAchievement.color, fontSize: '12px', fontWeight: '900', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>
               ACHIEVEMENT UNLOCKED
             </div>
-            
+
             <h2 style={{ color: 'white', fontSize: '32px', fontWeight: '950', margin: '0 0 16px 0', letterSpacing: '-1px' }}>
               {selectedAchievement.label}
             </h2>
-            
+
             <div style={{ height: '2px', width: '40px', background: selectedAchievement.color, margin: '0 auto 20px auto', borderRadius: '2px' }} />
-            
+
             <p style={{ color: '#aaa', fontSize: '15px', lineHeight: '1.6', margin: 0 }}>
               {selectedAchievement.desc}
             </p>
-            
+
             <div style={{ marginTop: '30px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', fontSize: '12px', color: '#666', border: '1px solid rgba(255,255,255,0.05)' }}>
-              Acquired by <span style={{ color: '#fff', fontWeight: 'bold' }}>{profile.display_name}</span> • ROGUE Network
+              Acquired by <span style={{ color: '#fff', fontWeight: 'bold' }}>{profile.display_name}</span> • AMPEX Network
             </div>
           </div>
         </div>

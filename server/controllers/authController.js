@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase');
 const { accountBlockReason } = require('../middleware/authMiddleware');
+const { tierFor } = require('../utils/rankings');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -376,45 +377,73 @@ const getPublicUserProfile = async (req, res) => {
     const verifiedRecords = userRecords ? userRecords.filter((r) => r.status === 'verified') : [];
     const verifiedCount = verifiedRecords.length;
 
-    // Prefer the real ranking row; fall back to the legacy dynamic metric.
-    const { data: rankingRow } = await supabase
-      .from('user_rankings')
-      .select('total_points, global_rank, tier_badge, world_records_count')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Ranking stats, computed from live data so a new athlete's profile is never blank.
+    const [{ data: rankingRow }, { data: allVerified }, { count: issuedCerts }] = await Promise.all([
+      supabase.from('user_rankings').select('total_points, tier_badge').eq('user_id', user.id).maybeSingle(),
+      supabase.from('records').select('user_id, category').eq('status', 'verified'),
+      supabase.from('certificate_issuances').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'issued'),
+    ]);
 
-    let globalRank = rankingRow?.global_rank || 0;
-    const totalPoints = rankingRow?.total_points ?? verifiedCount * 5000;
+    const totalPoints = rankingRow?.total_points ?? 0;
 
-    if (!rankingRow && verifiedCount > 0) {
-      const { data: allVerifiedRecords } = await supabase
-        .from('records')
-        .select('user_id')
-        .eq('status', 'verified');
-      const userCounts = {};
-      (allVerifiedRecords || []).forEach((r) => {
-        userCounts[r.user_id] = (userCounts[r.user_id] || 0) + 1;
-      });
-      globalRank = Object.values(userCounts).filter((c) => c > verifiedCount).length + 1;
+    // Global rank: 1 + athletes with more points (falls back to verified-record count when nobody has points yet)
+    let globalRank = 0;
+    if (rankingRow) {
+      const { count: ahead } = await supabase
+        .from('user_rankings')
+        .select('id', { count: 'exact', head: true })
+        .gt('total_points', totalPoints);
+      globalRank = (ahead || 0) + 1;
+    } else if (verifiedCount > 0) {
+      const perUser = {};
+      (allVerified || []).forEach((r) => { perUser[r.user_id] = (perUser[r.user_id] || 0) + 1; });
+      globalRank = Object.values(perUser).filter((c) => c > verifiedCount).length + 1;
+    }
+
+    // Category placements: rank athletes inside each category by verified records
+    const byCategory = {};
+    (allVerified || []).forEach((r) => {
+      const cat = (r.category || 'Uncategorized').trim();
+      byCategory[cat] = byCategory[cat] || {};
+      byCategory[cat][r.user_id] = (byCategory[cat][r.user_id] || 0) + 1;
+    });
+    let firstPlace = 0;
+    let top10 = 0;
+    const categoryRanks = [];
+    for (const [cat, counts] of Object.entries(byCategory)) {
+      const mine = counts[user.id];
+      if (!mine) continue;
+      const rank = Object.values(counts).filter((c) => c > mine).length + 1; // ties share the place
+      categoryRanks.push({ category: cat, rank, records: mine });
+      if (rank === 1) firstPlace++;
+      if (rank <= 10) top10++;
     }
 
     const ranking = {
       global_rank: globalRank,
       total_points: totalPoints,
       verified_records_count: verifiedCount,
-      world_records_count: rankingRow?.world_records_count ?? (userRecords ? userRecords.filter((r) => r.record_type === 'world_record').length : 0),
-      tier_badge: rankingRow?.tier_badge || 'Challenger',
-      first_place_categories: globalRank === 1 ? 1 : 0,
-      top_10_placements: globalRank > 0 && globalRank <= 10 ? 1 : 0,
-      medals_earned: verifiedCount > 0 ? 1 : 0,
-      certificates_earned: verifiedCount,
+      world_records_count: verifiedCount, // every verified record is an official world record
+      tier_badge: rankingRow?.tier_badge || tierFor(totalPoints),
+      first_place_categories: firstPlace,
+      top_10_placements: top10,
+      category_ranks: categoryRanks.sort((a, b) => a.rank - b.rank),
+      medals_earned: firstPlace,
+      certificates_earned: issuedCerts || 0,
     };
 
-    if (!rankingRow) {
-      if (ranking.total_points > 5000) ranking.tier_badge = 'Grand Champion';
-      else if (ranking.total_points > 2500) ranking.tier_badge = 'Elite Master';
-      else if (ranking.total_points > 1000) ranking.tier_badge = 'Pro Competitor';
+    // VIP badge: granted by an admin (VIP Competitors tab) or included in the member's plan (VIP profile)
+    const [{ data: vipRow }, { data: activeMem }] = await Promise.all([
+      supabase.from('vip_competitors').select('vip_status, is_verified').eq('user_id', user.id).maybeSingle(),
+      supabase.from('memberships').select('tier').eq('user_id', user.id).eq('status', 'active').maybeSingle(),
+    ]);
+    let planVip = false;
+    if (activeMem?.tier) {
+      const { data: plan } = await supabase.from('membership_plans').select('vip_profile').eq('slug', activeMem.tier).maybeSingle();
+      planVip = !!plan?.vip_profile;
     }
+    const granted = vipRow?.vip_status && vipRow.vip_status !== 'none' ? vipRow.vip_status : null;
+    ranking.vip = { status: granted || (planVip ? 'member' : null), verified: !!vipRow?.is_verified };
 
     return res.json({ profile: user, ranking, records: userRecords || [] });
   } catch (err) {

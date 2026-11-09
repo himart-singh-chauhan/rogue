@@ -6,14 +6,14 @@ import {
 } from "lucide-react";
 
 const MOCK_MESSAGES = [
-  { id: "m-001", to: "all", toLabel: "All Users (1,247)", subject: "Welcome to Rogue World Records!", body: "We are thrilled to have you as part of our growing community...", sentAt: "2026-05-25T10:00:00Z", status: "sent", type: "announcement" },
+  { id: "m-001", to: "all", toLabel: "All Users (1,247)", subject: "Welcome to AMPEX World Records!", body: "We are thrilled to have you as part of our growing community...", sentAt: "2026-05-25T10:00:00Z", status: "sent", type: "announcement" },
   { id: "m-002", to: "user:james.park@email.com", toLabel: "James Park", subject: "Your submission is under review", body: "Your record attempt for Most Juggling Objects has been received...", sentAt: "2026-05-27T14:30:00Z", status: "sent", type: "reminder" },
   { id: "m-003", to: "membership:gold", toLabel: "Gold Members (84)", subject: "Exclusive Gold Event Invitation", body: "As a Gold member, you have exclusive access to our upcoming...", sentAt: "2026-05-28T09:00:00Z", status: "sent", type: "event" },
   { id: "m-004", to: "all", toLabel: "All Users", subject: "Maintenance Notice — 2AM UTC", body: "The platform will be down for scheduled maintenance...", sentAt: null, status: "draft", type: "maintenance" },
 ];
 
 const MOCK_EMAIL_TEMPLATES = [
-  { id: "et-001", name: "Registration Confirmation", trigger: "on_register", subject: "Welcome to Rogue World Records!", active: true, lastEdited: "2026-05-10" },
+  { id: "et-001", name: "Registration Confirmation", trigger: "on_register", subject: "Welcome to AMPEX World Records!", active: true, lastEdited: "2026-05-10" },
   { id: "et-002", name: "Submission Received", trigger: "on_submit", subject: "Your record submission has been received", active: true, lastEdited: "2026-05-12" },
   { id: "et-003", name: "Submission Approved", trigger: "on_approve", subject: "Congratulations! Your record is VERIFIED 🏆", active: true, lastEdited: "2026-05-15" },
   { id: "et-004", name: "Submission Denied", trigger: "on_deny", subject: "Your submission requires attention", active: true, lastEdited: "2026-05-15" },

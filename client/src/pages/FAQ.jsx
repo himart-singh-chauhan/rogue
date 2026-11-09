@@ -23,7 +23,7 @@ const FAQ = () => {
   const [openIndex, setOpenIndex] = useState(0);
 
   const faqs = [
-    { question: "1. What is Rogue World Records?", answer: "Rogue World Records is a global platform where individuals can attempt, submit, verify, and compete in world record challenges across multiple categories." },
+    { question: "1. What is AMPEX World Records?", answer: "AMPEX World Records is a global platform where individuals can attempt, submit, verify, and compete in world record challenges across multiple categories." },
     { question: "2. Who can apply for a world record?", answer: "Anyone can apply, regardless of age, nationality, or experience level, as long as they follow the official rules and safety guidelines." },
     { question: "3. Do I need to become a member to submit a record?", answer: "Basic submissions may be available to everyone, but certain premium competitions, prize events, and advanced features may require an active membership." },
     { question: "4. What types of records can I attempt?", answer: "You can attempt records in categories such as: Strength, Endurance, Gaming, Athletics, Balance, Skills, Mind & Memory, Entertainment, Action Sports, and Creative Challenges." },
@@ -32,7 +32,7 @@ const FAQ = () => {
     { question: "7. What evidence is required for verification?", answer: "Depending on the challenge, evidence may include: Video recordings, Photos, Witness statements, Official measurements, Timer verification, and Judge approval." },
     { question: "8. How long does verification take?", answer: "Verification times vary based on the complexity of the record and the amount of evidence submitted." },
     { question: "9. Can I compete against an existing record holder?", answer: "Yes. Many records can be directly challenged if you believe you can beat the current record." },
-    { question: "10. Are live events available?", answer: "Yes. Rogue World Records plans to host live competitions, tournaments, and public challenge events." },
+    { question: "10. Are live events available?", answer: "Yes. AMPEX World Records plans to host live competitions, tournaments, and public challenge events." },
     { question: "11. Can children compete?", answer: "Yes. Youth competitors may participate in age-appropriate categories with parental or guardian permission." },
     { question: "12. What age groups are available?", answer: "Common age divisions may include: Under 13, Teen Division, Adult Division, Senior Division. Some categories may also be open to all ages." },
     { question: "13. Are there cash prizes?", answer: "Certain competitions, sponsored events, and special tournaments may include prize money, trophies, certificates, or rewards." },
@@ -42,7 +42,7 @@ const FAQ = () => {
     { question: "17. Can I upload my attempt from my phone?", answer: "Yes. Most submissions can be uploaded directly from mobile devices, tablets, or computers." },
     { question: "18. Are dangerous or unsafe records allowed?", answer: "No. Safety is a priority. Dangerous, illegal, or reckless challenges may be denied or removed." },
     { question: "19. Can I appeal a verification decision?", answer: "Yes. Users may request a review or appeal if they believe a decision was made incorrectly." },
-    { question: "20. How do I contact support?", answer: "You can contact the Rogue World Records support team through the Contact Us page or by emailing the appropriate department for assistance." }
+    { question: "20. How do I contact support?", answer: "You can contact the AMPEX World Records support team through the Contact Us page or by emailing the appropriate department for assistance." }
   ];
 
   return (
@@ -58,7 +58,7 @@ const FAQ = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", maxWidth: "1200px", margin: "0 auto 80px" }}>
           <div>
             <h3 style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", fontWeight: "900", letterSpacing: "0.2em", marginBottom: "12px", textTransform: "uppercase" }}>SUPPORT CENTER</h3>
-            <h1 style={{ fontSize: "72px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", lineHeight: "0.9" }}>FAQ | ROGUE WORLD <br /> RECORDS</h1>
+            <h1 style={{ fontSize: "72px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", lineHeight: "0.9" }}>FAQ | AMPEX WORLD <br /> RECORDS</h1>
           </div>
           <Link to="/verify" style={{ textDecoration: "none" }}>
             <button style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "14px 32px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}>

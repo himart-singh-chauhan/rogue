@@ -117,6 +117,8 @@ const updateChallenge = async (req, res) => {
       updateData.thumbnail_url = req.files.thumbnailImage[0].url || `${baseUrl}/uploads/thumbnails/${req.files.thumbnailImage[0].filename}`;
     } else if (req.body.thumbnailUrl) {
       updateData.thumbnail_url = req.body.thumbnailUrl;
+    } else if (req.body.removeThumbnail === 'true' || req.body.removeThumbnail === true) {
+      updateData.thumbnail_url = null;
     }
 
     const { data: updatedChallenge, error } = await supabase

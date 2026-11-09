@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
-const { awardPoints, pointsForVerifiedRecord } = require('../utils/rankings');
+const { syncRecordAward } = require('../utils/rankings');
+const { tierConfigFor, endDateFor } = require('./membershipController');
 const { thumbnailFor } = require('../utils/youtubeIntegration');
 
 // ==========================================
@@ -328,24 +329,30 @@ const getAllProductsByAdmin = async (req, res) => {
   }
 };
 
+// Championship belts always need an admin's approval per competitor before they can be bought.
+const APPROVAL_CATEGORIES = ['championship belts'];
+const needsApproval = (category, flag) =>
+  APPROVAL_CATEGORIES.includes(String(category || '').trim().toLowerCase()) || flag === true || flag === 'true';
+
 // @desc    Create a shop product
 // @route   POST /api/admin/products
 // @access  Private/Admin
 const createProductByAdmin = async (req, res) => {
-  const { name, description, price, imageUrl, category, stockCount, sizes, imageUrls } = req.body;
+  const { name, description, price, imageUrl, category, stockCount, sizes, imageUrls, requiresAuthorization } = req.body;
   try {
     const { data: createdProduct, error } = await supabase
       .from('products')
       .insert([
         {
           name,
-          description,
+          description: description || '',
           price: parseFloat(price) || 0.00,
           image_url: imageUrl,
           category,
           stock_count: parseInt(stockCount) || 0,
           sizes: sizes || [],
-          image_urls: imageUrls || []
+          image_urls: imageUrls || [],
+          requires_authorization: needsApproval(category, requiresAuthorization)
         }
       ])
       .select()
@@ -362,7 +369,7 @@ const createProductByAdmin = async (req, res) => {
 // @route   PUT /api/admin/products/:id
 // @access  Private/Admin
 const updateProductByAdmin = async (req, res) => {
-  const { name, description, price, imageUrl, category, stockCount, sizes, imageUrls } = req.body;
+  const { name, description, price, imageUrl, category, stockCount, sizes, imageUrls, requiresAuthorization } = req.body;
   try {
     const { data: updatedProduct, error } = await supabase
       .from('products')
@@ -375,6 +382,7 @@ const updateProductByAdmin = async (req, res) => {
         stock_count: parseInt(stockCount) || 0,
         sizes: sizes || [],
         image_urls: imageUrls || [],
+        requires_authorization: needsApproval(category, requiresAuthorization),
         updated_at: new Date()
       })
       .eq('id', req.params.id)
@@ -605,7 +613,7 @@ const getPaymentsLedger = async (req, res) => {
           customerEmail: userObj.email || '',
           paymentType: 'membership',
           amount: parseFloat(m.price) || 0.00,
-          status: m.status === 'active' ? 'paid' : m.status === 'cancelled' ? 'refunded' : 'failed',
+          status: m.status === 'active' ? 'paid' : m.status === 'pending' ? 'pending' : m.status === 'cancelled' ? 'refunded' : 'failed',
           referenceId: m.id,
           createdAt: m.created_at
         });
@@ -824,6 +832,23 @@ const updatePaymentStatus = async (req, res) => {
         updates.status = 'cancelled';
       } else if (status === 'paid') {
         updates.status = 'active';
+        if (membership.status !== 'active') {
+          // a paid upgrade request replaces the user's current plan (one active plan per user)
+          await supabase
+            .from('memberships')
+            .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Replaced by a new plan', updated_at: new Date() })
+            .eq('user_id', membership.user_id)
+            .eq('status', 'active')
+            .neq('id', membership.id);
+          updates.start_date = new Date().toISOString();
+          // same expiry and limits as Activate in Memberships → Upgrade requests
+          const cfg = await tierConfigFor(membership.tier);
+          if (cfg) {
+            updates.end_date = endDateFor(membership.tier, cfg);
+            updates.submission_limit = cfg.submissionLimit;
+            updates.features = cfg.features;
+          }
+        }
       }
 
       const { data, error } = await supabase
@@ -1133,6 +1158,7 @@ const approveFinalDecision = async (req, res) => {
       .update({
         status: record.judge_decision,
         verification_status: record.judge_decision === 'verified' ? 'approved' : 'denied',
+        verified_at: record.judge_decision === 'verified' ? (record.verified_at || new Date()) : null,
         updated_at: new Date()
       })
       .eq('id', req.params.id)
@@ -1141,20 +1167,10 @@ const approveFinalDecision = async (req, res) => {
 
     if (updateError) throw updateError;
 
-    if (record.judge_decision === 'verified' && record.status !== 'verified' && updatedRecord.user_id) {
-      try {
-        await awardPoints({
-          userId: updatedRecord.user_id,
-          points: await pointsForVerifiedRecord(updatedRecord),
-          source: 'record_verified',
-          referenceId: updatedRecord.id,
-          reason: `Record verified: ${updatedRecord.title}`,
-          adminId: req.user.id,
-          counters: { verified_records_count: 1, world_records_count: updatedRecord.record_type === 'world_record' ? 1 : 0 },
-        });
-      } catch (pointsErr) {
-        console.warn('[Rankings Warning] Could not award points:', pointsErr.message);
-      }
+    try {
+      await syncRecordAward(updatedRecord, { verified: record.judge_decision === 'verified', adminId: req.user.id });
+    } catch (pointsErr) {
+      console.warn('[Rankings Warning] Could not update points:', pointsErr.message);
     }
 
     const { data: meta } = await supabase

@@ -497,10 +497,10 @@ const RecordDetail = () => {
             <div style={{ background: "linear-gradient(135deg, #FF6A00, #FF3D00)", borderRadius: "32px", padding: "40px", color: "white" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
                 <ShieldCheck size={32} />
-                <h3 style={{ fontSize: "20px", fontWeight: "950", textTransform: "uppercase" }}>ROGUE VERIFIED</h3>
+                <h3 style={{ fontSize: "20px", fontWeight: "950", textTransform: "uppercase" }}>AMPEX VERIFIED</h3>
               </div>
               <p style={{ fontSize: "14px", fontWeight: "600", lineHeight: "1.6", opacity: 0.9, marginBottom: "32px" }}>
-                This record has passed the Rogue World Records multi-stage verification protocol, including AI biometric analysis and environment validation.
+                This record has passed the AMPEX World Records multi-stage verification protocol, including AI biometric analysis and environment validation.
               </p>
               <div style={{ background: "rgba(0,0,0,0.1)", borderRadius: "16px", padding: "20px" }}>
                 <div style={{ fontSize: "11px", fontWeight: "900", opacity: 0.7, marginBottom: "12px" }}>VERIFICATION ID</div>
@@ -541,7 +541,7 @@ const RecordDetail = () => {
               <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.6)", lineHeight: "1.6", marginBottom: "28px" }}>
                 Think you have what it takes to break this world record? Submit your attempt and enter the global hall of fame.
               </p>
-              <Link to={`/challenge-verify?record=${encodeURIComponent(record.title)}`} style={{ textDecoration: "none", width: "100%" }}>
+              <Link to={`/challenge-verify?recordId=${encodeURIComponent(record.id)}&record=${encodeURIComponent(record.title)}`} style={{ textDecoration: "none", width: "100%" }}>
                 <button style={{ 
                   background: "#FF6A00", 
                   color: "white", 

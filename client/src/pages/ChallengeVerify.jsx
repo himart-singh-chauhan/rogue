@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -33,7 +33,7 @@ import {
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { API_URL, apiCall, uploadDirect } from "../utils/api";
+import { API_URL, apiCall, uploadDirect, formatProductImage } from "../utils/api";
 
 // Supabase free plan: 50 MB per file. Bigger footage should be submitted as a YouTube / Vimeo link.
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -111,6 +111,9 @@ const ChallengeVerify = () => {
   const videoInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
+  // The record being challenged (?recordId=...): its own media, holder and score are shown on every step
+  const [challengedRecord, setChallengedRecord] = useState(null);
+
   useEffect(() => {
     const recordParam = searchParams.get("record");
     if (recordParam) {
@@ -119,7 +122,53 @@ const ChallengeVerify = () => {
         event: recordParam
       }));
     }
-  }, [searchParams]);
+    const recordId = searchParams.get("recordId");
+    if (!recordId) return undefined;
+    let cancelled = false;
+    apiCall(`/records/${encodeURIComponent(recordId)}`, "GET", null, user?.token)
+      .then((rec) => {
+        if (cancelled || !rec) return;
+        setChallengedRecord(rec);
+        setFormData(prev => ({
+          ...prev,
+          event: rec.title || prev.event,
+          category: rec.category ? String(rec.category).toUpperCase() : prev.category,
+          unit: rec.unit || prev.unit,
+          value: ""
+        }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [searchParams, user?.token]);
+
+  // Local previews of what the athlete uploaded (shown instead of stock photos)
+  const uploadPreview = useMemo(() => ({
+    image: uploadedFiles.images[0] ? URL.createObjectURL(uploadedFiles.images[0]) : null,
+    video: uploadedFiles.video ? URL.createObjectURL(uploadedFiles.video) : null,
+  }), [uploadedFiles]);
+  useEffect(() => () => {
+    if (uploadPreview.image) URL.revokeObjectURL(uploadPreview.image);
+    if (uploadPreview.video) URL.revokeObjectURL(uploadPreview.video);
+  }, [uploadPreview]);
+
+  const recordImage = challengedRecord?.thumbnail_url
+    ? formatProductImage(challengedRecord.thumbnail_url)
+    : (challengedRecord?.evidence_url && /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(challengedRecord.evidence_url) ? formatProductImage(challengedRecord.evidence_url) : null);
+  const heroImage = uploadPreview.image || recordImage;
+  const challengedScore = challengedRecord
+    ? (challengedRecord.value !== null && challengedRecord.value !== undefined && challengedRecord.value !== "" ? `${challengedRecord.value}${challengedRecord.unit ? ` ${challengedRecord.unit}` : ""}` : "Pending verification")
+    : null;
+
+  // Image (or empty dark panel) used where stock gym photos used to be
+  const renderMedia = ({ opacity = 1, preferVideo = false } = {}) => {
+    if (preferVideo && uploadPreview.video) {
+      return <video src={uploadPreview.video} muted playsInline loop autoPlay style={{ width: "100%", height: "100%", objectFit: "cover", opacity }} />;
+    }
+    if (heroImage) {
+      return <img loading="lazy" decoding="async" src={heroImage} alt={challengedRecord?.title || "Your upload"} style={{ width: "100%", height: "100%", objectFit: "cover", opacity }} />;
+    }
+    return <div style={{ width: "100%", height: "100%", background: "radial-gradient(circle at 30% 30%, rgba(255,106,0,0.18), #0d0d0d 70%)" }} />;
+  };
 
   const handleVideoUpload = (e) => {
     const file = e.target.files[0];
@@ -486,6 +535,31 @@ const ChallengeVerify = () => {
           </div>
 
           <div style={{ maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
+            {challengedRecord && !isSubmitted && (
+              <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap", background: "rgba(255,106,0,0.06)", border: "1px solid rgba(255,106,0,0.25)", borderRadius: "20px", padding: "14px", marginBottom: "36px" }}>
+                <div style={{ width: "96px", height: "72px", borderRadius: "12px", overflow: "hidden", background: "#111", flexShrink: 0 }}>
+                  {recordImage ? (
+                    <img src={recordImage} alt={challengedRecord.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : challengedRecord.video_url && challengedRecord.video_type !== "youtube" && !/youtu\.?be|vimeo/i.test(challengedRecord.video_url) ? (
+                    <video src={challengedRecord.video_url} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Trophy size={28} color="#FF6A00" /></div>
+                  )}
+                </div>
+                <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                  <div style={{ fontSize: "10px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px" }}>You are challenging</div>
+                  <div style={{ fontSize: "18px", fontWeight: "900", color: "white", lineHeight: 1.2, overflowWrap: "anywhere" }}>{challengedRecord.title}</div>
+                  <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "4px" }}>
+                    Held by <strong style={{ color: "white" }}>{challengedRecord.user?.name || "AMPEX athlete"}</strong>
+                    {challengedRecord.category ? ` · ${challengedRecord.category}` : ""}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flex: "0 0 auto" }}>
+                  <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Score to beat</div>
+                  <div style={{ fontSize: "22px", fontWeight: "950", color: "#FF6A00" }}>{challengedScore}</div>
+                </div>
+              </div>
+            )}
             <AnimatePresence mode="wait">
               {isSubmitted ? (
                 <motion.div
@@ -674,7 +748,7 @@ const ChallengeVerify = () => {
                       <div style={{ display: "grid", gridTemplateColumns: "0.8fr 1.2fr", gap: "40px" }}>
                         <div>
                           <div style={{ width: "100%", height: "450px", borderRadius: "24px", overflow: "hidden", marginBottom: "24px" }}>
-                            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80" alt="Venue" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            {renderMedia()}
                           </div>
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -1004,7 +1078,7 @@ const ChallengeVerify = () => {
                             accept="video/mp4,video/webm,video/quicktime"
                             onChange={handleVideoUpload}
                           />
-                          <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
+                          <div style={{ position: "absolute", inset: 0 }}>{renderMedia({ opacity: 0.3, preferVideo: true })}</div>
                           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px", textAlign: "center" }}>
                             <div style={{ width: "90px", height: "90px", background: "#FF6A00", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px", boxShadow: "0 15px 30px rgba(255,106,0,0.3)" }}>
                               <Video size={40} color="white" />
@@ -1131,7 +1205,7 @@ const ChallengeVerify = () => {
                           auditOutcome === "failed" ? "rgba(255, 77, 77, 0.3)" :
                           auditOutcome === "incomplete" ? "rgba(255, 204, 0, 0.3)" : "rgba(255, 106, 0, 0.3)"
                         }`, background: "#000" }}>
-                          <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
+                          {renderMedia({ opacity: 0.5, preferVideo: true })}
                           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.6))" }}></div>
 
                           {/* HUD TOP LEFT */}
@@ -1332,7 +1406,7 @@ const ChallengeVerify = () => {
                       <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "32px", padding: "40px" }}>
                         <h4 style={{ fontSize: "20px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>AUTHENTICITY PROTOCOL_v4.2</h4>
                         <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "32px", maxWidth: "800px" }}>
-                          Our AI Vision Analysis scrutinizes 420 unique joint positions per second. By comparing your movement signature against the global standard for this record, we ensure the absolute integrity of the ROGUE ecosystem.
+                          Our AI Vision Analysis scrutinizes 420 unique joint positions per second. By comparing your movement signature against the global standard for this record, we ensure the absolute integrity of the AMPEX ecosystem.
                         </p>
                         <div style={{ display: "flex", gap: "48px" }}>
                            <div>
@@ -1406,7 +1480,7 @@ const ChallengeVerify = () => {
 
                             <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "24px", padding: "24px", display: "flex", alignItems: "center", gap: "20px", border: "1px solid rgba(255,255,255,0.05)" }}>
                               <div style={{ width: "64px", height: "64px", borderRadius: "12px", background: "#111", overflow: "hidden" }}>
-                                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
+                                {renderMedia({ opacity: 0.8, preferVideo: true })}
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: "13px", fontWeight: "900", marginBottom: "4px" }}>
@@ -1431,7 +1505,7 @@ const ChallengeVerify = () => {
                             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                               {[
                                 "Biometric signature confirmed via heart rate strap log.",
-                                "Location data matches Rogue Certified Facility #422.",
+                                "Location data matches AMPEX Certified Facility #422.",
                                 "Equipment calibration certificate uploaded."
                               ].map((text, i) => (
                                 <div key={i} style={{ display: "flex", gap: "12px", fontSize: "12px", color: "rgba(255,255,255,0.6)", lineHeight: "1.4" }}>
@@ -1454,7 +1528,7 @@ const ChallengeVerify = () => {
                       <div style={{ textAlign: "center", marginBottom: "80px" }}>
                         <div style={{ color: "white", fontSize: "24px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "40px" }}>POST-SUBMISSION PREVIEW</div>
                         <div style={{
-                          backgroundImage: "linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80')",
+                          backgroundImage: heroImage ? `linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('${heroImage}')` : "linear-gradient(135deg, rgba(255,106,0,0.12), #0d0d0d)",
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                           borderRadius: "40px",
@@ -1476,7 +1550,7 @@ const ChallengeVerify = () => {
                             YOUR NAME IN STONE.
                           </div>
                           <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "16px", maxWidth: "600px", margin: "0 auto", lineHeight: "1.6" }}>
-                            Once submitted, your record will be etched into the Rogue Global Ledger, visible to every athlete across the world.
+                            Once submitted, your record will be etched into the AMPEX Global Ledger, visible to every athlete across the world.
                           </p>
                         </div>
                       </div>
@@ -1485,7 +1559,7 @@ const ChallengeVerify = () => {
                       <div style={{ textAlign: "center", maxWidth: "800px", margin: "0 auto" }}>
                         <div style={{ fontSize: "11px", fontWeight: "900", color: "#FF6A00", textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: "16px" }}>LEGAL DISCLAIMER</div>
                         <p style={{ fontSize: "12px", color: "white", lineHeight: "1.6", marginBottom: "48px" }}>
-                          By hitting 'Submit to Global Ledger', you certify that all performance data, video evidence, and biometric logs are 100% authentic and unmanipulated. Any attempt to falsify record data will result in immediate permanent disqualification and revocation of Elite Membership. The Rogue World Records committee reserves the right to request a live re-verification of any performance.
+                          By hitting 'Submit to Global Ledger', you certify that all performance data, video evidence, and biometric logs are 100% authentic and unmanipulated. Any attempt to falsify record data will result in immediate permanent disqualification and revocation of Elite Membership. The AMPEX World Records committee reserves the right to request a live re-verification of any performance.
                         </p>
 
                         {validationError && (

@@ -1,35 +1,28 @@
 const supabase = require('../config/supabase');
 
-// Membership tier configurations
-const TIER_CONFIG = {
-  free: {
-    name: 'Free',
-    price: 0,
-    renewalPrice: 0,
-    submissionLimit: 3,
-    features: ['3 submissions/month', 'Basic profile', 'Community access']
-  },
-  bronze: {
-    name: 'Bronze',
-    price: 9.99,
-    renewalPrice: 9.99,
-    submissionLimit: 10,
-    features: ['10 submissions/month', 'Priority review', 'Profile badge', 'Analytics']
-  },
-  silver: {
-    name: 'Silver',
-    price: 19.99,
-    renewalPrice: 19.99,
-    submissionLimit: 30,
-    features: ['30 submissions/month', 'Premium support', 'Advanced analytics', 'Custom badge']
-  },
-  gold: {
-    name: 'Gold',
-    price: 49.99,
-    renewalPrice: 49.99,
-    submissionLimit: 100,
-    features: ['Unlimited submissions', '24/7 support', 'Full analytics', 'Featured profile', 'API access']
-  }
+// Membership plans come from the membership_plans table (editable in Admin → Memberships → Plans).
+const { getPlanBySlug, formatPlan } = require('./planController');
+const { evaluateCoupon } = require('./couponController');
+
+// Adapter: plan row -> the shape the membership code expects
+const tierConfigFor = async (slug) => {
+  const plan = await getPlanBySlug(slug);
+  if (!plan) return null;
+  return {
+    name: plan.name,
+    price: plan.price,
+    renewalPrice: plan.billingInterval === 'one_time' ? 0 : plan.price,
+    submissionLimit: plan.submissionLimit, // null = unlimited
+    features: plan.features,
+    billingInterval: plan.billingInterval,
+  };
+};
+
+// When a membership period ends: free and one-time (lifetime) plans never expire.
+const endDateFor = (slug, cfg) => {
+  if (!cfg || slug === 'free' || cfg.billingInterval === 'one_time' || cfg.price === 0) return null;
+  const days = cfg.billingInterval === 'year' ? 365 : 30;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 };
 
 const getFormattedMembership = (m) => {
@@ -67,7 +60,15 @@ const getFormattedMembership = (m) => {
 
 const getTierConfigs = async (req, res) => {
   try {
-    res.json(TIER_CONFIG);
+    const supabase2 = supabase;
+    const { data } = await supabase2.from('membership_plans').select('*').eq('active', true).order('sort_order');
+    // keyed by slug, like the old TIER_CONFIG response
+    const out = {};
+    (data || []).forEach((p) => {
+      const f = formatPlan(p);
+      out[f.slug] = { name: f.name, price: f.price, renewalPrice: f.price, submissionLimit: f.submissionLimit, features: f.features, billingInterval: f.billingInterval };
+    });
+    res.json(out);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching tier configs', error: error.message });
   }
@@ -150,7 +151,7 @@ const getUserMembership = async (req, res) => {
 
       return res.json({
         tier: 'free',
-        ...TIER_CONFIG.free,
+        ...((await tierConfigFor('free')) || {}),
         user: user ? {
           _id: user.id,
           id: user.id,
@@ -172,8 +173,9 @@ const createMembership = async (req, res) => {
   const { userId, tier, autoRenew = false, paymentAmount = 0, applicationData = null } = req.body;
 
   try {
-    if (!['free', 'bronze', 'silver', 'gold'].includes(tier)) {
-      return res.status(400).json({ message: 'Invalid membership tier' });
+    const tierConfig = await tierConfigFor(tier);
+    if (!tierConfig) {
+      return res.status(400).json({ message: 'Invalid membership plan' });
     }
 
     // Check if user exists
@@ -198,8 +200,7 @@ const createMembership = async (req, res) => {
       .eq('user_id', userId)
       .eq('status', 'active');
 
-    const tierConfig = TIER_CONFIG[tier];
-    const endDate = tier === 'free' ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const endDate = endDateFor(tier, tierConfig);
 
     const newPaymentHistory = paymentAmount > 0 ? [{
       date: new Date().toISOString(),
@@ -259,10 +260,10 @@ const updateMembership = async (req, res) => {
     };
 
     if (tier && tier !== existingMembership.tier) {
-      if (!['free', 'bronze', 'silver', 'gold'].includes(tier)) {
-        return res.status(400).json({ message: 'Invalid membership tier' });
+      const tierConfig = await tierConfigFor(tier);
+      if (!tierConfig) {
+        return res.status(400).json({ message: 'Invalid membership plan' });
       }
-      const tierConfig = TIER_CONFIG[tier];
       updates.tier = tier;
       updates.submission_limit = tierConfig.submissionLimit;
       updates.features = tierConfig.features;
@@ -275,6 +276,15 @@ const updateMembership = async (req, res) => {
     if (notes) updates.notes = notes;
     if (status) updates.status = status;
     if (endDate) updates.end_date = new Date(endDate).toISOString();
+
+    if (status === 'active' && existingMembership.status !== 'active') {
+      await supabase
+        .from('memberships')
+        .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Replaced by a new plan', updated_at: new Date() })
+        .eq('user_id', existingMembership.user_id)
+        .eq('status', 'active')
+        .neq('id', existingMembership.id);
+    }
 
     const { data: membership, error } = await supabase
       .from('memberships')
@@ -308,20 +318,26 @@ const changeMembershipTier = async (req, res) => {
       return res.status(404).json({ message: 'Membership not found' });
     }
 
-    if (!['free', 'bronze', 'silver', 'gold'].includes(newTier)) {
-      return res.status(400).json({ message: 'Invalid membership tier' });
+    const tierConfig = await tierConfigFor(newTier);
+    if (!tierConfig) {
+      return res.status(400).json({ message: 'Invalid membership plan' });
     }
 
     const oldTier = existingMembership.tier;
-    const tierConfig = TIER_CONFIG[newTier];
+    if (oldTier === newTier) {
+      return res.status(400).json({ message: 'The member is already on this plan.' });
+    }
 
+    // An admin plan change is a record of the change, not money received: it is logged with
+    // amount 0 (or the refund given) so revenue reports only count real payments.
     const currentHistory = existingMembership.payment_history || [];
     currentHistory.push({
       date: new Date().toISOString(),
-      amount: refundAmount > 0 ? -parseFloat(refundAmount) : parseFloat(tierConfig.price),
+      amount: refundAmount > 0 ? -parseFloat(refundAmount) : 0,
       type: 'upgrade_downgrade',
+      note: `Plan changed by admin from ${oldTier} to ${newTier}`,
       transactionId: `TXN-${Date.now()}`,
-      status: 'completed'
+      status: refundAmount > 0 ? 'refunded' : 'adjustment'
     });
 
     const { data: membership, error } = await supabase
@@ -330,7 +346,9 @@ const changeMembershipTier = async (req, res) => {
         tier: newTier,
         submission_limit: tierConfig.submissionLimit,
         features: tierConfig.features,
+        price: tierConfig.price,
         renewal_price: tierConfig.renewalPrice,
+        end_date: endDateFor(newTier, tierConfig),
         payment_history: currentHistory,
         updated_at: new Date()
       })
@@ -363,6 +381,22 @@ const renewMembership = async (req, res) => {
       return res.status(404).json({ message: 'Membership not found' });
     }
 
+    if (!['active', 'expired'].includes(existingMembership.status)) {
+      return res.status(400).json({ message: 'Only an active or expired membership can be renewed. Activate a pending request instead.' });
+    }
+    const cfg = await tierConfigFor(existingMembership.tier);
+    if (!cfg || cfg.billingInterval === 'one_time' || !cfg.price) {
+      return res.status(400).json({ message: 'This plan does not renew (it is free or a one-time / lifetime plan).' });
+    }
+
+    // only one active membership per user
+    await supabase
+      .from('memberships')
+      .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Replaced by a renewed plan', updated_at: new Date() })
+      .eq('user_id', existingMembership.user_id)
+      .eq('status', 'active')
+      .neq('id', existingMembership.id);
+
     const currentHistory = existingMembership.payment_history || [];
     currentHistory.push({
       date: new Date().toISOString(),
@@ -372,12 +406,16 @@ const renewMembership = async (req, res) => {
       status: 'completed'
     });
 
+    // extend from the current end date if it hasn't passed yet
+    const base = existingMembership.end_date && new Date(existingMembership.end_date) > new Date() ? new Date(existingMembership.end_date).getTime() : Date.now();
+    const days = cfg.billingInterval === 'year' ? 365 : 30;
+
     const { data: membership, error } = await supabase
       .from('memberships')
       .update({
         status: 'active',
         submission_count: 0,
-        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        end_date: new Date(base + days * 24 * 60 * 60 * 1000).toISOString(),
         payment_history: currentHistory,
         updated_at: new Date()
       })
@@ -517,7 +555,159 @@ const getPaymentHistory = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Upgrade requests from the Membership page.
+// Until Stripe Checkout is connected no card is charged, so a paid plan is saved as a
+// PENDING request; an administrator activates it once payment is confirmed.
+// (When Stripe is live, the Stripe webhook activates it instead.)
+// ---------------------------------------------------------------------------
+const cleanText = (v, max = 200) => String(v || '').trim().slice(0, max);
+
+const requestMembership = async (req, res) => {
+  const userId = req.user.id;
+  const slug = cleanText(req.body.tier, 50).toLowerCase();
+  const app = req.body.applicationData || {};
+  try {
+    const plan = await getPlanBySlug(slug);
+    if (!plan || !plan.active) return res.status(400).json({ message: 'This membership plan is not available.' });
+
+    if (!plan.price) {
+      return res.json({ status: 'free', message: 'You are on the Free plan. No payment is needed.' });
+    }
+
+    const { data: current } = await supabase
+      .from('memberships')
+      .select('id, tier, status')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (current && current.tier === slug) {
+      return res.status(400).json({ message: `You already have an active ${plan.name} membership.` });
+    }
+
+    // One open request at a time: a new request replaces the previous one
+    await supabase
+      .from('memberships')
+      .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Replaced by a newer upgrade request', updated_at: new Date() })
+      .eq('user_id', userId)
+      .eq('status', 'pending');
+
+    // The amount owed is the plan price minus a coupon checked here (never an amount from the browser).
+    // The coupon itself is used up when an admin activates the request.
+    const couponCode = cleanText(req.body.couponCode, 40).toUpperCase() || null;
+    let couponDiscount = 0;
+    if (couponCode) {
+      const verdict = await evaluateCoupon({ code: couponCode, subtotal: plan.price, items: [], checkoutType: 'membership', targetId: slug, customerEmail: req.user.email }, req.user);
+      if (!verdict.data?.valid) return res.status(400).json({ message: verdict.data?.message || 'That coupon could not be applied.' });
+      couponDiscount = Math.min(plan.price, Math.max(0, Number(verdict.data.discountAmount) || 0));
+    }
+    const applicationData = {
+      fullName: cleanText(app.fullName),
+      email: cleanText(app.email || req.user.email),
+      phone: cleanText(app.phone, 40),
+      address: cleanText(app.address, 300),
+      couponCode: couponDiscount > 0 ? couponCode : null,
+      couponDiscount,
+    };
+    const quoted = Math.round((plan.price - couponDiscount) * 100) / 100;
+
+    const { data: membership, error } = await supabase
+      .from('memberships')
+      .insert([{
+        user_id: userId,
+        tier: slug,
+        start_date: new Date().toISOString(),
+        end_date: null,
+        status: 'pending',
+        auto_renew: plan.billingInterval !== 'one_time',
+        submission_limit: plan.submissionLimit,
+        features: plan.features,
+        price: plan.price,
+        renewal_price: plan.billingInterval === 'one_time' ? 0 : plan.price,
+        payment_history: [{
+          date: new Date().toISOString(),
+          amount: quoted,
+          type: 'purchase',
+          transactionId: `REQ-${Date.now()}`,
+          status: 'pending',
+        }],
+        notes: JSON.stringify(applicationData),
+      }])
+      .select('*, user:users(id, name, email)')
+      .single();
+    if (error) throw error;
+
+    res.status(202).json({
+      status: 'pending',
+      message: `Your ${plan.name} upgrade request has been received. Your card has not been charged. Our team will confirm your upgrade and payment by email.`,
+      membership: getFormattedMembership(membership),
+    });
+  } catch (error) {
+    console.error('requestMembership:', error.message);
+    res.status(500).json({ message: 'Could not save your upgrade request. Please try again.' });
+  }
+};
+
+// Admin: turn a pending request (or any membership) into the user's active plan
+const activateMembership = async (req, res) => {
+  const { paymentReceived = true } = req.body || {};
+  try {
+    const { data: m, error: findError } = await supabase.from('memberships').select('*').eq('id', req.params.id).single();
+    if (findError || !m) return res.status(404).json({ message: 'Membership not found' });
+    const cfg = await tierConfigFor(m.tier);
+    if (!cfg) return res.status(400).json({ message: 'This plan no longer exists. Change the plan first.' });
+
+    // only one active membership per user
+    await supabase
+      .from('memberships')
+      .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Replaced by a new plan', updated_at: new Date() })
+      .eq('user_id', m.user_id)
+      .eq('status', 'active')
+      .neq('id', m.id);
+
+    const history = (m.payment_history || []).map((p) =>
+      p.status === 'pending' ? { ...p, status: paymentReceived ? 'completed' : 'waived', confirmedAt: new Date().toISOString(), confirmedBy: req.user.id } : p);
+
+    const { data: membership, error } = await supabase
+      .from('memberships')
+      .update({
+        status: 'active',
+        start_date: new Date().toISOString(),
+        end_date: endDateFor(m.tier, cfg),
+        submission_limit: cfg.submissionLimit,
+        features: cfg.features,
+        payment_history: history,
+        updated_at: new Date(),
+      })
+      .eq('id', m.id)
+      .select('*, user:users(id, name, email)')
+      .single();
+    if (error) throw error;
+
+    // Use up the coupon the member applied to this request (limits are enforced by the database).
+    let warning = null;
+    let app = {};
+    try { app = JSON.parse(m.notes || '{}') || {}; } catch { app = {}; }
+    if (m.status === 'pending' && app.couponCode && Number(app.couponDiscount) > 0) {
+      const { data: result, error: redeemError } = await supabase.rpc('redeem_coupon_v2', {
+        p_code: app.couponCode, p_user: m.user_id, p_email: app.email || null,
+        p_context: 'membership', p_reference: String(m.id), p_discount: Number(app.couponDiscount),
+      });
+      if (redeemError || result !== 'ok') {
+        warning = `Coupon ${app.couponCode} could not be counted (${redeemError ? 'error' : result}). The member was quoted the discounted price.`;
+      }
+    }
+    res.json({ message: 'Membership activated', warning, membership: getFormattedMembership(membership) });
+  } catch (error) {
+    res.status(500).json({ message: 'Error activating membership', error: error.message });
+  }
+};
+
 module.exports = {
+  tierConfigFor,
+  endDateFor,
+  requestMembership,
+  activateMembership,
   getTierConfigs,
   getAllMemberships,
   getUserMembership,

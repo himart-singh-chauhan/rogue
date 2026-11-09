@@ -16,7 +16,7 @@ const Footer = () => {
           {/* Brand */}
           <div className="footer-brand">
             <div style={{ marginBottom: 5, marginTop: -30 }}>
-              <img loading="lazy" decoding="async" src="/images/logo-light.webp" alt="ROGUE Logo" width={450} height={300} style={{ height: 150, width: "auto", display: 'block', mixBlendMode: 'screen' }} />
+              <img loading="lazy" decoding="async" src="/images/logo-light.webp" alt="AMPEX Logo" width={450} height={300} style={{ height: 150, width: "auto", display: 'block', mixBlendMode: 'screen' }} />
             </div>
             <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px", maxWidth: "260px" }}>
               Structured divisions ensure fairness, increase participation, and scale record categories globally.
@@ -77,7 +77,7 @@ const Footer = () => {
         {/* Large Branding Image - Positioned at bottom right, partially off-screen for cool effect */}
         <img loading="lazy" decoding="async" 
           src="/images/athlete-certificate.webp" 
-          alt="Rogue Branding"
+          alt="AMPEX Branding"
           width={467}
           height={700}
           style={{
@@ -97,7 +97,7 @@ const Footer = () => {
         {/* Bottom bar */}
         <SponsorBanner variant="compact" placements={["footer", "footer_sponsor"]} />
         <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} Rogue World Records. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} AMPEX World Records. All rights reserved.</span>
         </div>
 
       </div>

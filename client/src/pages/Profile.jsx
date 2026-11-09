@@ -1,16 +1,141 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, Trophy, MapPin, Calendar, Activity, Zap, Timer, 
-  CheckCircle2, Share2, User, Mail, LogOut, Plus, ShieldCheck, 
+import {
+  ArrowLeft, Trophy, MapPin, Calendar, Activity, Zap, Timer,
+  CheckCircle2, Share2, User, Mail, LogOut, Plus, ShieldCheck,
   Flame, Loader2, AlertCircle, Eye, RefreshCw, BarChart2, Shield,
   Award, TrendingUp, Compass, ChevronRight, HardDrive, Bell, Settings,
-  Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search
+  Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search, Download, ExternalLink
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
 import { apiCall, apiUpload, formatProductImage } from "../utils/api";
+import { downloadCertificatePdf, formatCertDate } from "../utils/certificatePdf";
+
+// ---------- My Certificates (issued by an administrator) ----------
+const MyCertificates = ({ state, token }) => {
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState("");
+  const download = async (cert) => {
+    setBusy(cert.certificateNumber);
+    setError("");
+    try {
+      // the server returns the certificate with its template (and counts the download)
+      const full = await apiCall(`/certificates/${encodeURIComponent(cert.certificateNumber)}/download`, "GET", null, token);
+      await downloadCertificatePdf(full, full.template || cert.template);
+    } catch (err) {
+      setError(err.message || "Could not create the PDF.");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div>
+      <h2 style={{ fontSize: "22px", fontWeight: "900", letterSpacing: "-0.5px", margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: "10px" }}>
+        <Award size={22} color="#FF5500" /> MY CERTIFICATES
+      </h2>
+      <p style={{ color: "#666", fontSize: "13px", margin: "0 0 24px 0" }}>Official AMPEX certificates approved for your verified records</p>
+      {error && <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", borderRadius: "12px", padding: "12px 14px", fontSize: "13px", fontWeight: 700, marginBottom: "16px" }}>{error}</div>}
+      {!state.loaded ? (
+        <div style={{ color: "#666", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Loading certificates...</div>
+      ) : state.error ? (
+        <div style={{ color: "#f87171", fontSize: "14px" }}>{state.error}</div>
+      ) : state.list.length === 0 ? (
+        <div style={{ background: "rgba(13,13,16,0.5)", border: "1px dashed rgba(255,255,255,0.08)", borderRadius: "24px", padding: "40px 24px", textAlign: "center", color: "#777", fontSize: "14px", lineHeight: 1.6 }}>
+          No certificates yet. When an administrator approves a certificate for one of your verified records, it will appear here ready to download.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          {state.list.map((c) => (
+            <div key={c.id} style={{ background: "rgba(13,13,16,0.5)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "20px", padding: "20px", display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(255,85,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Award size={22} color="#FF5500" />
+              </div>
+              <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: "15px", color: "white", overflowWrap: "anywhere" }}>{c.recordTitle}</div>
+                <div style={{ color: "#888", fontSize: "12px", marginTop: "4px", lineHeight: 1.6, overflowWrap: "anywhere" }}>
+                  {c.recordValue ? `${c.recordValue} · ` : ""}Verified {formatCertDate(c.dateVerified) || "—"}<br />
+                  <span style={{ color: "#FF5500", fontWeight: 800 }}>{c.certificateNumber}</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => download(c)}
+                  disabled={busy === c.certificateNumber}
+                  style={{ background: "#FF5500", color: "white", border: "none", borderRadius: "100px", padding: "10px 16px", fontSize: "12px", fontWeight: 900, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: busy === c.certificateNumber ? 0.6 : 1 }}
+                >
+                  {busy === c.certificateNumber ? <Loader2 size={13} /> : <Download size={13} />} {busy === c.certificateNumber ? "PREPARING..." : "DOWNLOAD PDF"}
+                </button>
+                <Link to={`/certificate/${c.certificateNumber}`} style={{ border: "1px solid rgba(255,255,255,0.12)", color: "#ccc", borderRadius: "100px", padding: "10px 16px", fontSize: "12px", fontWeight: 800, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <ExternalLink size={13} /> VERIFY
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------- Messages from AMPEX (Admin → Communications) ----------
+const Inbox = ({ state, token, onRead }) => {
+  const [openId, setOpenId] = useState(null);
+  const open = (m) => {
+    setOpenId(openId === m.id ? null : m.id);
+    if (!m.is_read) {
+      onRead(m.id);
+      apiCall(`/messages/${m.id}/read`, "PUT", {}, token).catch(() => {});
+    }
+  };
+  return (
+    <div>
+      <h2 style={{ fontSize: "22px", fontWeight: "900", letterSpacing: "-0.5px", margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: "10px" }}>
+        <Mail size={22} color="#FF5500" /> MESSAGES
+      </h2>
+      <p style={{ color: "#666", fontSize: "13px", margin: "0 0 24px 0" }}>Notices and replies from the AMPEX World Records team</p>
+      {!state.loaded ? (
+        <div style={{ color: "#666", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Loading messages...</div>
+      ) : state.error ? (
+        <div style={{ color: "#f87171", fontSize: "14px" }}>{state.error}</div>
+      ) : state.list.length === 0 ? (
+        <div style={{ background: "rgba(13,13,16,0.5)", border: "1px dashed rgba(255,255,255,0.08)", borderRadius: "24px", padding: "40px 24px", textAlign: "center", color: "#777", fontSize: "14px" }}>
+          Your inbox is empty.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {state.list.map((m) => {
+            const isOpen = openId === m.id;
+            return (
+              <div key={m.id} style={{ background: "rgba(13,13,16,0.5)", border: `1px solid ${m.is_read ? "rgba(255,255,255,0.05)" : "rgba(255,85,0,0.35)"}`, borderRadius: "18px", overflow: "hidden" }}>
+                <button
+                  onClick={() => open(m)}
+                  aria-expanded={isOpen}
+                  style={{ width: "100%", background: "none", border: "none", color: "white", textAlign: "left", padding: "16px 18px", cursor: "pointer", display: "flex", gap: "12px", alignItems: "center" }}
+                >
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: m.is_read ? "transparent" : "#FF5500", flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontWeight: m.is_read ? 700 : 900, fontSize: "14px", overflowWrap: "anywhere" }}>{m.subject || "(no subject)"}</span>
+                    <span style={{ display: "block", color: "#777", fontSize: "12px", marginTop: "3px" }}>
+                      {m.sender?.name || "AMPEX World Records"} · {formatCertDate(m.created_at)}
+                    </span>
+                  </span>
+                  <ChevronRight size={16} color="#666" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
+                </button>
+                {isOpen && (
+                  <div style={{ padding: "0 18px 18px 38px", color: "rgba(255,255,255,0.75)", fontSize: "14px", lineHeight: 1.7, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
+                    {m.body}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ATHLETES = {
   "leo-vance": {
@@ -86,9 +211,12 @@ const Profile = () => {
   const [myRecords, setMyRecords] = useState([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [errorRecords, setErrorRecords] = useState(null);
-  const [activeTab, setActiveTab] = useState("submissions"); // submissions, biometrics
+  const [activeTab, setActiveTab] = useState("submissions"); // submissions, biometrics, certificates, messages
+  const [certState, setCertState] = useState({ loaded: false, list: [], error: "" });
+  const [inboxState, setInboxState] = useState({ loaded: false, list: [], error: "" });
+  const unreadCount = inboxState.list.filter((m) => !m.is_read).length;
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Edit profile state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editError, setEditError] = useState("");
@@ -140,6 +268,22 @@ const Profile = () => {
 
     fetchSubmissions();
   }, [user, isOwnProfile]);
+
+  // Own profile: issued certificates + inbox
+  useEffect(() => {
+    if (!isOwnProfile || !user?.token) return undefined;
+    let cancelled = false;
+    apiCall("/certificates/mine", "GET", null, user.token)
+      .then((list) => { if (!cancelled) setCertState({ loaded: true, list: Array.isArray(list) ? list : [], error: "" }); })
+      .catch((err) => { if (!cancelled) setCertState({ loaded: true, list: [], error: err.message || "Could not load certificates." }); });
+    apiCall("/messages", "GET", null, user.token)
+      .then((list) => { if (!cancelled) setInboxState({ loaded: true, list: Array.isArray(list) ? list : [], error: "" }); })
+      .catch((err) => { if (!cancelled) setInboxState({ loaded: true, list: [], error: err.message || "Could not load messages." }); });
+    return () => { cancelled = true; };
+  }, [isOwnProfile, user?.token]);
+
+  const markReadLocally = (messageId) =>
+    setInboxState((s) => ({ ...s, list: s.list.map((m) => (m.id === messageId ? { ...m, is_read: true } : m)) }));
 
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -199,7 +343,7 @@ const Profile = () => {
     return (
       <div style={{ background: "#030303", color: "white", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
         <Loader2 className="animate-spin" size={48} color="#FF5500" />
-        <p style={{ marginTop: "16px", color: "#aaa", fontFamily: "'Outfit', 'Inter', sans-serif", letterSpacing: "1px" }}>SYNCING WITH ROGUE NETWORK...</p>
+        <p style={{ marginTop: "16px", color: "#aaa", fontFamily: "'Outfit', 'Inter', sans-serif", letterSpacing: "1px" }}>SYNCING WITH AMPEX NETWORK...</p>
       </div>
     );
   }
@@ -215,10 +359,10 @@ const Profile = () => {
   };
 
   return (
-    <div style={{ 
-      background: "#030303", 
-      color: "white", 
-      minHeight: "100vh", 
+    <div style={{
+      background: "#030303",
+      color: "white",
+      minHeight: "100vh",
       fontFamily: "'Outfit', 'Inter', sans-serif",
       backgroundImage: `
         radial-gradient(circle at 50% -10%, rgba(255, 85, 0, 0.12) 0%, transparent 60%),
@@ -235,8 +379,8 @@ const Profile = () => {
       {/* 1. Cover Photo Section */}
       <section style={{ position: "relative", height: "300px", width: "100%", overflow: "hidden" }}>
         <img loading="lazy" decoding="async"
-          src={isOwnProfile 
-            ? "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80" 
+          src={isOwnProfile
+            ? "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1600&q=80"
             : athlete.cover
           }
           alt="Cover Background"
@@ -251,10 +395,10 @@ const Profile = () => {
 
       {/* 2. Floating Profile Header Card */}
       <section className="container" style={{ position: "relative", zIndex: 10, marginTop: "-120px", paddingBottom: "20px" }}>
-        <div style={{ 
-          display: "flex", 
-          alignItems: "flex-end", 
-          gap: "36px", 
+        <div style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "36px",
           flexWrap: "wrap",
           background: "rgba(10, 10, 12, 0.4)",
           backdropFilter: "blur(20px)",
@@ -263,19 +407,19 @@ const Profile = () => {
           border: "1px solid rgba(255, 255, 255, 0.03)",
           boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.9)"
         }}>
-          
+
           {/* Avatar block with rotating neon border */}
           <div style={{ position: "relative", flexShrink: 0 }}>
-            <div style={{ 
-              position: "absolute", 
-              inset: "-8px", 
-              borderRadius: "32px", 
+            <div style={{
+              position: "absolute",
+              inset: "-8px",
+              borderRadius: "32px",
               background: "linear-gradient(135deg, #FF5500 0%, #a200ff 100%)",
               opacity: 0.7,
               zIndex: -1,
               filter: "blur(6px)"
             }} />
-            
+
             {isOwnProfile ? (
               user.profileImage ? (
                 <img loading="lazy" decoding="async"
@@ -285,11 +429,11 @@ const Profile = () => {
                 />
               ) : (
                 <div style={{ position: "relative" }}>
-                  <div style={{ 
-                    width: "160px", 
-                    height: "160px", 
-                    borderRadius: "24px", 
-                    border: "4px solid #030303", 
+                  <div style={{
+                    width: "160px",
+                    height: "160px",
+                    borderRadius: "24px",
+                    border: "4px solid #030303",
                     background: "linear-gradient(135deg, #FF5500 0%, #7000ff 100%)",
                     display: "flex",
                     justifyContent: "center",
@@ -335,39 +479,39 @@ const Profile = () => {
                 <div style={{ width: "160px", height: "160px", borderRadius: "24px", border: "4px solid #030303", background: "#111" }} />
               )
             )}
-            
+
             {/* Dynamic online ping badge */}
-            <div style={{ 
-              position: "absolute", 
-              top: "-4px", 
-              right: "-4px", 
-              background: "#22c55e", 
-              width: "14px", 
-              height: "14px", 
+            <div style={{
+              position: "absolute",
+              top: "-4px",
+              right: "-4px",
+              background: "#22c55e",
+              width: "14px",
+              height: "14px",
               borderRadius: "50%",
               border: "3px solid #030303",
               boxShadow: "0 0 15px #22c55e"
             }}>
-              <div style={{ 
-                position: "absolute", 
-                inset: "-4px", 
-                borderRadius: "50%", 
-                border: "2px solid #22c55e", 
-                animation: "radarPulse 1.8s infinite ease-out" 
+              <div style={{
+                position: "absolute",
+                inset: "-4px",
+                borderRadius: "50%",
+                border: "2px solid #22c55e",
+                animation: "radarPulse 1.8s infinite ease-out"
               }} />
             </div>
 
-            <div style={{ 
-              position: "absolute", 
-              bottom: "-10px", 
-              left: "50%", 
-              transform: "translateX(-50%)", 
-              background: "linear-gradient(to right, #FF5500, #ff8800)", 
-              color: "white", 
-              padding: "4px 14px", 
-              borderRadius: "100px", 
-              fontWeight: "900", 
-              fontSize: "11px", 
+            <div style={{
+              position: "absolute",
+              bottom: "-10px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "linear-gradient(to right, #FF5500, #ff8800)",
+              color: "white",
+              padding: "4px 14px",
+              borderRadius: "100px",
+              fontWeight: "900",
+              fontSize: "11px",
               letterSpacing: "1px",
               border: "3px solid #0a0a0c",
               boxShadow: "0 5px 15px rgba(255, 85, 0, 0.4)",
@@ -380,14 +524,14 @@ const Profile = () => {
           {/* Core Name Meta block */}
           <div style={{ flex: 1, minWidth: "280px" }}>
             <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
-              <span style={{ 
-                background: "linear-gradient(90deg, rgba(255,85,0,0.2) 0%, rgba(255,85,0,0.05) 100%)", 
-                color: "#FF5500", 
-                padding: "4px 14px", 
-                borderRadius: "100px", 
-                fontSize: "10px", 
-                fontWeight: "950", 
-                letterSpacing: "1.5px", 
+              <span style={{
+                background: "linear-gradient(90deg, rgba(255,85,0,0.2) 0%, rgba(255,85,0,0.05) 100%)",
+                color: "#FF5500",
+                padding: "4px 14px",
+                borderRadius: "100px",
+                fontSize: "10px",
+                fontWeight: "950",
+                letterSpacing: "1.5px",
                 border: "1px solid rgba(255, 85, 0, 0.35)",
                 boxShadow: "0 0 10px rgba(255, 85, 0, 0.1)"
               }}>
@@ -399,7 +543,7 @@ const Profile = () => {
                   {isOwnProfile ? `@${user.username || "athlete"}` : `@${athlete.username}`}
                 </span>
               </div>
-              
+
               {(isOwnProfile ? user.memberNumber : athlete.memberNumber) && (
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.03)", padding: "4px 12px", borderRadius: "100px", border: "1px solid rgba(255,255,255,0.05)" }}>
                   <span style={{ fontSize: "9px", color: "#FF5500", fontWeight: "900", letterSpacing: "0.5px", textTransform: "uppercase" }}>MID:</span>
@@ -409,7 +553,7 @@ const Profile = () => {
                   <div style={{ display: "inline-flex", background: "rgba(34, 197, 94, 0.15)", borderRadius: "50%", padding: "2px", border: "1px solid rgba(34, 197, 94, 0.3)" }} title="Verified Member">
                     <svg viewBox="0 0 24 24" width="10" height="10" stroke="#22c55e" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       navigator.clipboard.writeText(isOwnProfile ? user.memberNumber : athlete.memberNumber);
                       alert(`Member ID (${isOwnProfile ? user.memberNumber : athlete.memberNumber}) copied to clipboard!`);
@@ -423,13 +567,13 @@ const Profile = () => {
               )}
             </div>
 
-            <h1 style={{ 
-              fontSize: "clamp(32px, 5vw, 52px)", 
-              fontWeight: "950", 
-              margin: 0, 
-              textTransform: "uppercase", 
-              letterSpacing: "-1.5px", 
-              lineHeight: 1.1, 
+            <h1 style={{
+              fontSize: "clamp(32px, 5vw, 52px)",
+              fontWeight: "950",
+              margin: 0,
+              textTransform: "uppercase",
+              letterSpacing: "-1.5px",
+              lineHeight: 1.1,
               color: "white"
             }}>
               {isOwnProfile ? user.name : athlete.name}
@@ -437,9 +581,9 @@ const Profile = () => {
 
             <div style={{ display: "flex", alignItems: "center", gap: "24px", marginTop: "14px", color: "#888", fontSize: "13px", flexWrap: "wrap" }}>
               <span style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: "500" }}>
-                <MapPin size={15} color="#FF5500" /> 
-                {isOwnProfile 
-                  ? (user.city && user.country ? `${user.city}, ${user.country}` : "ROGUE Network Node") 
+                <MapPin size={15} color="#FF5500" />
+                {isOwnProfile
+                  ? (user.city && user.country ? `${user.city}, ${user.country}` : "AMPEX Network Node")
                   : athlete.location
                 }
               </span>
@@ -452,26 +596,27 @@ const Profile = () => {
 
       {/* 3. Main Content Dashboard Grid */}
       <section className="container" style={{ padding: "20px 0 80px 0", display: "grid", gridTemplateColumns: "1fr 360px", gap: "48px" }}>
-        
+
         {/* Left Column: Interactive Tab Dashboard */}
         <div>
           {isOwnProfile ? (
             /* ================== DYNAMIC USER PORTAL ================== */
             <div>
               {/* Futuristic Cyber Tab Navigation */}
-              <div style={{ 
-                display: "flex", 
-                background: "rgba(255,255,255,0.02)", 
-                padding: "6px", 
-                borderRadius: "16px", 
-                border: "1px solid rgba(255,255,255,0.05)", 
+              <div style={{
+                display: "flex",
+                background: "rgba(255,255,255,0.02)",
+                padding: "6px",
+                borderRadius: "16px",
+                border: "1px solid rgba(255,255,255,0.05)",
                 marginBottom: "36px",
-                gap: "6px"
+                gap: "6px",
+                flexWrap: "wrap"
               }}>
-                <button 
+                <button
                   onClick={() => setActiveTab("submissions")}
                   style={{
-                    flex: 1,
+                    flex: "1 1 150px",
                     background: activeTab === "submissions" ? "linear-gradient(135deg, #FF5500 0%, #ff7733 100%)" : "transparent",
                     border: "none",
                     color: activeTab === "submissions" ? "white" : "#888",
@@ -491,10 +636,10 @@ const Profile = () => {
                 >
                   <Trophy size={15} /> SUBMISSIONS ({myRecords.length})
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab("biometrics")}
                   style={{
-                    flex: 1,
+                    flex: "1 1 150px",
                     background: activeTab === "biometrics" ? "linear-gradient(135deg, #FF5500 0%, #ff7733 100%)" : "transparent",
                     border: "none",
                     color: activeTab === "biometrics" ? "white" : "#888",
@@ -514,6 +659,52 @@ const Profile = () => {
                 >
                   <Activity size={15} /> COCKPIT STATS
                 </button>
+                <button
+                  onClick={() => setActiveTab("certificates")}
+                  style={{
+                    flex: "1 1 150px",
+                    background: activeTab === "certificates" ? "linear-gradient(135deg, #FF5500 0%, #ff7733 100%)" : "transparent",
+                    border: "none",
+                    color: activeTab === "certificates" ? "white" : "#888",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    fontSize: "13px",
+                    fontWeight: "900",
+                    letterSpacing: "1px",
+                    cursor: "pointer",
+                    transition: "all 0.25s",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "8px",
+                    boxShadow: activeTab === "certificates" ? "0 10px 25px rgba(255, 85, 0, 0.25)" : "none"
+                  }}
+                >
+                  <Award size={15} /> CERTIFICATES ({certState.list.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("messages")}
+                  style={{
+                    flex: "1 1 150px",
+                    background: activeTab === "messages" ? "linear-gradient(135deg, #FF5500 0%, #ff7733 100%)" : "transparent",
+                    border: "none",
+                    color: activeTab === "messages" ? "white" : "#888",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    fontSize: "13px",
+                    fontWeight: "900",
+                    letterSpacing: "1px",
+                    cursor: "pointer",
+                    transition: "all 0.25s",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "8px",
+                    boxShadow: activeTab === "messages" ? "0 10px 25px rgba(255, 85, 0, 0.25)" : "none"
+                  }}
+                >
+                  <Mail size={15} /> MESSAGES {unreadCount > 0 && <span style={{ background: activeTab === "messages" ? "white" : "#FF5500", color: activeTab === "messages" ? "#FF5500" : "white", borderRadius: "100px", fontSize: "10px", padding: "2px 7px", letterSpacing: 0 }}>{unreadCount}</span>}
+                </button>
               </div>
 
               {/* TAB 1: Real-time Record Submissions list */}
@@ -526,30 +717,30 @@ const Profile = () => {
                       </h2>
                       <p style={{ color: "#666", fontSize: "13px", margin: "4px 0 0 0" }}>Chronological record of athletic verifications</p>
                     </div>
-                    
+
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <div style={{ position: "relative" }}>
                         <Search size={14} color="#666" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-                        <input 
-                          type="text" 
-                          placeholder="Search records..." 
+                        <input
+                          type="text"
+                          placeholder="Search records..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "8px 12px 8px 32px", borderRadius: "100px", fontSize: "12px", outline: "none", width: "200px" }}
                         />
                       </div>
                       <Link to="/verify" style={{ textDecoration: "none" }}>
-                        <button style={{ 
-                          background: "rgba(255, 85, 0, 0.1)", 
-                          color: "#FF5500", 
-                          border: "1px solid rgba(255, 85, 0, 0.3)", 
-                          padding: "10px 20px", 
-                          borderRadius: "100px", 
-                          fontSize: "12px", 
-                          fontWeight: "900", 
-                          display: "flex", 
-                          alignItems: "center", 
-                          gap: "6px", 
+                        <button style={{
+                          background: "rgba(255, 85, 0, 0.1)",
+                          color: "#FF5500",
+                          border: "1px solid rgba(255, 85, 0, 0.3)",
+                          padding: "10px 20px",
+                          borderRadius: "100px",
+                          fontSize: "12px",
+                          fontWeight: "900",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
                           cursor: "pointer",
                           letterSpacing: "0.5px",
                           transition: "all 0.25s"
@@ -561,27 +752,27 @@ const Profile = () => {
                   </div>
 
                   {loadingRecords ? (
-                    <div style={{ 
-                      display: "flex", 
-                      flexDirection: "column", 
-                      justifyContent: "center", 
-                      alignItems: "center", 
-                      padding: "80px 0", 
-                      background: "rgba(13,13,16,0.6)", 
-                      borderRadius: "24px", 
+                    <div style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      padding: "80px 0",
+                      background: "rgba(13,13,16,0.6)",
+                      borderRadius: "24px",
                       border: "1px solid rgba(255, 255, 255, 0.04)"
                     }}>
                       <Loader2 className="animate-spin" size={36} color="#FF5500" />
                       <p style={{ color: "#888", marginTop: "16px", fontSize: "14px", letterSpacing: "1px" }}>QUERYING SUPABASE METADATA...</p>
                     </div>
                   ) : errorRecords ? (
-                    <div style={{ 
-                      display: "flex", 
-                      padding: "24px", 
-                      gap: "16px", 
-                      background: "rgba(239, 68, 68, 0.08)", 
-                      border: "1px solid rgba(239, 68, 68, 0.15)", 
-                      borderRadius: "20px", 
+                    <div style={{
+                      display: "flex",
+                      padding: "24px",
+                      gap: "16px",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.15)",
+                      borderRadius: "20px",
                       color: "#f87171"
                     }}>
                       <AlertCircle size={24} style={{ flexShrink: 0 }} />
@@ -591,21 +782,21 @@ const Profile = () => {
                       </div>
                     </div>
                   ) : myRecords.length === 0 ? (
-                    <div style={{ 
-                      textAlign: "center", 
-                      padding: "80px 40px", 
-                      background: "rgba(13,13,16,0.3)", 
-                      borderRadius: "24px", 
+                    <div style={{
+                      textAlign: "center",
+                      padding: "80px 40px",
+                      background: "rgba(13,13,16,0.3)",
+                      borderRadius: "24px",
                       border: "1px dashed rgba(255,255,255,0.08)"
                     }}>
-                      <div style={{ 
-                        width: "72px", 
-                        height: "72px", 
-                        background: "rgba(255, 85, 0, 0.04)", 
-                        borderRadius: "50%", 
-                        display: "flex", 
-                        justifyContent: "center", 
-                        alignItems: "center", 
+                      <div style={{
+                        width: "72px",
+                        height: "72px",
+                        background: "rgba(255, 85, 0, 0.04)",
+                        borderRadius: "50%",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
                         margin: "0 auto 20px auto",
                         border: "1px solid rgba(255, 85, 0, 0.1)"
                       }}>
@@ -616,14 +807,14 @@ const Profile = () => {
                         Your verified performance ledger is empty. Upload your evidence and get authenticated by our expert panel!
                       </p>
                       <Link to="/verify" style={{ textDecoration: "none" }}>
-                        <button style={{ 
-                          background: "linear-gradient(135deg, #FF5500 0%, #ff8800 100%)", 
-                          color: "white", 
-                          border: "none", 
-                          padding: "13px 32px", 
-                          borderRadius: "100px", 
-                          fontSize: "13px", 
-                          fontWeight: "900", 
+                        <button style={{
+                          background: "linear-gradient(135deg, #FF5500 0%, #ff8800 100%)",
+                          color: "white",
+                          border: "none",
+                          padding: "13px 32px",
+                          borderRadius: "100px",
+                          fontSize: "13px",
+                          fontWeight: "900",
                           letterSpacing: "0.5px",
                           cursor: "pointer",
                           boxShadow: "0 10px 25px rgba(255, 85, 0, 0.35)",
@@ -646,17 +837,17 @@ const Profile = () => {
                         const colors = statusColors[status] || statusColors.pending;
 
                         return (
-                          <div 
-                            key={record.id} 
+                          <div
+                            key={record.id}
                             onClick={() => navigate(`/record/${record.id}`)}
-                            style={{ 
-                              background: "rgba(13, 13, 16, 0.5)", 
-                              padding: "24px", 
-                              borderRadius: "20px", 
-                              border: "1px solid rgba(255, 255, 255, 0.03)", 
+                            style={{
+                              background: "rgba(13, 13, 16, 0.5)",
+                              padding: "24px",
+                              borderRadius: "20px",
+                              border: "1px solid rgba(255, 255, 255, 0.03)",
                               backdropFilter: "blur(20px)",
-                              display: "flex", 
-                              justifyContent: "space-between", 
+                              display: "flex",
+                              justifyContent: "space-between",
                               alignItems: "center",
                               position: "relative",
                               overflow: "hidden",
@@ -667,24 +858,24 @@ const Profile = () => {
                           >
                             {/* Scanning indicator trace line */}
                             {status === "pending" && (
-                              <div style={{ 
-                                position: "absolute", 
-                                left: 0, 
-                                top: 0, 
-                                bottom: 0, 
-                                width: "3px", 
-                                background: "linear-gradient(to bottom, #ffcc00, transparent)", 
+                              <div style={{
+                                position: "absolute",
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: "3px",
+                                background: "linear-gradient(to bottom, #ffcc00, transparent)",
                                 animation: "timelineScan 2.5s infinite linear"
                               }} />
                             )}
 
                             <div>
                               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                                <span style={{ 
-                                  color: "#FF5500", 
-                                  fontSize: "10px", 
-                                  fontWeight: "900", 
-                                  textTransform: "uppercase", 
+                                <span style={{
+                                  color: "#FF5500",
+                                  fontSize: "10px",
+                                  fontWeight: "900",
+                                  textTransform: "uppercase",
                                   letterSpacing: "1.5px",
                                   background: "rgba(255, 85, 0, 0.06)",
                                   padding: "3px 8px",
@@ -693,13 +884,13 @@ const Profile = () => {
                                 }}>
                                   {record.category}
                                 </span>
-                                <span style={{ 
-                                  background: colors.bg, 
-                                  color: colors.text, 
+                                <span style={{
+                                  background: colors.bg,
+                                  color: colors.text,
                                   border: `1px solid ${colors.border}`,
-                                  fontSize: "10px", 
-                                  fontWeight: "900", 
-                                  padding: "2px 8px", 
+                                  fontSize: "10px",
+                                  fontWeight: "900",
+                                  padding: "2px 8px",
                                   borderRadius: "100px",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.5px",
@@ -707,10 +898,10 @@ const Profile = () => {
                                   alignItems: "center",
                                   gap: "5px"
                                 }}>
-                                  <span style={{ 
-                                    width: "5px", 
-                                    height: "5px", 
-                                    borderRadius: "50%", 
+                                  <span style={{
+                                    width: "5px",
+                                    height: "5px",
+                                    borderRadius: "50%",
                                     background: colors.iconColor,
                                     boxShadow: `0 0 6px ${colors.iconColor}`,
                                     display: "inline-block"
@@ -718,11 +909,11 @@ const Profile = () => {
                                   {status}
                                 </span>
                               </div>
-                              
+
                               <h3 style={{ fontSize: "19px", fontWeight: "800", margin: "0 0 6px 0", color: "white", letterSpacing: "-0.5px" }}>
                                 {record.title}
                               </h3>
-                              
+
                               <div style={{ display: "flex", alignItems: "center", gap: "14px", color: "#555", fontSize: "12px" }}>
                                 <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                                   <Calendar size={12} /> {new Date(record.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -756,13 +947,13 @@ const Profile = () => {
                   </h2>
 
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-                    
+
                     {/* Power Gauge */}
-                    <div style={{ 
-                      background: "rgba(13,13,16,0.5)", 
-                      padding: "26px", 
-                      borderRadius: "24px", 
-                      border: "1px solid rgba(255,255,255,0.03)", 
+                    <div style={{
+                      background: "rgba(13,13,16,0.5)",
+                      padding: "26px",
+                      borderRadius: "24px",
+                      border: "1px solid rgba(255,255,255,0.03)",
                       backdropFilter: "blur(20px)"
                     }}>
                       <div style={{ display: "flex", justifycontent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -771,7 +962,7 @@ const Profile = () => {
                         </span>
                         <Flame size={15} color="#FF5500" />
                       </div>
-                      
+
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         <div style={{ fontSize: "38px", fontWeight: "900", color: "white", letterSpacing: "-1px" }}>78%</div>
                         <div style={{ background: "rgba(255,85,0,0.08)", color: "#FF5500", fontSize: "10px", fontWeight: "900", padding: "2px 6px", borderRadius: "4px" }}>
@@ -782,7 +973,7 @@ const Profile = () => {
                       <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.04)", borderRadius: "10px", marginTop: "16px", overflow: "hidden" }}>
                         <div style={{ width: "78%", height: "100%", background: "linear-gradient(to right, #FF5500, #ff8800)", borderRadius: "10px", boxShadow: "0 0 10px #FF5500" }} />
                       </div>
-                      
+
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", color: "#444", fontSize: "10px", fontWeight: "700" }}>
                         <span>LIMIT: 100</span>
                         <span>ACTUAL: 78.4</span>
@@ -790,11 +981,11 @@ const Profile = () => {
                     </div>
 
                     {/* Agility Gauge */}
-                    <div style={{ 
-                      background: "rgba(13,13,16,0.5)", 
-                      padding: "26px", 
-                      borderRadius: "24px", 
-                      border: "1px solid rgba(255,255,255,0.03)", 
+                    <div style={{
+                      background: "rgba(13,13,16,0.5)",
+                      padding: "26px",
+                      borderRadius: "24px",
+                      border: "1px solid rgba(255,255,255,0.03)",
                       backdropFilter: "blur(20px)"
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -803,7 +994,7 @@ const Profile = () => {
                         </span>
                         <Zap size={15} color="#a200ff" />
                       </div>
-                      
+
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         <div style={{ fontSize: "38px", fontWeight: "900", color: "white", letterSpacing: "-1px" }}>84%</div>
                         <div style={{ background: "rgba(162,0,255,0.08)", color: "#a200ff", fontSize: "10px", fontWeight: "900", padding: "2px 6px", borderRadius: "4px" }}>
@@ -824,6 +1015,12 @@ const Profile = () => {
                   </div>
                 </div>
               )}
+
+              {/* TAB 3: Certificates issued by an administrator */}
+              {activeTab === "certificates" && <MyCertificates state={certState} token={user?.token} />}
+
+              {/* TAB 4: Inbox */}
+              {activeTab === "messages" && <Inbox state={inboxState} token={user?.token} onRead={markReadLocally} />}
             </div>
           ) : (
             /* ================== PUBLIC PRO ATHLETE VIEW ================== */
@@ -834,10 +1031,10 @@ const Profile = () => {
                 </h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                   {athlete.stats.map((stat, i) => (
-                    <div key={i} style={{ 
-                      background: "rgba(13,13,16,0.5)", 
-                      padding: "24px", 
-                      borderRadius: "20px", 
+                    <div key={i} style={{
+                      background: "rgba(13,13,16,0.5)",
+                      padding: "24px",
+                      borderRadius: "20px",
                       border: "1px solid rgba(255,255,255,0.03)",
                       backdropFilter: "blur(20px)"
                     }}>
@@ -855,16 +1052,16 @@ const Profile = () => {
                 </h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   {athlete.recordList.map((record, i) => (
-                    <div key={i} style={{ 
-                      background: "rgba(13, 13, 16, 0.5)", 
-                      padding: "24px", 
-                      borderRadius: "20px", 
-                      border: "1px solid rgba(255, 255, 255, 0.03)", 
+                    <div key={i} style={{
+                      background: "rgba(13, 13, 16, 0.5)",
+                      padding: "24px",
+                      borderRadius: "20px",
+                      border: "1px solid rgba(255, 255, 255, 0.03)",
                       backdropFilter: "blur(20px)",
-                      display: "flex", 
-                      justifyContent: "space-between", 
-                      alignItems: "center", 
-                      transition: "all 0.25s" 
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      transition: "all 0.25s"
                     }} className="quest-card">
                       <div>
                         <div style={{ color: "#FF5500", fontSize: "10px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "4px" }}>{record.category}</div>
@@ -886,34 +1083,34 @@ const Profile = () => {
         {/* Right Column: Dynamic Side Dashboard Cards & Quick CTA Portals */}
         <div>
           <div style={{ position: "sticky", top: "110px", display: "flex", flexDirection: "column", gap: "24px" }}>
-            
+
             {/* Dynamic Athlete Registry Dossier Card */}
-            <div style={{ 
-              background: "rgba(13, 13, 16, 0.5)", 
-              padding: "32px 24px", 
-              borderRadius: "24px", 
+            <div style={{
+              background: "rgba(13, 13, 16, 0.5)",
+              padding: "32px 24px",
+              borderRadius: "24px",
               border: "1px solid rgba(255, 255, 255, 0.03)",
               backdropFilter: "blur(25px)",
               boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h3 style={{ 
-                  fontSize: "13px", 
-                  fontWeight: "900", 
-                  textTransform: "uppercase", 
-                  letterSpacing: "2px", 
-                  margin: 0, 
-                  color: "white", 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "8px" 
+                <h3 style={{
+                  fontSize: "13px",
+                  fontWeight: "900",
+                  textTransform: "uppercase",
+                  letterSpacing: "2px",
+                  margin: 0,
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
                 }}>
                   <Award size={15} color="#FF5500" />
                   ATHLETE DOSSIER
                 </h3>
-                
+
                 {isOwnProfile && (
-                  <button 
+                  <button
                     onClick={openEditModal}
                     style={{
                       background: "transparent",
@@ -933,10 +1130,10 @@ const Profile = () => {
                   </button>
                 )}
               </div>
-              
+
               {isOwnProfile ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  
+
                   {/* Name detail row */}
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <div style={{ background: "rgba(255, 85, 0, 0.06)", color: "#FF5500", padding: "8px", borderRadius: "8px", border: "1px solid rgba(255, 85, 0, 0.12)" }}><User size={14} /></div>
@@ -1001,8 +1198,8 @@ const Profile = () => {
                     <div>
                       <div style={{ color: "#555", fontSize: "9px", fontWeight: "900", letterSpacing: "1px" }}>ADDRESS</div>
                       <div style={{ fontSize: "13px", fontWeight: "800", color: "white", letterSpacing: "-0.3px" }}>
-                        {user.streetAddress || user.city || user.state || user.zipCode ? 
-                          [user.streetAddress, user.city, user.state, user.zipCode].filter(Boolean).join(", ") 
+                        {user.streetAddress || user.city || user.state || user.zipCode ?
+                          [user.streetAddress, user.city, user.state, user.zipCode].filter(Boolean).join(", ")
                           : "Not Specified"}
                       </div>
                     </div>
@@ -1046,7 +1243,7 @@ const Profile = () => {
                       <span style={{ fontWeight: "800", color: "white", fontSize: "13px" }}>Mastery</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#555", fontSize: "12px", fontWeight: "600" }}>Rogue Status</span>
+                      <span style={{ color: "#555", fontSize: "12px", fontWeight: "600" }}>AMPEX Status</span>
                       <span style={{ fontWeight: "800", color: "#FF5500", fontSize: "13px" }}>Grandmaster</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1066,10 +1263,10 @@ const Profile = () => {
 
             {/* Quick Actions Panel */}
             {isOwnProfile && (
-              <div style={{ 
+              <div style={{
                 background: "linear-gradient(135deg, rgba(255,85,0,0.04) 0%, rgba(112,0,255,0.04) 100%)",
-                padding: "24px", 
-                borderRadius: "24px", 
+                padding: "24px",
+                borderRadius: "24px",
                 border: "1px solid rgba(255, 85, 0, 0.2)",
                 boxShadow: "0 15px 35px rgba(255, 85, 0, 0.06)",
                 display: "flex",
@@ -1079,7 +1276,7 @@ const Profile = () => {
                 overflow: "hidden"
               }}>
                 <h4 style={{ margin: "0 0 4px 0", fontSize: "13px", fontWeight: "900", color: "white", letterSpacing: "1.5px" }}>ACTION PORTAL</h4>
-                
+
                 <Link to="/verify" style={{ textDecoration: "none" }}>
                   <button style={{
                     width: "100%",
@@ -1125,7 +1322,7 @@ const Profile = () => {
                   </button>
                 </Link>
 
-                <button 
+                <button
                   onClick={logout}
                   style={{
                     width: "100%",
@@ -1163,12 +1360,12 @@ const Profile = () => {
               overflow: "hidden"
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
-                <div style={{ 
-                  background: "rgba(212, 163, 89, 0.08)", 
-                  color: "#D4A359", 
-                  padding: "6px", 
-                  borderRadius: "8px", 
-                  border: "1px solid rgba(212, 163, 89, 0.15)" 
+                <div style={{
+                  background: "rgba(212, 163, 89, 0.08)",
+                  color: "#D4A359",
+                  padding: "6px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(212, 163, 89, 0.15)"
                 }}>
                   <Shield size={18} />
                 </div>
@@ -1183,7 +1380,7 @@ const Profile = () => {
               <p style={{ color: "#bda888", fontSize: "11px", margin: "0 0 16px 0", lineHeight: 1.5, fontWeight: "500" }}>
                 Priority physical adjudicator tracking, expedited auditing, and custom physical certificates.
               </p>
-              
+
               <Link to="/elite" style={{ textDecoration: "none" }}>
                 <button style={{
                   width: "100%",
@@ -1206,7 +1403,7 @@ const Profile = () => {
                 </button>
               </Link>
             </div>
-            
+
           </div>
         </div>
 
@@ -1238,7 +1435,7 @@ const Profile = () => {
             flexDirection: "column",
             animation: "modalFadeIn 0.3s ease-out"
           }}>
-            
+
             {/* Modal Header */}
             <div style={{
               padding: "24px 32px",
@@ -1253,7 +1450,7 @@ const Profile = () => {
                 </h3>
                 <p style={{ color: "#555", fontSize: "14px", margin: "6px 0 0 0", fontWeight: "600", letterSpacing: "0.5px" }}>UPDATE PHYSICAL DOSSIER & SECURITY KEYS</p>
               </div>
-              <button 
+              <button
                 onClick={() => setIsEditModalOpen(false)}
                 style={{ background: "rgba(255,255,255,0.03)", border: "none", color: "#888", width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center" }}
                 className="hover-white"
@@ -1265,7 +1462,7 @@ const Profile = () => {
             {/* Modal Body / Scrollable Form */}
             <form onSubmit={handleEditSubmit} style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div style={{ padding: "32px", overflowY: "auto", maxHeight: "60vh", display: "flex", flexDirection: "column", gap: "20px", scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
-                
+
                 {editError && (
                   <div style={{ background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.15)", borderRadius: "12px", color: "#f87171", padding: "16px 20px", fontSize: "12px", display: "flex", gap: "8px", alignItems: "center" }}>
                     <AlertCircle size={16} />
@@ -1288,8 +1485,8 @@ const Profile = () => {
                     </div>
                     <label style={{ flex: 1, background: "rgba(0,0,0,0.4)", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px", cursor: isUploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "0.3s", opacity: isUploading ? 0.5 : 1 }} className={!isUploading ? "hover-white" : ""}>
                       <span>{isUploading ? "UPLOADING..." : editForm.profileImage ? "CHANGE UPLOADED IMAGE" : "UPLOAD NEW PICTURE"}</span>
-                      <input 
-                        type="file" 
+                      <input
+                        type="file"
                         accept="image/png, image/jpeg, image/webp"
                         style={{ display: "none" }}
                         disabled={isUploading}
@@ -1345,22 +1542,22 @@ const Profile = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>FULL CREDENTIAL NAME</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                       required
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>REGISTRY USERNAME</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={editForm.username}
                       onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
                       required
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                 </div>
@@ -1369,21 +1566,21 @@ const Profile = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>PHONE NUMBER</label>
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       placeholder="+1 (555) 000-0000"
                       value={editForm.phone}
                       onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>DATE OF BIRTH</label>
-                    <input 
-                      type="date" max={new Date().toISOString().split('T')[0]} 
+                    <input
+                      type="date" max={new Date().toISOString().split('T')[0]}
                       value={editForm.dob}
                       onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px", colorScheme: "dark" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px", colorScheme: "dark" }}
                     />
                   </div>
                 </div>
@@ -1406,7 +1603,7 @@ const Profile = () => {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>RACE / ETHNICITY</label>
-                    <select 
+                    <select
                       value={editForm.ethnicity}
                       onChange={(e) => setEditForm({ ...editForm, ethnicity: e.target.value })}
                       style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
@@ -1425,12 +1622,12 @@ const Profile = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>COUNTRY</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. United States"
                       value={editForm.country}
                       onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                 </div>
@@ -1439,22 +1636,22 @@ const Profile = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>STREET ADDRESS</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. 123 Main St"
                       value={editForm.streetAddress}
                       onChange={(e) => setEditForm({ ...editForm, streetAddress: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>CITY</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. New York"
                       value={editForm.city}
                       onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                 </div>
@@ -1462,22 +1659,22 @@ const Profile = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>STATE / PROVINCE</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. NY"
                       value={editForm.state}
                       onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>ZIP / POSTAL CODE</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. 10001"
                       value={editForm.zipCode}
                       onChange={(e) => setEditForm({ ...editForm, zipCode: e.target.value })}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                 </div>
@@ -1492,12 +1689,12 @@ const Profile = () => {
                         <button type="button" onClick={() => setEditForm({ ...editForm, weightUnit: "lbs" })} style={{ background: "transparent", border: "none", color: editForm.weightUnit === "lbs" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>LBS</button>
                       </div>
                     </div>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={editForm.weight}
                       onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })}
                       placeholder={editForm.weightUnit === "kg" ? "75" : "165"}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                   <div>
@@ -1508,12 +1705,12 @@ const Profile = () => {
                         <button type="button" onClick={() => setEditForm({ ...editForm, heightUnit: "ft_in" })} style={{ background: "transparent", border: "none", color: editForm.heightUnit === "ft_in" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>FT/IN</button>
                       </div>
                     </div>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={editForm.height}
                       onChange={(e) => setEditForm({ ...editForm, height: e.target.value })}
                       placeholder={editForm.heightUnit === "cm" ? "180" : "5'11\""}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                      style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                     />
                   </div>
                 </div>
@@ -1521,12 +1718,12 @@ const Profile = () => {
                 {/* City */}
                 <div>
                   <label style={{ display: "block", fontSize: "16px", fontWeight: "900", color: "#555", marginBottom: "8px", letterSpacing: "1px" }}>CITY / REGION</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="e.g. Los Angeles, CA"
                     value={editForm.city}
                     onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                    style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }} 
+                    style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "16px 20px", color: "white", outline: "none", fontSize: "16px" }}
                   />
                 </div>
 
@@ -1541,7 +1738,7 @@ const Profile = () => {
                 justifyContent: "flex-end",
                 gap: "14px"
               }}>
-                <button 
+                <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
                   style={{
@@ -1559,7 +1756,7 @@ const Profile = () => {
                 >
                   CANCEL
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={editLoading}
                   style={{
@@ -1607,12 +1804,12 @@ const Profile = () => {
           0% { transform: scale(0.95); opacity: 0; }
           100% { transform: scale(1); opacity: 1; }
         }
-        
-        .quest-card:hover { 
+
+        .quest-card:hover {
           transform: translateY(-4px);
           border-color: rgba(255, 85, 0, 0.25) !important;
-          box-shadow: 
-            0 12px 30px rgba(0, 0, 0, 0.6), 
+          box-shadow:
+            0 12px 30px rgba(0, 0, 0, 0.6),
             0 0 20px rgba(255, 85, 0, 0.04) !important;
           background: rgba(18, 18, 22, 0.8) !important;
         }

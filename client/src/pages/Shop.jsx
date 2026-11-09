@@ -7,12 +7,18 @@ import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
+import "../styles/shop.css";
 import { useAuth } from "../context/AuthContext";
+import { SHOP_CATEGORIES, normalizeShopCategory, categorySlug } from "../utils/shopCategories";
+
+// 6 across × 10 rows on desktop, then the next page
+const PAGE_SIZE = 60;
 
 const Shop = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("ALL ITEMS");
+  const [page, setPage] = useState(1);
   const [dbProducts, setDbProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -39,14 +45,12 @@ const Shop = () => {
 
   useEffect(() => {
     const cat = searchParams.get("category");
-    if (cat) {
-      setActiveTab(cat.toUpperCase());
-    } else {
-      setActiveTab("ALL ITEMS");
-    }
+    const match = SHOP_CATEGORIES.find((c) => categorySlug(c) === cat || c.toLowerCase() === String(cat || "").toLowerCase());
+    setActiveTab(match || "ALL ITEMS");
+    setPage(1);
   }, [searchParams]);
 
-  const categories = ["ALL ITEMS", "TICKETS", "CERTIFICATE", "AWARD", "MEDAL", "TROPHY", "APPAREL"];
+  // Tabs: only categories that actually have products (in the shared order)
 
   const hardcodedProducts = [
 
@@ -104,10 +108,20 @@ const Shop = () => {
         price: `$${parseFloat(p.price).toFixed(2)}`,
         desc: p.description,
         img: formatProductImage(p.image_url),
-        badge: p.category?.toUpperCase() || "GEAR",
-        category: p.category?.toUpperCase() || "APPAREL"
+        badge: normalizeShopCategory(p.category),
+        category: normalizeShopCategory(p.category),
+        requiresAuthorization: !!p.requires_authorization
       }))
-    : hardcodedProducts;
+    : hardcodedProducts.map(p => ({ ...p, category: normalizeShopCategory(p.category), badge: normalizeShopCategory(p.category) }));
+
+  const presentCategories = SHOP_CATEGORIES.filter(c => products.some(p => p.category === c));
+  const extraCategories = [...new Set(products.map(p => p.category))].filter(c => !SHOP_CATEGORIES.includes(c));
+  const categories = ["ALL ITEMS", ...presentCategories, ...extraCategories];
+
+  const filteredProducts = products.filter(p => activeTab === "ALL ITEMS" || p.category === activeTab);
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const buttonHover = {
 
@@ -138,7 +152,7 @@ const Shop = () => {
         <header style={{ position: "relative", height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", margin: "20px 2.5%", borderRadius: "40px", marginTop: "20px" }}>
           <img loading="lazy" decoding="async"
             src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"
-            alt="Rogue Gear Shop"
+            alt="AMPEX Gear Shop"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }}
           />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent, rgba(10,10,10,0.8))" }} />
@@ -148,7 +162,7 @@ const Shop = () => {
               OFFICIAL GEAR
             </div>
             <h1 style={{ fontSize: "clamp(48px, 10vw, 100px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", marginBottom: "16px", lineHeight: "1.0" }}>
-              <ScrollReveal>ROGUE GEAR &</ScrollReveal> <br />
+              <ScrollReveal>AMPEX GEAR &</ScrollReveal> <br />
               <span style={{ color: "#FF6A00" }}><ScrollReveal>CERTIFICATES</ScrollReveal></span>
             </h1>
             <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "16px", maxWidth: "600px", margin: "0 auto" }}>
@@ -168,7 +182,7 @@ const Shop = () => {
                   if (cat === "ALL ITEMS") {
                     searchParams.delete("category");
                   } else {
-                    searchParams.set("category", cat.toLowerCase());
+                    searchParams.set("category", categorySlug(cat));
                   }
                   setSearchParams(searchParams);
                 }}
@@ -185,7 +199,7 @@ const Shop = () => {
                   textTransform: "uppercase"
                 }}
               >
-                {cat}
+                {cat === "ALL ITEMS" ? "All Items" : cat}
               </button>
             ))}
           </div>
@@ -220,129 +234,103 @@ const Shop = () => {
         {/* PRODUCT GRID */}
         <SponsorBanner placements={["shop"]} />
         <section style={{ padding: "0 5% 100px", maxWidth: "1400px", margin: "0 auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px" }}>
-            {products
-              .filter(p => activeTab === "ALL ITEMS" || p.category === activeTab)
-              .map((product) => (
-                <div 
-                  key={product.id} 
+          {pageProducts.length === 0 && (
+            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.4)", padding: "60px 20px", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: "20px" }}>
+              {loading ? "Loading products..." : "No products in this category yet."}
+            </div>
+          )}
+          <div className="shop-grid">
+            {pageProducts.map((product) => (
+                <div
+                  key={product.id}
                   onClick={() => navigate(`/product/${product.id}`)}
-                  style={{ 
-                    background: "#161616", 
-                    borderRadius: "32px", 
-                    overflow: "hidden", 
-                    border: "1px solid rgba(255,255,255,0.05)", 
-                    display: "flex", 
-                    flexDirection: "column",
-                    cursor: "pointer",
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = "#FF6A00";
-                    e.currentTarget.style.boxShadow = "0 20px 40px rgba(255, 106, 0, 0.15)";
-                    e.currentTarget.style.transform = "translateY(-8px)";
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
-                    e.currentTarget.style.boxShadow = "none";
-                    e.currentTarget.style.transform = "translateY(0)";
-                  }}
+                  className="shop-card"
                 >
-                  <div style={{ position: "relative", height: "220px" }}>
-                    <img loading="lazy" decoding="async" src={product.img} alt={product.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    <div style={{ position: "absolute", top: "16px", right: "16px", background: "#FF6A00", color: "white", padding: "4px 12px", borderRadius: "8px", fontSize: "9px", fontWeight: "900" }}>
-                      {product.badge}
-                    </div>
+                  {/* Whole image always visible: contain, centred, never cropped */}
+                  <div className="shop-card-media">
+                    <img loading="lazy" decoding="async" src={product.img} alt={product.title} />
+                    <div className="shop-card-badge">{product.badge}</div>
                   </div>
-                  <div style={{ padding: "24px", flex: 1, display: "flex", flexDirection: "column" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                      <h3 style={{ fontSize: "16px", fontWeight: "900", textTransform: "uppercase", width: "70%", lineHeight: "1.2" }}>{product.title}</h3>
-                      <div style={{ fontSize: "16px", fontWeight: "900", color: "#FF6A00" }}>{product.price}</div>
-                    </div>
-                    <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.4)", lineHeight: "1.6", marginBottom: "24px" }}>{product.desc}</p>
+                  <div className="shop-card-body">
+                    <h3 className="shop-card-title">{product.title}</h3>
+                    <div className="shop-card-price">{product.price}</div>
+                    {product.requiresAuthorization && <div className="shop-card-note">Requires approval</div>}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         navigate(`/product/${product.id}`);
                       }}
-                      {...buttonHover}
-                      style={{
-                        marginTop: "auto",
-                        background: "#FF6A00",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "100px",
-                        padding: "16px",
-                        fontSize: "12px",
-                        fontWeight: "900",
-                        textTransform: "uppercase",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "8px",
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
-                      }}
+                      className="shop-card-button"
                     >
-                      VIEW DETAILS <ArrowRight size={14} />
+                      View <ArrowRight size={12} />
                     </button>
                   </div>
                 </div>
               ))}
           </div>
+
+          {totalPages > 1 && (
+            <div className="shop-pagination">
+              <button disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Previous</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                <button key={n} className={n === currentPage ? "active" : ""} onClick={() => { setPage(n); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{n}</button>
+              ))}
+              <button disabled={currentPage === totalPages} onClick={() => { setPage(currentPage + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Next</button>
+            </div>
+          )}
         </section>
 
         {/* PREMIUM ELITE CTA */}
         <section style={{ padding: "0 2.5% 120px" }}>
-          <div style={{ 
-            position: "relative", 
-            borderRadius: "40px", 
-            overflow: "hidden", 
-            minHeight: "500px", 
-            display: "flex", 
+          <div style={{
+            position: "relative",
+            borderRadius: "40px",
+            overflow: "hidden",
+            minHeight: "500px",
+            display: "flex",
             alignItems: "center",
             boxShadow: "0 40px 80px rgba(0,0,0,0.8)"
           }}>
             {/* Background Image - Using a placeholder until the final asset is added to the repo */}
-            <img loading="lazy" decoding="async" 
-              src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1600&q=80" 
-              alt="Elite Member" 
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} 
+            <img loading="lazy" decoding="async"
+              src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1600&q=80"
+              alt="Elite Member"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }}
             />
             {/* Dark gradient fade from left to right */}
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.8) 40%, transparent 100%)" }} />
 
             <div style={{ position: "relative", zIndex: 10, padding: "80px", maxWidth: "800px", textAlign: "left" }}>
-              <span style={{ 
-                border: "1px solid #FF6A00", 
-                color: "#FF6A00", 
-                padding: "8px 20px", 
-                borderRadius: "100px", 
-                fontSize: "11px", 
-                fontWeight: "900", 
+              <span style={{
+                border: "1px solid #FF6A00",
+                color: "#FF6A00",
+                padding: "8px 20px",
+                borderRadius: "100px",
+                fontSize: "11px",
+                fontWeight: "900",
                 letterSpacing: "0.1em",
                 display: "inline-block",
                 marginBottom: "24px"
               }}>
                 LEVEL UP YOUR STATUS
               </span>
-              
-              <h2 style={{ 
-                fontSize: "clamp(60px, 8vw, 100px)", 
-                fontWeight: "950", 
-                marginBottom: "16px", 
-                lineHeight: "0.9", 
-                textTransform: "uppercase" 
+
+              <h2 style={{
+                fontSize: "clamp(60px, 8vw, 100px)",
+                fontWeight: "950",
+                marginBottom: "16px",
+                lineHeight: "0.9",
+                textTransform: "uppercase"
               }}>
                 <ScrollReveal>UNLOCKED</ScrollReveal><br/>
                 <span style={{ color: "#FF6A00" }}><ScrollReveal>ACCESS</ScrollReveal></span>
               </h2>
-              
-              <p style={{ 
-                color: "white", 
-                fontSize: "18px", 
-                maxWidth: "450px", 
-                marginBottom: "40px", 
+
+              <p style={{
+                color: "white",
+                fontSize: "18px",
+                maxWidth: "450px",
+                marginBottom: "40px",
                 lineHeight: "1.6",
                 fontWeight: "500"
               }}>

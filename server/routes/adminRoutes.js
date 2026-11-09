@@ -79,6 +79,7 @@ const { protect, admin } = require('../middleware/authMiddleware');
 
 // Lock down all endpoints underneath protection check
 router.use(protect);
+const extras = require('../controllers/adminExtrasController');
 router.use(admin);
 
 // 👥 User Operations
@@ -146,7 +147,7 @@ router.put('/ai-verification/settings', updateAISettings);
 router.get('/reports', getReports);
 router.put('/reports/:id', updateReport);
 router.get('/messages', getMessages);
-router.post('/messages', sendMessage);
+router.post('/messages', extras.sendAdminMessage); // real composer (to one member or all)
 router.get('/bans', getBans);
 
 // ⚖️ Dispute Resolution / Appeals (Phase 12)
@@ -157,6 +158,9 @@ router.put('/appeals/:id/notes', updateAppealNotes);
 
 // 🎬 Content, Media & Certificates (Phase 2)
 router.get('/media', getMediaAssets);
+router.post('/media', extras.createMediaAsset);
+router.put('/media/:id', extras.updateMediaAsset);
+router.delete('/media/:id', extras.deleteMediaAsset);
 router.get('/certificates', getCertificates);
 router.put('/certificates/:id/order', updateCertificateOrder);
 
@@ -177,7 +181,7 @@ const { getAuditLogs, triggerBackup, getApiKeys, updateSeoSettings } = require('
 router.get('/security/audit-logs', getAuditLogs);
 router.post('/security/backup', triggerBackup);
 router.get('/security/api-keys', getApiKeys);
-router.put('/security/seo', updateSeoSettings);
+router.put('/security/seo', extras.updateSeoSettings); // persisted in system_settings
 
 // 💰 Monetization, Sponsorships, Rankings & VIP (Phase 4)
 const { getSponsors, createSponsor, updateSponsor, deleteSponsor, trackSponsorClick, trackSponsorView, updateVipStatus, getRevenueMetrics, recalculateRankings } = require('../controllers/adminMonetizationController');
@@ -189,6 +193,13 @@ router.post('/monetization/sponsors/:id/click', trackSponsorClick);
 router.post('/monetization/sponsors/:id/view', trackSponsorView);
 router.put('/monetization/vip/:userId', updateVipStatus);
 router.get('/monetization/revenue', getRevenueMetrics);
+router.get('/monetization/breakdown', extras.getMonetizationBreakdown);
+
+// Championship belts & other products that need per-competitor approval
+const productAuth = require('../controllers/productAuthController');
+router.get('/product-authorizations', productAuth.listAuthorizations);
+router.post('/product-authorizations', productAuth.grantAuthorization);
+router.put('/product-authorizations/:id', productAuth.decideAuthorization);
 router.post('/monetization/rankings/recalculate', recalculateRankings);
 
 // 🏆 Challenges Management

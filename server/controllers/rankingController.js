@@ -53,7 +53,7 @@ exports.getGlobalRankings = async (req, res) => {
             tier_badge: 'Challenger',
           };
           usersMap[r.user_id].verified_records_count += 1;
-          usersMap[r.user_id].total_points += 5000;
+          usersMap[r.user_id].total_points += 10;
         });
         const dynamic = Object.values(usersMap).sort((a, b) => b.total_points - a.total_points);
         dynamic.forEach((r, idx) => { r.global_rank = idx + 1; });

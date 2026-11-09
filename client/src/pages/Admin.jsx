@@ -14,6 +14,44 @@ import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
 import { apiCall, formatProductImage, API_URL, uploadDirect } from "../utils/api";
 import AdminRankingPanel from "../components/AdminRankingPanel";
+import AdminCategoryManager from "../components/admin/AdminCategoryManager";
+import AdminDivisionPanels from "../components/admin/AdminDivisionPanels";
+import AdminPlansManager from "../components/admin/AdminPlansManager";
+import AdminSubscribers from "../components/admin/AdminSubscribers";
+import AdminMonetizationBreakdown from "../components/admin/AdminMonetizationBreakdown";
+import AdminMediaLibrary from "../components/admin/AdminMediaLibrary";
+import AdminCommunications from "../components/admin/AdminCommunications";
+import AdminProductAuthorizations from "../components/admin/AdminProductAuthorizations";
+import AdminCertificates from "../components/admin/AdminCertificates";
+import ImageUploadField from "../components/admin/ImageUploadField";
+import { Modal as AdminModal } from "../components/admin/adminUi";
+import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
+
+// Recommended artwork size for each sponsor placement (shown in the sponsor form)
+const SPONSOR_SIZES = {
+  homepage_top_banner: { w: 1920, h: 400, note: "Full-width banner at the top of the homepage" },
+  homepage_sidebar: { w: 1920, h: 400, note: "Homepage sponsor strip" },
+  homepage: { w: 1920, h: 400, note: "Homepage sponsor strip" },
+  featured: { w: 1920, h: 400, note: "Featured sponsor strip on the homepage" },
+  live_event: { w: 1920, h: 400, note: "Banner on the Events page" },
+  livestream: { w: 1920, h: 400, note: "Banner under the livestream player" },
+  shop: { w: 1920, h: 400, note: "Banner on the Shop page" },
+  video_overlay: { w: 600, h: 120, note: "Small logo strip over the video player. Transparent PNG works best" },
+  footer: { w: 400, h: 120, note: "Logo in the footer sponsor row. Transparent PNG works best" },
+  footer_sponsor: { w: 400, h: 120, note: "Logo in the footer sponsor row. Transparent PNG works best" },
+};
+
+// Event status from the real event data (not from its position in the list)
+const eventPhase = (ev) => {
+  const status = String(ev.status || "").toLowerCase();
+  const when = ev.date ? new Date(ev.date).getTime() : NaN;
+  const now = Date.now();
+  if (["completed", "past", "cancelled"].includes(status)) return "completed";
+  if (ev.is_live || status === "live") return "active";
+  if (!Number.isNaN(when) && when > now) return "scheduled";
+  if (!Number.isNaN(when) && now - when < 24 * 60 * 60 * 1000) return "active";
+  return "completed";
+};
 
 const Admin = () => {
   const { user, loading: authLoading } = useAuth();
@@ -229,12 +267,21 @@ const Admin = () => {
   const [recordThumbFile, setRecordThumbFile] = useState(null);
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
   const [eventForm, setEventForm] = useState({ title: "", description: "", date: "", location: "", imageUrl: "", isPaid: false, ticketPrice: 0 });
-  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [], imageFile: null, imagePreview: "" });
+  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false, imageFile: null, imagePreview: "" });
   const [adminProductDragActive, setAdminProductDragActive] = useState(false);
   const adminProductFileInputRef = React.useRef(null);
 
   // ===== CERTIFICATE & AWARD CONTROL SUITE STATE =====
-  const [adminSubTab, setAdminSubTab] = useState("generator");
+  const [adminSubTab, setAdminSubTab] = useState("official");
+  const [viewEvent, setViewEvent] = useState(null);
+  const [seoForm, setSeoForm] = useState({ title: "AMPEX World Records Elite Athlete Database", description: "", keywords: "" });
+  const [seoStatus, setSeoStatus] = useState("");
+  useEffect(() => {
+    if (activeTab !== "systemSettings") return;
+    apiCall("/settings/public", "GET")
+      .then((st) => setSeoForm({ title: st?.seoTitle || "AMPEX World Records Elite Athlete Database", description: st?.seoDescription || "", keywords: st?.seoKeywords || "" }))
+      .catch(() => {});
+  }, [activeTab]);
   const [certName, setCertName] = useState("JOHNATHAN TITAN");
   const [certRecord, setCertRecord] = useState("HEAVYWEIGHT BENCH PRESS WORLD RECORD");
   const [certValue, setCertValue] = useState("502.5 KG");
@@ -245,7 +292,7 @@ const Admin = () => {
   const [awardPrice, setAwardPrice] = useState("");
   const [awardDesc, setAwardDesc] = useState("");
   const [awardStock, setAwardStock] = useState("10");
-  const [awardCategory, setAwardCategory] = useState("CERTIFICATE");
+  const [awardCategory, setAwardCategory] = useState("Certificates");
   const [awardImageFile, setAwardImageFile] = useState(null);
   const [awardImagePreview, setAwardImagePreview] = useState("");
   const [awardDragActive, setAwardDragActive] = useState(false);
@@ -374,6 +421,7 @@ const Admin = () => {
     targetId: "",
     minPurchase: "",
     maxRedemptions: "",
+    maxPerUser: "1",
     restrictedMembershipTier: "",
     restrictedCountry: "",
     autoGenerate: false
@@ -1094,13 +1142,14 @@ const Admin = () => {
           description: item.description || "",
           price: item.price || "",
           imageUrl: item.image_url || "",
-          category: item.category || "Accessories",
+          category: normalizeShopCategory(item.category || "Accessories"),
           stockCount: item.stock_count || "",
           sizes: item.sizes || [],
-          imageUrls: item.image_urls || []
+          imageUrls: item.image_urls || [],
+          requiresAuthorization: !!item.requires_authorization
         });
       } else {
-        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [] });
+        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false });
       }
     } else if (activeTab === "coupons") {
       if (type === "edit" && item) {
@@ -1114,6 +1163,7 @@ const Admin = () => {
           targetId: item.target_id || "",
           minPurchase: item.min_purchase || "",
           maxRedemptions: item.max_redemptions || "",
+          maxPerUser: item.max_per_user === null || item.max_per_user === undefined ? "1" : Number(item.max_per_user) === 0 ? "" : String(item.max_per_user),
           restrictedMembershipTier: item.restricted_membership_tier || "",
           restrictedCountry: item.restricted_country || "",
           autoGenerate: false
@@ -1129,6 +1179,7 @@ const Admin = () => {
           targetId: "",
           minPurchase: "",
           maxRedemptions: "",
+          maxPerUser: "1",
           restrictedMembershipTier: "",
           restrictedCountry: "",
           autoGenerate: false
@@ -1415,6 +1466,7 @@ const Admin = () => {
             targetId: couponForm.targetId,
             minPurchase: parseFloat(couponForm.minPurchase) || 0,
             maxRedemptions: couponForm.maxRedemptions ? parseInt(couponForm.maxRedemptions) : null,
+            maxPerUser: couponForm.maxPerUser === "" ? 0 : parseInt(couponForm.maxPerUser), // 0 = unlimited per account
             restrictedMembershipTier: couponForm.restrictedMembershipTier || null,
             restrictedCountry: couponForm.restrictedCountry || null
           };
@@ -1713,7 +1765,7 @@ const Admin = () => {
       setJudges([
         {
           id: "j-1",
-          name: "Rogue Marshal Team",
+          name: "AMPEX Marshal Team",
           email: "marshals@rogueworldrecords.com",
           role: "judge",
           admin_notes: "Elite veteran review team. Expert in physical speed and weightlifting challenges.",
@@ -2058,7 +2110,7 @@ const Admin = () => {
             <div>
               <div style={{ marginBottom: "32px" }}>
                 <h1 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0" }}>Performance Overview</h1>
-                <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Real-time monitoring of Rogue World Records global network.</p>
+                <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Real-time monitoring of AMPEX World Records global network.</p>
               </div>
 
               {/* Stats Cards */}
@@ -2365,8 +2417,8 @@ const Admin = () => {
                             <td style={{ padding: "16px 0", display: "flex", alignItems: "center", gap: "12px" }}>
                               <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${r.user?.name || 'Athlete'}&background=random`} alt={r.user?.name || 'User'} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
                               <div>
-                                <div style={{ color: "white", fontSize: "14px", fontWeight: "700" }}>{r.user?.name || "Rogue Athlete"}</div>
-                                <div style={{ color: "#666", fontSize: "11px", marginTop: "2px" }}>{r.user?.email || "athlete@rogue.com"}</div>
+                                <div style={{ color: "white", fontSize: "14px", fontWeight: "700" }}>{r.user?.name || "AMPEX Athlete"}</div>
+                                <div style={{ color: "#666", fontSize: "11px", marginTop: "2px" }}>{r.user?.email || "athlete@example.com"}</div>
                               </div>
                             </td>
                             <td style={{ padding: "16px 0" }}>
@@ -2530,246 +2582,7 @@ const Admin = () => {
               )}
 
               {/* Categories Sub-Tab rendering */}
-              {recordsSubTab === "categories" && (
-                <div>
-                  {/* Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "40px" }}>
-                    <div>
-                      <div style={{ color: "#FF5500", fontSize: "11px", fontWeight: "900", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>
-                        Administration Engine
-                      </div>
-                      <h2 style={{ fontSize: "36px", fontWeight: "950", margin: "0 0 12px 0", color: "white", letterSpacing: "-1px", textTransform: "uppercase" }}>
-                        Category<br />Management
-                      </h2>
-                      <p style={{ color: "#888", margin: 0, fontSize: "14px", maxWidth: "450px", lineHeight: "1.6" }}>
-                        Control the foundational pillars of the Apex World Records ecosystem. Audit, expand, and monitor global category performance in real-time.
-                      </p>
-                    </div>
-                    <div style={{ display: "flex", gap: "16px", alignItems: "center", marginTop: "20px", flexWrap: "wrap" }}>
-                      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "12px 24px", borderRadius: "100px", display: "flex", alignItems: "center", gap: "16px" }}>
-                        <div style={{ color: "#888", fontSize: "11px", fontWeight: "800", letterSpacing: "1px" }}>TOTAL CATS</div>
-                        <div style={{ color: "#FF5500", fontSize: "18px", fontWeight: "900" }}>{categories.length}</div>
-                      </div>
-                      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "12px 24px", borderRadius: "100px", display: "flex", alignItems: "center", gap: "16px" }}>
-                        <div style={{ color: "#888", fontSize: "11px", fontWeight: "800", letterSpacing: "1px" }}>ACTIVE</div>
-                        <div style={{ color: "#22c55e", fontSize: "18px", fontWeight: "900" }}>{categories.filter(c => c.active !== false).length}</div>
-                      </div>
-                      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "12px 24px", borderRadius: "100px", display: "flex", alignItems: "center", gap: "16px" }}>
-                        <div style={{ color: "#888", fontSize: "11px", fontWeight: "800", letterSpacing: "1px" }}>INACTIVE</div>
-                        <div style={{ color: "#ef4444", fontSize: "18px", fontWeight: "900" }}>{categories.filter(c => c.active === false).length}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Search / Filter / Actions Toolbar */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", gap: "16px", flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", gap: "12px", alignItems: "center", flex: 1 }}>
-                      {/* Search */}
-                      <div style={{ position: "relative", flex: 1, maxWidth: "400px" }}>
-                        <Search size={16} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#666" }} />
-                        <input
-                          type="text"
-                          placeholder="Search categories..."
-                          value={categorySearchQuery}
-                          onChange={(e) => setCategorySearchQuery(e.target.value)}
-                          style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "12px 14px 12px 40px", color: "white", fontSize: "13px", fontWeight: "600", outline: "none" }}
-                        />
-                      </div>
-                      {/* Filter */}
-                      <select
-                        value={categoryActiveFilter}
-                        onChange={(e) => setCategoryActiveFilter(e.target.value)}
-                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "12px 18px", color: "white", fontSize: "12px", fontWeight: "800", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.5px" }}
-                      >
-                        <option value="all">All Status</option>
-                        <option value="active">Active Only</option>
-                        <option value="inactive">Inactive Only</option>
-                      </select>
-                    </div>
-                    <div style={{ display: "flex", gap: "12px" }}>
-                      <button
-                        onClick={handleSeedCategories}
-                        style={{ background: "transparent", color: "#FF5500", border: "1px solid #FF5500", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.5px", transition: "all 0.2s" }}
-                      >
-                        <Sparkles size={16} /> Seed Defaults
-                      </button>
-                      <button onClick={() => setCategoryModal({ isOpen: true, mode: 'add', category: { name: "", subs: [], active: true, rules: "", description: "", requirements: "", featured_records: "" } })} style={{ background: "#FF5500", color: "white", border: "none", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.5px", boxShadow: "0 8px 20px rgba(255,85,0,0.3)" }}>
-                        <Plus size={16} /> Add Category
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Categories Grid */}
-                  {(() => {
-                    const filteredCats = categoriesList.filter(cat => {
-                      const matchesSearch = !categorySearchQuery || cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase()) || (cat.description && cat.description.toLowerCase().includes(categorySearchQuery.toLowerCase()));
-                      const matchesFilter = categoryActiveFilter === "all" || (categoryActiveFilter === "active" && cat.active !== false) || (categoryActiveFilter === "inactive" && cat.active === false);
-                      return matchesSearch && matchesFilter;
-                    });
-
-                    return (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "24px", marginBottom: "40px" }}>
-                        {filteredCats.length === 0 ? (
-                          <div style={{ gridColumn: "span 6", padding: "80px", textAlign: "center", background: "rgba(255,255,255,0.02)", borderRadius: "24px", border: "1px dashed rgba(255,255,255,0.1)" }}>
-                            <Layers size={48} color="#FF5500" style={{ marginBottom: "16px" }} />
-                            <h3 style={{ color: "white", fontSize: "20px", fontWeight: "900", margin: "0 0 8px 0" }}>
-                              {categoriesList.length === 0 ? "NO CATEGORIES FOUND" : "NO MATCHING CATEGORIES"}
-                            </h3>
-                            <p style={{ color: "#888", fontSize: "14px", margin: "0 0 24px 0" }}>
-                              {categoriesList.length === 0
-                                ? "Seed the default Apex World Records categories or create your first custom one."
-                                : "Try adjusting your search or filter criteria."
-                              }
-                            </p>
-                            {categoriesList.length === 0 && (
-                              <div style={{ display: "flex", gap: "16px", justifyContent: "center" }}>
-                                <button onClick={handleSeedCategories} style={{ background: "transparent", color: "#FF5500", border: "2px solid #FF5500", padding: "14px 28px", borderRadius: "100px", fontSize: "14px", fontWeight: "900", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                  <Sparkles size={18} /> SEED 20 DEFAULT CATEGORIES
-                                </button>
-                                <button onClick={() => openModal("add")} style={{ background: "#FF5500", color: "white", border: "none", padding: "14px 28px", borderRadius: "100px", fontSize: "14px", fontWeight: "900", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                  <Plus size={18} /> ADD CUSTOM CATEGORY
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ) : filteredCats.map((cat, index) => {
-                          const colSpan = index < 2 ? (index === 0 ? 4 : 2) : 2;
-                          const isFirstRow = index < 2;
-                          const height = isFirstRow ? "360px" : "260px";
-
-                          const bgImages = [
-                            "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?q=80&w=1472&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1598387993441-a364f854c3e1?q=80&w=1470&auto=format&fit=crop",
-                            "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1470&auto=format&fit=crop"
-                          ];
-                          const bgImage = bgImages[index % bgImages.length];
-
-                          return (
-                            <div key={cat._id || cat.id || index} style={{
-                              gridColumn: `span ${colSpan}`,
-                              height: height,
-                              position: "relative",
-                              borderRadius: "24px",
-                              overflow: "hidden",
-                              boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
-                              transition: "transform 0.2s",
-                              opacity: cat.active === false ? 0.6 : 1
-                            }}>
-                              {/* Background Image */}
-                              <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center", filter: cat.active === false ? "grayscale(80%)" : "none" }} />
-                              {/* Dark overlay gradient */}
-                              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.1) 100%)" }} />
-
-                              {/* Content */}
-                              <div style={{ position: "relative", zIndex: 1, padding: "32px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                                {/* Top row */}
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                  <span style={{
-                                    background: cat.active !== false ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                                    border: `1px solid ${cat.active !== false ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
-                                    color: cat.active !== false ? "#22c55e" : "#ef4444",
-                                    padding: "6px 16px",
-                                    borderRadius: "100px",
-                                    fontSize: "10px",
-                                    fontWeight: "900",
-                                    letterSpacing: "1px",
-                                    backdropFilter: "blur(8px)"
-                                  }}>
-                                    {cat.active !== false ? "ACTIVE" : "INACTIVE"}
-                                  </span>
-
-                                  <div style={{ display: "flex", gap: "8px" }}>
-                                    {/* Toggle Active */}
-                                    <button
-                                      onClick={() => handleToggleCategoryActive(cat)}
-                                      title={cat.active !== false ? "Deactivate" : "Activate"}
-                                      style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.05)", color: cat.active !== false ? "#22c55e" : "#ef4444", width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
-                                    >
-                                      {cat.active !== false ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                                    </button>
-                                    {/* Edit */}
-                                    <button onClick={() => openModal("edit", cat)} title="Edit" style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}>
-                                      <Edit3 size={16} />
-                                    </button>
-                                    {/* Delete */}
-                                    {!cat.isDefault && (
-                                      <button
-                                        onClick={() => handleDelete(cat._id || cat.id)}
-                                        title="Delete"
-                                        style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", width: "36px", height: "36px", borderRadius: "50%", cursor: "pointer", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Bottom row */}
-                                <div>
-                                  <h3 style={{
-                                    fontSize: colSpan === 4 ? "48px" : "28px",
-                                    fontWeight: "950",
-                                    color: "white",
-                                    textTransform: "uppercase",
-                                    margin: "0 0 16px 0",
-                                    letterSpacing: "-1.5px",
-                                    lineHeight: "1"
-                                  }}>
-                                    {cat.name}
-                                  </h3>
-                                  {cat.description && (
-                                    <p style={{ color: "#aaa", fontSize: "12px", margin: "0 0 12px 0", lineHeight: "1.4", maxWidth: "300px" }}>
-                                      {cat.description.length > 80 ? cat.description.substring(0, 80) + "..." : cat.description}
-                                    </p>
-                                  )}
-
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-                                    <div>
-                                      <div style={{ color: "#aaa", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", marginBottom: "6px" }}>{colSpan === 4 ? "ACTIVE RECORDS" : "RECORDS"}</div>
-                                      <div style={{ color: "white", fontSize: "24px", fontWeight: "900" }}>
-                                        {records.filter(r => r.category === cat.name || r.category?.toLowerCase() === cat.name.toLowerCase()).length}
-                                      </div>
-                                    </div>
-                                    <div style={{ textAlign: "right" }}>
-                                      <div style={{ color: "#aaa", fontSize: "10px", fontWeight: "900", letterSpacing: "1px", marginBottom: "6px" }}>ORDER</div>
-                                      <div style={{ color: "#FF5500", fontSize: "18px", fontWeight: "900" }}>
-                                        #{cat.order || index + 1}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Bottom action row */}
-                  {categories.length > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ color: "#666", fontSize: "12px", fontWeight: "700" }}>
-                        Showing {categories.filter(cat => {
-                          const matchesSearch = !categorySearchQuery || cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase());
-                          const matchesFilter = categoryActiveFilter === "all" || (categoryActiveFilter === "active" && cat.active !== false) || (categoryActiveFilter === "inactive" && cat.active === false);
-                          return matchesSearch && matchesFilter;
-                        }).length} of {categories.length} categories
-                      </div>
-                      <button onClick={() => openModal("add")} style={{ background: "#FF5500", color: "white", border: "none", padding: "16px 32px", borderRadius: "100px", fontSize: "14px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "1px", boxShadow: "0 10px 20px rgba(255,85,0,0.3)" }}>
-                        <Plus size={18} /> Add New Category
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              {recordsSubTab === "categories" && <AdminCategoryManager />}
 
               {/* Age Groups / Divisions Sub-Tab rendering */}
               {recordsSubTab === "ageGroups" && (
@@ -2779,7 +2592,7 @@ const Admin = () => {
                     <div>
                       <h2 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0", letterSpacing: "-0.5px" }}>Management Console</h2>
                       <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>
-                        Control the foundational structures of Rogue World Records.
+                        Control the foundational structures of AMPEX World Records.
                       </p>
                     </div>
                     <div style={{ display: "flex", gap: "12px" }}>
@@ -2851,122 +2664,8 @@ const Admin = () => {
                     )}
                   </div>
 
-                  {/* Bottom Grid: Categories & Weight Classes */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "24px" }}>
-
-                    {/* Categories Hierarchy */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <Layers size={20} color="#FF5500" />
-                          <h3 style={{ fontSize: "20px", fontWeight: "900", margin: 0 }}>Categories Hierarchy</h3>
-                        </div>
-                        <button style={{ background: "transparent", border: "none", color: "#FF5500", fontSize: "13px", fontWeight: "800", cursor: "pointer" }}>Reorder All</button>
-                      </div>
-
-                      <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "0" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                          <thead>
-                            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", color: "#888", fontSize: "11px", fontWeight: "900", textTransform: "uppercase" }}>
-                              <th style={{ padding: "20px 24px", textAlign: "left" }}>NAME</th>
-                              <th style={{ padding: "20px 24px", textAlign: "center" }}>TOTAL RECORDS</th>
-                              <th style={{ padding: "20px 24px", textAlign: "center" }}>GLOBAL RANK</th>
-                              <th style={{ padding: "20px 24px", textAlign: "right" }}>ACTIONS</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {categories.length === 0 ? (
-                              <tr><td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#888" }}>No categories found</td></tr>
-                            ) : categories.slice(0, 5).map((cat, i) => (
-                              <tr key={cat._id || i} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                                <td style={{ padding: "16px 24px", display: "flex", alignItems: "center", gap: "12px" }}>
-                                  <div style={{ background: "rgba(255,85,0,0.1)", padding: "8px", borderRadius: "8px", color: "#FF5500", display: "flex" }}>
-                                    {i % 4 === 0 ? <Activity size={16} /> : i % 4 === 1 ? <Zap size={16} /> : i % 4 === 2 ? <Timer size={16} /> : <Sparkles size={16} />}
-                                  </div>
-                                  <span style={{ fontWeight: "800", color: "white", fontSize: "14px" }}>{cat.name}</span>
-                                </td>
-                                <td style={{ padding: "16px 24px", textAlign: "center", color: "#aaa", fontSize: "13px", fontWeight: "600" }}>
-                                  {Math.floor(Math.random() * 1000) + 100} {/* Dummy stat since we don't track total records per category yet */}
-                                </td>
-                                <td style={{ padding: "16px 24px", textAlign: "center", color: "#FF5500", fontSize: "13px", fontWeight: "900" }}>
-                                  #{i + 1}
-                                </td>
-                                <td style={{ padding: "16px 24px", textAlign: "right" }}>
-                                  <div style={{ display: "inline-flex", gap: "12px", color: "#666" }}>
-                                    <button style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer" }}><Edit3 size={16} /></button>
-                                    <button style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer" }}><Trash2 size={16} /></button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        <button style={{ width: "100%", padding: "16px", background: "transparent", border: "none", borderTop: "1px solid rgba(255,255,255,0.05)", color: "#888", fontSize: "13px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                          <Plus size={16} /> Add New Category
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Weight Classes */}
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-                        <Component size={20} color="#FF5500" />
-                        <h3 style={{ fontSize: "20px", fontWeight: "900", margin: 0 }}>Weight Classes</h3>
-                      </div>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderLeft: "4px solid #FF5500", borderRadius: "12px", padding: "20px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                            <h4 style={{ fontSize: "16px", fontWeight: "900", color: "white", margin: 0 }}>Lightweight</h4>
-                            <span style={{ background: "rgba(255,255,255,0.1)", color: "#888", fontSize: "9px", fontWeight: "900", padding: "4px 8px", borderRadius: "4px" }}>LW</span>
-                          </div>
-                          <p style={{ color: "#666", fontSize: "11px", margin: "0 0 16px 0" }}>Weight limit up to 155 lbs (70.3 kg)</p>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#888", fontWeight: "800", marginBottom: "8px" }}>
-                            <span>320 Registered</span>
-                            <span>35% of total</span>
-                          </div>
-                          <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px" }}>
-                            <div style={{ width: "35%", height: "100%", background: "#FF5500", borderRadius: "2px" }}></div>
-                          </div>
-                        </div>
-
-                        <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderLeft: "4px solid #FF5500", borderRadius: "12px", padding: "20px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                            <h4 style={{ fontSize: "16px", fontWeight: "900", color: "white", margin: 0 }}>Middleweight</h4>
-                            <span style={{ background: "rgba(255,255,255,0.1)", color: "#888", fontSize: "9px", fontWeight: "900", padding: "4px 8px", borderRadius: "4px" }}>MW</span>
-                          </div>
-                          <p style={{ color: "#666", fontSize: "11px", margin: "0 0 16px 0" }}>Weight limit 156 - 185 lbs (83.9 kg)</p>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#888", fontWeight: "800", marginBottom: "8px" }}>
-                            <span>412 Registered</span>
-                            <span>48% of total</span>
-                          </div>
-                          <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px" }}>
-                            <div style={{ width: "48%", height: "100%", background: "#FF5500", borderRadius: "2px" }}></div>
-                          </div>
-                        </div>
-
-                        <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.05)", borderLeft: "4px solid #FF5500", borderRadius: "12px", padding: "20px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                            <h4 style={{ fontSize: "16px", fontWeight: "900", color: "white", margin: 0 }}>Heavyweight</h4>
-                            <span style={{ background: "rgba(255,255,255,0.1)", color: "#888", fontSize: "9px", fontWeight: "900", padding: "4px 8px", borderRadius: "4px" }}>HW</span>
-                          </div>
-                          <p style={{ color: "#666", fontSize: "11px", margin: "0 0 16px 0" }}>Weight 186 lbs+ (84 kg+)</p>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#888", fontWeight: "800", marginBottom: "8px" }}>
-                            <span>155 Registered</span>
-                            <span>17% of total</span>
-                          </div>
-                          <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px" }}>
-                            <div style={{ width: "17%", height: "100%", background: "#FF5500", borderRadius: "2px" }}></div>
-                          </div>
-                        </div>
-
-                        <button style={{ background: "transparent", border: "1px dashed rgba(255,255,255,0.1)", color: "#888", padding: "20px", borderRadius: "12px", fontSize: "13px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                          <Plus size={16} /> Define New Weight Class
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
+                  {/* Live category hierarchy + weight classes (saved in the database) */}
+                  <AdminDivisionPanels onManageCategories={() => setRecordsSubTab("categories")} />
                 </div>
               )}
             </div>
@@ -3286,9 +2985,9 @@ const Admin = () => {
                     Access our expert documentation on record verification protocols and admin security.
                   </p>
                   <div>
-                    <a href="#" style={{ color: "#FF5500", fontSize: "14px", fontWeight: "800", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                    <Link to="/admin/guide" style={{ color: "#FF5500", fontSize: "14px", fontWeight: "800", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "8px" }}>
                       View Admin Guide <ArrowRight size={16} />
-                    </a>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -3296,6 +2995,43 @@ const Admin = () => {
           )}
 
           {/* ==================== 3. CHALLENGES (formerly Events) ==================== */}
+          {activeTab === "events" && viewEvent && (
+            <AdminModal
+              title={viewEvent.title || "Event"}
+              onClose={() => setViewEvent(null)}
+              width={620}
+              footer={<>
+                <a href="/events" target="_blank" rel="noreferrer" style={{ background: "rgba(255,255,255,0.05)", color: "white", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 700, textDecoration: "none" }}>Open Events page</a>
+                <button onClick={() => { const ev = viewEvent; setViewEvent(null); openModal("edit", ev); }} style={{ background: "#FF5500", color: "white", border: "none", borderRadius: "10px", padding: "10px 18px", fontSize: "13px", fontWeight: 800, cursor: "pointer" }}>Edit event</button>
+              </>}
+            >
+              {(viewEvent.image_url || viewEvent.imageUrl) && <img src={formatProductImage(viewEvent.image_url || viewEvent.imageUrl)} alt="" style={{ width: "100%", maxHeight: "260px", objectFit: "contain", background: "#0b0b0b", borderRadius: "12px" }} />}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+                {[
+                  ["Status", eventPhase(viewEvent) === "scheduled" ? "Scheduled" : eventPhase(viewEvent) === "active" ? "Active / live" : "Completed"],
+                  ["Date", viewEvent.date ? new Date(viewEvent.date).toLocaleString() : "—"],
+                  ["Location", viewEvent.location || "—"],
+                  ["Tickets", viewEvent.is_paid && Number(viewEvent.ticket_price) > 0 ? `$${Number(viewEvent.ticket_price).toFixed(2)} each` : "Free entry"],
+                  ["Livestream", viewEvent.stream_url ? "Link set" : "Not set"],
+                  ["Live now", viewEvent.is_live ? "Yes" : "No"],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "10px 12px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 800, color: "#777", textTransform: "uppercase", marginBottom: "4px" }}>{k}</div>
+                    <div style={{ fontSize: "14px", color: "white", fontWeight: 700, wordBreak: "break-word" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {viewEvent.description && <p style={{ color: "#bbb", fontSize: "14px", lineHeight: 1.6, margin: 0, whiteSpace: "pre-line" }}>{viewEvent.description}</p>}
+              {(viewEvent.competitors || viewEvent.judges || viewEvent.sponsors) && (
+                <div style={{ fontSize: "13px", color: "#aaa", lineHeight: 1.7 }}>
+                  {viewEvent.competitors && <div><strong style={{ color: "white" }}>Competitors:</strong> {viewEvent.competitors}</div>}
+                  {viewEvent.judges && <div><strong style={{ color: "white" }}>Judges:</strong> {viewEvent.judges}</div>}
+                  {viewEvent.sponsors && <div><strong style={{ color: "white" }}>Sponsors:</strong> {viewEvent.sponsors}</div>}
+                </div>
+              )}
+            </AdminModal>
+          )}
+
           {activeTab === "events" && (
             <div>
               {/* Header */}
@@ -3381,10 +3117,11 @@ const Admin = () => {
                   ];
                   const bgImg = item.image_url || item.imageUrl || fallbackImages[originalIndex % fallbackImages.length];
 
-                  // Determine status based on index for variety if real status isn't available
-                  const isCompleted = originalIndex === 2;
-                  const isScheduled = originalIndex === 1;
-                  const isActive = !isCompleted && !isScheduled;
+                  // Status from the event's own date / live flag / status
+                  const phase = eventPhase(item);
+                  const isCompleted = phase === "completed";
+                  const isScheduled = phase === "scheduled";
+                  const isActive = phase === "active";
 
                   return { ...item, originalIndex, bgImg, isCompleted, isScheduled, isActive };
                 });
@@ -3466,18 +3203,18 @@ const Admin = () => {
                         <div style={{ display: "flex", gap: "48px", marginRight: "48px" }}>
                           <div>
                             <div style={{ color: "#777", fontSize: "9px", fontWeight: "900", letterSpacing: "1px", marginBottom: "6px" }}>
-                              {isCompleted ? "FINAL FINISHERS" : "PARTICIPANTS"}
+                              EVENT DATE
                             </div>
                             <div style={{ color: "white", fontSize: "16px", fontWeight: "900" }}>
-                              {Math.floor(Math.random() * 2000)} {isScheduled && <span style={{ fontSize: "12px", color: "#888", fontWeight: "700" }}>(Waitlist)</span>}
+                              {item.date ? new Date(item.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "No date"}
                             </div>
                           </div>
                           <div>
                             <div style={{ color: "#777", fontSize: "9px", fontWeight: "900", letterSpacing: "1px", marginBottom: "6px" }}>
-                              {isCompleted ? "TOTAL PAYOUT" : "PRIZE POOL"}
+                              TICKETS
                             </div>
                             <div style={{ color: isCompleted ? "white" : "#FF5500", fontSize: "16px", fontWeight: "900" }}>
-                              ${item.ticket_price ? (item.ticket_price * 1000).toLocaleString() : (Math.floor(Math.random() * 30) * 1000).toLocaleString()}
+                              {item.is_paid && Number(item.ticket_price) > 0 ? `$${Number(item.ticket_price).toFixed(2)}` : "Free"}
                             </div>
                           </div>
                         </div>
@@ -3487,13 +3224,13 @@ const Admin = () => {
                           {isScheduled && <button style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Calendar size={14} /></button>}
                           {isCompleted && <button style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><BarChart2 size={14} /></button>}
 
-                          <button onClick={() => openModal("edit", item)} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-white-10">
+                          <button title={isCompleted ? "View event details" : "Edit event"} onClick={() => (isCompleted ? setViewEvent(item) : openModal("edit", item))} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-white-10">
                             {isCompleted ? <Eye size={14} /> : <Edit3 size={14} />}
                           </button>
 
                           {!isCompleted && (
                             <>
-                              <button style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-white-10">
+                              <button title="View event details" onClick={() => setViewEvent(item)} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.05)", color: "white", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-white-10">
                                 <Eye size={14} />
                               </button>
                               <button onClick={() => handleDelete(item.id)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", width: "32px", height: "32px", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }} className="hover-bg-red-20">
@@ -3585,7 +3322,7 @@ const Admin = () => {
                     🛍️ Products & Shop Inventory
                   </h2>
                   <p style={{ color: "#666", fontSize: "12px", margin: "4px 0 0 0", fontWeight: "700", letterSpacing: "0.5px" }}>
-                    MANAGE THE ROGUE OFFICIAL MERCHANDISE AND STOCK
+                    MANAGE THE AMPEX OFFICIAL MERCHANDISE AND STOCK
                   </p>
                 </div>
                 <button
@@ -3688,82 +3425,17 @@ const Admin = () => {
                   <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", margin: 0 }}>Customize live certificates, upload border templates, add physical medals to the Shop catalog, and review framed award customizations.</p>
                 </div>
                 <div style={{ display: "flex", gap: "10px" }}>
-                  {[{ id: "generator", label: "🎨 Visual Generator" }, { id: "templates", label: "📁 Theme Templates" }, { id: "medal-creator", label: "🏅 Award Creator" }, { id: "orders", label: "📦 Framed Orders" }].map(sub => (
+                  {[{ id: "official", label: "🏆 Certificates" }, { id: "medal-creator", label: "🏅 Award Creator" }, { id: "approvals", label: "🛡️ Belt Approvals" }].map(sub => (
                     <button key={sub.id} onClick={() => setAdminSubTab(sub.id)} style={{ background: adminSubTab === sub.id ? "#FF6A00" : "rgba(255,255,255,0.05)", color: "white", border: "none", padding: "8px 20px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", cursor: "pointer", textTransform: "uppercase", transition: "all 0.2s" }}>{sub.label}</button>
                   ))}
                 </div>
               </div>
 
-              {/* TAB 1: VISUAL GENERATOR */}
-              {adminSubTab === "generator" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "40px" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                    <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>RECIPIENT FULL NAME</label><input type="text" value={certName} onChange={e => setCertName(e.target.value.toUpperCase())} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }} /></div>
-                    <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>RECORD SCHEME / DESCRIPTION</label><input type="text" value={certRecord} onChange={e => setCertRecord(e.target.value.toUpperCase())} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }} /></div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                      <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>ACHIEVEMENT VALUE</label><input type="text" value={certValue} onChange={e => setCertValue(e.target.value.toUpperCase())} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }} /></div>
-                      <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>ACHIEVED DATE</label><input type="text" value={certDate} onChange={e => setCertDate(e.target.value.toUpperCase())} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }} /></div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                      <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>VERIFYING ADJUDICATOR</label><input type="text" value={certAdjudicator} onChange={e => setCertAdjudicator(e.target.value.toUpperCase())} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }} /></div>
-                      <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>SELECT TEMPLATE STYLE</label>
-                        <select value={certTheme} onChange={e => setCertTheme(e.target.value)} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px", color: "white", fontSize: "13px", outline: "none", cursor: "pointer" }}>
-                          <option value="onyx">ROGUE ONYX PREMIUM (CARBON)</option>
-                          <option value="parchment">CLASSIC IVORY PARCHMENT (VINTAGE)</option>
-                          <option value="gold">TITAN GOLD ARENA (LUXURY)</option>
-                          <option value="glacial">GLACIAL SUB-ZERO ENDURANCE (ICE)</option>
-                        </select>
-                      </div>
-                    </div>
-                    <button onClick={() => showToast("🖨️ Certificate Dispatched to Printer!", "success")} style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", marginTop: "12px", boxShadow: "0 10px 20px rgba(255,106,0,0.2)" }}>🖨️ PRINT & SHIP CERTIFICATE</button>
-                  </div>
-                  {/* Certificate Preview */}
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-                    <div style={{ width: "100%", maxWidth: "560px", aspectRatio: "1.414", padding: "24px", boxSizing: "border-box", borderRadius: "16px", position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", boxShadow: "0 25px 50px rgba(0,0,0,0.6)", border: certTheme === "onyx" ? "3px double #FF6A00" : certTheme === "parchment" ? "3px double #8a6d3b" : certTheme === "gold" ? "3px double #d4af37" : "3px double #38bdf8", background: certTheme === "onyx" ? "radial-gradient(circle, #1a1a1a 0%, #0a0a0a 100%)" : certTheme === "parchment" ? "#f4edd8" : certTheme === "gold" ? "radial-gradient(circle, #2d2410 0%, #0c0903 100%)" : "radial-gradient(circle, #0e1e24 0%, #050a0c 100%)", color: certTheme === "parchment" ? "#222" : "white" }}>
-                      <div style={{ position: "absolute", inset: "8px", border: certTheme === "onyx" ? "1px solid rgba(255,106,0,0.2)" : certTheme === "parchment" ? "1px solid rgba(138,109,59,0.3)" : certTheme === "gold" ? "1px solid rgba(212,175,55,0.3)" : "1px solid rgba(56,189,248,0.2)", pointerEvents: "none" }} />
-                      <div style={{ textAlign: "center", marginTop: "12px", zIndex: 2 }}>
-                        <div style={{ fontSize: "8px", fontWeight: "900", letterSpacing: "3px", color: certTheme === "parchment" ? "#8a6d3b" : certTheme === "gold" ? "#d4af37" : certTheme === "glacial" ? "#38bdf8" : "#FF6A00", marginBottom: "4px" }}>ROGUE WORLD RECORDS ASSOCIATION</div>
-                        <h4 style={{ fontSize: "20px", fontWeight: "950", letterSpacing: "-0.5px", fontFamily: "'Playfair Display', 'Georgia', serif", margin: 0 }}>CERTIFICATE OF RECORD ACHIEVEMENT</h4>
-                      </div>
-                      <div style={{ textAlign: "center", zIndex: 2, padding: "0 20px" }}>
-                        <div style={{ fontSize: "7px", letterSpacing: "1px", fontStyle: "italic", opacity: 0.6, marginBottom: "4px" }}>THIS IS TO OFFICIALLY CERTIFY THAT</div>
-                        <div style={{ fontSize: "22px", fontWeight: "950", letterSpacing: "0.5px", fontFamily: "'Playfair Display', 'Georgia', serif", color: certTheme === "parchment" ? "#000" : certTheme === "gold" ? "#facc15" : "white", borderBottom: certTheme === "parchment" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", display: "inline-block", paddingBottom: "2px", marginBottom: "8px", width: "80%" }}>{certName || "JOHNATHAN TITAN"}</div>
-                        <div style={{ fontSize: "7px", letterSpacing: "1px", fontStyle: "italic", opacity: 0.6, marginBottom: "6px" }}>SUCCESSFULLY BROKE THE STANDING WORLD RECORD FOR</div>
-                        <div style={{ fontSize: "12px", fontWeight: "900", letterSpacing: "0.5px", lineHeight: "1.2", width: "90%", margin: "0 auto 6px", textTransform: "uppercase" }}>{certRecord || "BENCH PRESS RECORD ATTEMPT"}</div>
-                        <div style={{ fontSize: "7px", letterSpacing: "1px", fontStyle: "italic", opacity: 0.6, marginBottom: "2px" }}>WITH AN OFFICIAL REGISTERED VALUE OF</div>
-                        <div style={{ fontSize: "24px", fontWeight: "950", color: certTheme === "parchment" ? "#8a6d3b" : certTheme === "gold" ? "#d4af37" : certTheme === "glacial" ? "#38bdf8" : "#FF6A00" }}>{certValue || "500.00 KG"}</div>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", zIndex: 2, padding: "0 16px 8px" }}>
-                        <div style={{ width: "120px", textAlign: "center" }}>
-                          <div style={{ fontSize: "11px", fontFamily: "'Brush Script MT','cursive','Georgia'", color: certTheme === "parchment" ? "#555" : "rgba(255,255,255,0.8)", lineHeight: "1", marginBottom: "2px" }}>{certAdjudicator || "Chief Marshall"}</div>
-                          <div style={{ borderTop: certTheme === "parchment" ? "1px solid #222" : "1px solid rgba(255,255,255,0.4)", width: "100%", height: "1px" }} />
-                          <div style={{ fontSize: "6px", fontWeight: "900", opacity: 0.5, marginTop: "2px", letterSpacing: "0.5px" }}>VERIFYING ADJUDICATOR</div>
-                        </div>
-                        <div style={{ position: "relative", width: "48px", height: "48px", background: "radial-gradient(circle, #ffe259 0%, #ffa751 100%)", borderRadius: "50%", boxShadow: "0 4px 10px rgba(0,0,0,0.3)", border: "1px dashed #d4af37", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ fontSize: "16px" }}>⭐</div></div>
-                        <div style={{ width: "120px", textAlign: "center" }}>
-                          <div style={{ fontSize: "8px", fontWeight: "900", marginBottom: "3px" }}>{certDate}</div>
-                          <div style={{ borderTop: certTheme === "parchment" ? "1px solid #222" : "1px solid rgba(255,255,255,0.4)", width: "100%", height: "1px" }} />
-                          <div style={{ fontSize: "6px", fontWeight: "900", opacity: 0.5, marginTop: "2px", letterSpacing: "0.5px" }}>DATE REGISTERED</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Official certificates: templates, approval queue, issued certificates (admin approval required) */}
+              {adminSubTab === "official" && <AdminCertificates />}
 
-              {/* TAB 2: THEME TEMPLATES */}
-              {adminSubTab === "templates" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px" }}>
-                  {[{ id: "onyx", title: "ROGUE ONYX PREMIUM", desc: "Dark Slate with carbon fiber textures & vibrant orange border line accents.", tags: "MOST POPULAR" }, { id: "parchment", title: "CLASSIC IVORY PARCHMENT", desc: "Elegant linen ivory finish with sepia classical framing & cursive styling.", tags: "TRADITIONAL" }, { id: "gold", title: "TITAN GOLD ARENA", desc: "Solid gold foil speckled frames with deep obsidian text borders.", tags: "CHAMPION" }, { id: "glacial", title: "GLACIAL SUB-ZERO", desc: "Alpine sub-zero endurance frost-blue gradient frame styling.", tags: "ENDURANCE" }].map(style => (
-                    <div key={style.id} onClick={() => { setCertTheme(style.id); setAdminSubTab("generator"); showToast(`Theme changed to: ${style.title}`, "success"); }} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "20px", padding: "24px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#FF6A00"; e.currentTarget.style.transform = "translateY(-4px)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; e.currentTarget.style.transform = "none"; }}>
-                      <div style={{ background: "rgba(255,255,255,0.05)", height: "80px", borderRadius: "12px", marginBottom: "16px", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: "20px" }}>{style.id === "onyx" ? "🖤" : style.id === "parchment" ? "📜" : style.id === "gold" ? "🏆" : "❄️"}</span></div>
-                      <span style={{ fontSize: "8px", fontWeight: "900", background: "rgba(255,106,0,0.15)", color: "#FF6A00", padding: "2px 8px", borderRadius: "4px" }}>{style.tags}</span>
-                      <h4 style={{ fontSize: "14px", fontWeight: "900", color: "white", marginTop: "12px", marginBottom: "6px" }}>{style.title}</h4>
-                      <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", margin: 0, lineHeight: "1.4" }}>{style.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Purchase approvals for championship belts */}
+              {adminSubTab === "approvals" && <AdminProductAuthorizations products={products} />}
 
               {/* TAB 3: AWARD CREATOR */}
               {adminSubTab === "medal-creator" && (
@@ -3778,10 +3450,7 @@ const Admin = () => {
                     <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>CATALOG STOCK COUNT</label><input type="number" value={awardStock} onChange={e => setAwardStock(e.target.value)} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }} /></div>
                     <div><label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>PRODUCT CATEGORY</label>
                       <select value={awardCategory} onChange={e => setAwardCategory(e.target.value)} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px", color: "white", fontSize: "13px", outline: "none", cursor: "pointer" }}>
-                        <option value="CERTIFICATE">CERTIFICATE</option>
-                        <option value="AWARD">AWARD</option>
-                        <option value="MEDAL">MEDAL</option>
-                        <option value="TROPHY">TROPHY</option>
+                        {SHOP_CATEGORIES.filter((c) => c !== "Tickets").map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
@@ -3811,37 +3480,6 @@ const Admin = () => {
               )}
 
               {/* TAB 4: FRAMED ORDERS LEDGER */}
-              {adminSubTab === "orders" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                    <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "1px" }}>IN-COMMEMORATIVE FRAMING DISPATCH LOGS</div>
-                    <span style={{ fontSize: "11px", color: "#FF6A00", fontWeight: "800" }}>TOTAL COMPLETED FRAMINGS: {awardOrders.filter(o => o.status === "completed").length}</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {awardOrders.map((ord) => (
-                      <div key={ord.id} style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "16px", padding: "20px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{ fontSize: "15px", fontWeight: "900", color: "white" }}>{ord.name}</span>
-                            <span style={{ fontSize: "9px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", padding: "2px 8px", borderRadius: "4px", fontWeight: "800" }}>{ord.frameType}</span>
-                          </div>
-                          <div style={{ fontSize: "12px", color: "#FF6A00", fontWeight: "700", marginTop: "4px" }}>Product: <span style={{ color: "white", fontWeight: "500" }}>{ord.product}</span></div>
-                          <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", margin: "6px 0 0 0", fontStyle: "italic" }}>{ord.customDetails}</p>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)", fontWeight: "700" }}>Ordered: {ord.date}</span>
-                          <span style={{ fontSize: "10px", fontWeight: "900", padding: "4px 12px", borderRadius: "100px", background: ord.status === "completed" ? "rgba(59,130,246,0.15)" : ord.status === "shipped" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)", color: ord.status === "completed" ? "#3b82f6" : ord.status === "shipped" ? "#22C55E" : "#EF4444", textTransform: "uppercase" }}>
-                            {ord.status === "completed" ? "Order Completed" : ord.status === "shipped" ? "Framed & Shipped" : "Processing Frame"}
-                          </span>
-                          <button onClick={() => handlePrintAwardSheet(ord)} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", padding: "8px 16px", borderRadius: "8px", fontSize: "11px", fontWeight: "800", cursor: "pointer" }}>🖨️ PRINT SHEET</button>
-                          <button onClick={() => handleToggleAwardShipping(ord.id)} style={{ background: ord.status === "shipped" ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)", border: ord.status === "shipped" ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(34,197,94,0.3)", color: ord.status === "shipped" ? "#EF4444" : "#22C55E", padding: "8px 16px", borderRadius: "8px", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}>{ord.status === "shipped" ? "Mark Processing" : "Mark Shipped"}</button>
-                          <button onClick={() => handleCompleteAwardOrder(ord.id)} style={{ background: ord.status === "completed" ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.4)", color: "#3b82f6", padding: "8px 16px", borderRadius: "8px", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}>{ord.status === "completed" ? "Completed" : "Order Complete"}</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -4451,501 +4089,17 @@ const Admin = () => {
               </div>
 
               {/* Tiers & Plans Sub-Tab */}
-              {membershipSubTab === "plans" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "20px", fontWeight: "900", color: "white", margin: 0 }}>Membership Plans</h3>
-                    <button onClick={() => setPlanModal({ isOpen: true, mode: 'add', plan: null })} style={{ background: "#FF5500", border: "none", color: "white", padding: "10px 20px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
-                      <Plus size={16} /> Add New Plan
-                    </button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
-                    {membershipPlans.map(tier => (
-                      <div key={tier.id} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${tier.color}40`, borderRadius: "16px", padding: "24px", position: "relative", opacity: tier.active ? 1 : 0.5 }}>
-                        <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "4px", background: tier.color, borderTopLeftRadius: "16px", borderTopRightRadius: "16px" }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px", color: tier.color }}>
-                          <Layers size={24} />
-                          <button onClick={() => setPlanModal({ isOpen: true, mode: 'edit', plan: tier })} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "4px 12px", borderRadius: "100px", fontSize: "10px", fontWeight: "900", cursor: "pointer" }}>EDIT</button>
-                        </div>
-                        <h4 style={{ fontSize: "24px", fontWeight: "900", color: "white", margin: "0 0 8px 0" }}>{tier.name} {tier.active ? "" : "(Inactive)"}</h4>
-                        <div style={{ fontSize: "16px", fontWeight: "700", color: tier.color, marginBottom: "8px" }}>{tier.price}</div>
-                        <div style={{ fontSize: "12px", color: "#888", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#FF5500' }} /> {tier.limits}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Subscribers Sub-Tab */}
-              {membershipSubTab === "subscribers" && (
-                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "18px", fontWeight: "900", color: "white", margin: 0 }}>Active Subscribers</h3>
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ color: "#888", fontSize: "11px", fontWeight: "800", textAlign: "left", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <th style={{ paddingBottom: "12px" }}>User</th>
-                        <th style={{ paddingBottom: "12px" }}>Current Plan</th>
-                        <th style={{ paddingBottom: "12px" }}>Status</th>
-                        <th style={{ paddingBottom: "12px" }}>Join Date</th>
-                        <th style={{ paddingBottom: "12px", textAlign: "right" }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { id: 1, user: 'Marcus Thorne', email: 'marcus@example.com', plan: 'Gold', status: 'Active', joinDate: 'Oct 12, 2025' },
-                        { id: 2, user: 'Sarah Jenkins', email: 'sarah@example.com', plan: 'Silver', status: 'Active', joinDate: 'Sep 05, 2025' },
-                        { id: 3, user: 'David Kim', email: 'dkim@example.com', plan: 'Free', status: 'Downgraded', joinDate: 'Aug 22, 2025' },
-                        { id: 4, user: 'Elena Rostova', email: 'elena@example.com', plan: 'Bronze', status: 'Expired', joinDate: 'Jan 15, 2025' }
-                      ].map((sub) => (
-                        <tr key={sub.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                          <td style={{ padding: "12px 0", display: "flex", alignItems: "center", gap: "12px" }}>
-                            <img loading="lazy" decoding="async" src={`https://ui-avatars.com/api/?name=${sub.user}&background=random`} alt={sub.user} style={{ width: "32px", height: "32px", borderRadius: "50%" }} />
-                            <div>
-                              <div style={{ color: "white", fontSize: "13px", fontWeight: "700" }}>{sub.user}</div>
-                              <div style={{ color: "#888", fontSize: "11px", marginTop: "2px" }}>{sub.email}</div>
-                            </div>
-                          </td>
-                          <td style={{ color: "white", fontSize: "13px", fontWeight: "700", padding: "12px 0" }}>{sub.plan}</td>
-                          <td style={{ padding: "12px 0" }}>
-                            <span style={{
-                              background: sub.status === 'Active' ? "rgba(34,197,94,0.1)" : sub.status === 'Expired' ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.05)",
-                              color: sub.status === 'Active' ? "#22c55e" : sub.status === 'Expired' ? "#ef4444" : "#888",
-                              padding: "4px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase"
-                            }}>
-                              {sub.status}
-                            </span>
-                          </td>
-                          <td style={{ color: "#aaa", fontSize: "12px", padding: "12px 0" }}>{sub.joinDate}</td>
-                          <td style={{ textAlign: "right", padding: "12px 0" }}>
-                            <button onClick={() => setSubscriberModal({ isOpen: true, subscriber: sub })} style={{ background: "transparent", border: "1px solid #FF5500", color: "#FF5500", padding: "6px 16px", borderRadius: "8px", fontSize: "11px", fontWeight: "800", cursor: "pointer" }}>Manage</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Payments Sub-Tab */}
-              {membershipSubTab === "payments" && (
-                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "18px", fontWeight: "900", color: "white", margin: 0 }}>Payment History</h3>
-                    <button onClick={() => {
-                      const data = [
-                        { date: 'Oct 28, 2025', user: 'Marcus T.', plan: 'Gold', amount: '$49.99', status: 'Success' },
-                        { date: 'Oct 27, 2025', user: 'Sarah J.', plan: 'Silver', amount: '$19.99', status: 'Success' },
-                        { date: 'Oct 26, 2025', user: 'John D.', plan: 'Bronze', amount: '$9.99', status: 'Failed' },
-                        { date: 'Oct 25, 2025', user: 'Alice W.', plan: 'Gold', amount: '$49.99', status: 'Refunded' }
-                      ];
-                      let csvContent = "data:text/csv;charset=utf-8,Date,User,Plan,Amount,Status\n";
-                      data.forEach(row => { csvContent += `${row.date},${row.user},${row.plan},${row.amount},${row.status}\n`; });
-                      const encodedUri = encodeURI(csvContent);
-                      const link = document.createElement("a");
-                      link.setAttribute("href", encodedUri);
-                      link.setAttribute("download", "payment_history.csv");
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "6px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "800", cursor: "pointer" }}>Export CSV</button>
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ color: "#888", fontSize: "11px", fontWeight: "800", textAlign: "left", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <th style={{ paddingBottom: "12px" }}>Date</th>
-                        <th style={{ paddingBottom: "12px" }}>User</th>
-                        <th style={{ paddingBottom: "12px" }}>Plan</th>
-                        <th style={{ paddingBottom: "12px" }}>Amount</th>
-                        <th style={{ paddingBottom: "12px" }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { date: 'Oct 28, 2025', user: 'Marcus T.', plan: 'Gold', amount: '$49.99', status: 'Success' },
-                        { date: 'Oct 27, 2025', user: 'Sarah J.', plan: 'Silver', amount: '$19.99', status: 'Success' },
-                        { date: 'Oct 26, 2025', user: 'John D.', plan: 'Bronze', amount: '$9.99', status: 'Failed' },
-                        { date: 'Oct 25, 2025', user: 'Alice W.', plan: 'Gold', amount: '$49.99', status: 'Refunded' }
-                      ].map((payment, idx) => (
-                        <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-                          <td style={{ color: "#aaa", fontSize: "12px", padding: "12px 0" }}>{payment.date}</td>
-                          <td style={{ color: "white", fontSize: "12px", fontWeight: "600", padding: "12px 0" }}>{payment.user}</td>
-                          <td style={{ color: "#aaa", fontSize: "12px", padding: "12px 0" }}>{payment.plan}</td>
-                          <td style={{ color: "white", fontSize: "12px", fontWeight: "700", padding: "12px 0" }}>{payment.amount}</td>
-                          <td style={{ padding: "12px 0" }}>
-                            <span style={{
-                              background: payment.status === 'Success' ? "rgba(34,197,94,0.1)" : payment.status === 'Failed' ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.05)",
-                              color: payment.status === 'Success' ? "#22c55e" : payment.status === 'Failed' ? "#ef4444" : "#888",
-                              padding: "4px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: "800"
-                            }}>
-                              {payment.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Modals for Membership Management */}
-              {planModal.isOpen && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-                  <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "16px", padding: "32px", width: "400px", maxWidth: "90%" }}>
-                    <h3 style={{ fontSize: "20px", fontWeight: "900", margin: "0 0 20px 0" }}>{planModal.mode === 'add' ? 'Add Membership Plan' : 'Edit Membership Plan'}</h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#888", marginBottom: "8px" }}>Plan Name</label>
-                        <input type="text" defaultValue={planModal.plan?.name || ""} placeholder="e.g. Diamond" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px", color: "white" }} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#888", marginBottom: "8px" }}>Price (per month/year)</label>
-                        <input type="text" defaultValue={planModal.plan?.price || ""} placeholder="e.g. $99/mo" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px", color: "white" }} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#888", marginBottom: "8px" }}>Limits Description</label>
-                        <input type="text" defaultValue={planModal.plan?.limits || ""} placeholder="e.g. Unlimited Submissions" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px", color: "white" }} />
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-                      <button onClick={() => setPlanModal({ isOpen: false, mode: 'add', plan: null })} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "8px 16px", borderRadius: "8px", fontSize: "12px", cursor: "pointer" }}>Cancel</button>
-                      <button onClick={() => { alert('Plan saved successfully!'); setPlanModal({ isOpen: false }); }} style={{ background: "#FF5500", border: "none", color: "white", padding: "8px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}>Save Plan</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {subscriberModal.isOpen && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-                  <div style={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "16px", padding: "32px", width: "400px", maxWidth: "90%" }}>
-                    <h3 style={{ fontSize: "20px", fontWeight: "900", margin: "0 0 20px 0" }}>Manage Subscriber: {subscriberModal.subscriber?.user}</h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#888", marginBottom: "8px" }}>Current Plan</label>
-                        <select defaultValue={subscriberModal.subscriber?.plan || "Free"} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px", color: "white" }}>
-                          {membershipPlans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#888", marginBottom: "8px" }}>Membership Status</label>
-                        <select defaultValue={subscriberModal.subscriber?.status || "Active"} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px", color: "white" }}>
-                          <option value="Active">Active</option>
-                          <option value="Expired">Expired</option>
-                          <option value="Suspended">Suspended</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-                      <button onClick={() => setSubscriberModal({ isOpen: false, subscriber: null })} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "8px 16px", borderRadius: "8px", fontSize: "12px", cursor: "pointer" }}>Cancel</button>
-                      <button onClick={() => { alert('Subscriber updated successfully!'); setSubscriberModal({ isOpen: false, subscriber: null }); }} style={{ background: "#FF5500", border: "none", color: "white", padding: "8px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}>Save Changes</button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {membershipSubTab === "plans" && <AdminPlansManager />}
+              {membershipSubTab === "subscribers" && <AdminSubscribers mode="subscribers" />}
+              {membershipSubTab === "payments" && <AdminSubscribers mode="payments" />}
             </div>
           )}
 
-          {/* ==================== 7. RECORD CATEGORY MANAGEMENT ==================== */}
-          {activeTab === "categories" && (
-            <div>
-              {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
-                <div>
-                  <div style={{ color: "#FF5500", fontSize: "11px", fontWeight: "900", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>
-                    Category Infrastructure
-                  </div>
-                  <h2 style={{ fontSize: "56px", fontWeight: "950", margin: "0 0 12px 0", color: "white", letterSpacing: "-2px", textTransform: "uppercase", lineHeight: "1" }}>
-                    CATEGORY
-                    <br />MANAGEMENT
-                  </h2>
-                </div>
-                <button onClick={() => setCategoryModal({ isOpen: true, mode: 'add', category: { name: "", subs: [], active: true, rules: "", requirements: "", featured_records: "" } })} style={{ background: "#FF5500", color: "white", border: "none", padding: "14px 28px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "1px", marginTop: "12px", boxShadow: "0 4px 14px rgba(255,85,0,0.4)" }}>
-                  <Plus size={14} /> ADD NEW CATEGORY
-                </button>
-              </div>
+          {/* ==================== 7. CATEGORIES (live) ==================== */}
+          {activeTab === "categories" && <AdminCategoryManager />}
 
-              {/* Category Search & Filters */}
-              <div style={{ background: "rgba(13,13,16,0.5)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "20px", padding: "16px 24px", marginBottom: "24px", display: "flex", alignItems: "center" }}>
-                <Search size={14} color="#555" style={{ marginRight: "12px" }} />
-                <input
-                  type="text"
-                  placeholder="Search categories by name or subcategory..."
-                  value={categorySearchQuery}
-                  onChange={(e) => setCategorySearchQuery(e.target.value)}
-                  style={{ background: "transparent", border: "none", color: "white", fontSize: "13px", outline: "none", width: "100%" }}
-                />
-              </div>
-
-              {/* Master Categories List */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "24px" }}>
-                {categoriesList
-                  .filter(cat =>
-                    cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
-                    cat.subs.some(sub => sub.toLowerCase().includes(categorySearchQuery.toLowerCase()))
-                  )
-                  .map(cat => (
-                  <div key={cat.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", position: "relative", overflow: "hidden", opacity: cat.active ? 1 : 0.4 }}>
-                    <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "4px", background: cat.active ? "linear-gradient(90deg, #FF5500, #ff8c00)" : "#444" }} />
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-                      <h3 style={{ fontSize: "24px", fontWeight: "950", color: "white", margin: 0, letterSpacing: "-0.5px", cursor: "pointer" }} onClick={() => setCategoryModal({ isOpen: true, mode: 'edit', category: JSON.parse(JSON.stringify(cat)) })}>{cat.name}</h3>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <button onClick={() => setCategoryModal({ isOpen: true, mode: 'edit', category: JSON.parse(JSON.stringify(cat)) })} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", width: "32px", height: "32px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit3 size={14} /></button>
-                        <button onClick={() => {
-                          if(window.confirm(`Are you sure you want to delete ${cat.name}?`)) {
-                            setCategoriesList(prev => prev.filter(c => c.id !== cat.id));
-                            showToast(`Category ${cat.name} deleted`, 'success');
-                          }
-                        }} style={{ background: "rgba(239,68,68,0.1)", border: "none", color: "#ef4444", width: "32px", height: "32px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: "20px", minHeight: "60px" }}>
-                      <div style={{ fontSize: "11px", color: "#888", fontWeight: "800", textTransform: "uppercase", marginBottom: "10px", letterSpacing: "1px" }}>Subcategories ({cat.subs.length})</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        {cat.subs.slice(0, 5).map(sub => (
-                          <span key={sub} style={{ background: "rgba(255,85,0,0.1)", color: "#FF5500", padding: "6px 12px", borderRadius: "100px", fontSize: "11px", fontWeight: "800" }}>{sub}</span>
-                        ))}
-                        {cat.subs.length > 5 && (
-                          <span style={{ background: "rgba(255,255,255,0.05)", color: "#aaa", padding: "6px 12px", borderRadius: "100px", fontSize: "11px", fontWeight: "800" }}>+{cat.subs.length - 5} more</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button onClick={() => setCategoryModal({ isOpen: true, mode: 'edit', category: JSON.parse(JSON.stringify(cat)) })} style={{ width: "100%", background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
-                      <Layers size={14} /> MANAGE CATEGORY
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Category Detail & Editor Modal */}
-              {categoryModal.isOpen && categoryModal.category && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, backdropFilter: "blur(8px)", padding: "20px" }}>
-                  <div style={{ background: "#0c0c0e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px", width: "100%", maxWidth: "800px", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
-                      <h3 style={{ fontSize: "20px", fontWeight: "900", color: "white", margin: 0 }}>{categoryModal.mode === 'add' ? 'Add New Category' : `Edit Category: ${categoryModal.category.name}`}</h3>
-                      <button onClick={() => setCategoryModal({ isOpen: false, mode: 'add', category: null })} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", padding: "8px" }}><X size={24} /></button>
-                    </div>
-
-                    <div style={{ padding: "32px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "24px" }}>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Category Name</label>
-                          <input type="text" value={categoryModal.category.name} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, name: e.target.value } }))} placeholder="e.g. Strength" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "14px", fontWeight: "700" }} />
-                        </div>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Status</label>
-                          <select value={categoryModal.category.active ? "true" : "false"} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, active: e.target.value === "true" } }))} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "14px", fontWeight: "700", outline: "none" }}>
-                            <option value="true">Active (Visible on public site)</option>
-                            <option value="false">Inactive (Hidden)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px" }}>
-                        <label style={{ display: "block", fontSize: "14px", color: "white", marginBottom: "16px", fontWeight: "900" }}>Manage Subcategories</label>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
-                          {categoryModal.category.subs.map((sub, idx) => (
-                            <div key={idx} style={{ background: "rgba(255,255,255,0.1)", color: "white", padding: "6px 12px", borderRadius: "100px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>
-                              {sub}
-                              <X size={12} color="#ff4444" style={{ cursor: "pointer" }} onClick={() => {
-                                const newSubs = categoryModal.category.subs.filter((s, i) => i !== idx);
-                                setCategoryModal(prev => ({ ...prev, category: { ...prev.category, subs: newSubs } }));
-                              }} />
-                            </div>
-                          ))}
-                          {categoryModal.category.subs.length === 0 && <span style={{ color: "#888", fontSize: "12px" }}>No subcategories added yet.</span>}
-                        </div>
-                        <div style={{ display: "flex", gap: "12px" }}>
-                          <input type="text" value={newSubcategoryInput} onChange={(e) => setNewSubcategoryInput(e.target.value)} onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newSubcategoryInput.trim()) {
-                              setCategoryModal(prev => ({ ...prev, category: { ...prev.category, subs: [...prev.category.subs, newSubcategoryInput.trim()] } }));
-                              setNewSubcategoryInput("");
-                            }
-                          }} placeholder="New subcategory name..." style={{ flex: 1, background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "10px 14px", color: "white", fontSize: "13px" }} />
-                          <button onClick={() => {
-                            if (newSubcategoryInput.trim()) {
-                              setCategoryModal(prev => ({ ...prev, category: { ...prev.category, subs: [...prev.category.subs, newSubcategoryInput.trim()] } }));
-                              setNewSubcategoryInput("");
-                            }
-                          }} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", padding: "0 20px", borderRadius: "8px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}>Add</button>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Assign Rules</label>
-                          <textarea value={categoryModal.category.rules || ""} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, rules: e.target.value } }))} placeholder="Define standard rules for this category..." style={{ width: "100%", height: "100px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px", resize: "vertical" }} />
-                        </div>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Submission Requirements</label>
-                          <textarea value={categoryModal.category.requirements || ""} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, requirements: e.target.value } }))} placeholder="e.g. Video must show full unedited attempt..." style={{ width: "100%", height: "100px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px", resize: "vertical" }} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Featured Records Showcase (Comma separated IDs)</label>
-                        <input type="text" value={categoryModal.category.featured_records || ""} onChange={(e) => setCategoryModal(prev => ({ ...prev, category: { ...prev.category, featured_records: e.target.value } }))} placeholder="rec_123, rec_456" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px" }} />
-                      </div>
-
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 32px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
-                      <button onClick={() => window.location.href = `/admin?tab=records&category=${encodeURIComponent(categoryModal.category.name)}`} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "white", padding: "10px 20px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}>View Records in Category</button>
-                      <div style={{ display: "flex", gap: "12px" }}>
-                        <button onClick={() => setCategoryModal({ isOpen: false, mode: 'add', category: null })} style={{ background: "transparent", border: "none", color: "#888", padding: "10px 20px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}>Cancel</button>
-                        <button onClick={async () => {
-                          if (!categoryModal.category.name.trim()) return showToast('Category name is required', 'error');
-
-                          try {
-                            if (categoryModal.mode === 'add') {
-                              // Create new category via API
-                              const apiRes = await apiCall('/categories', 'POST', {
-                                name: categoryModal.category.name,
-                                description: categoryModal.category.description || '',
-                                active: categoryModal.category.active,
-                                rules: categoryModal.category.rules || '',
-                                submissionRequirements: categoryModal.category.requirements || ''
-                              }, user.token);
-                              const newCat = { ...categoryModal.category, id: apiRes._id || apiRes.id, _id: apiRes._id };
-                              setCategoriesList(prev => [...prev, newCat]);
-                            } else {
-                              // Update category via API
-                              await apiCall(`/categories/${categoryModal.category._id || categoryModal.category.id}`, 'PUT', {
-                                name: categoryModal.category.name,
-                                description: categoryModal.category.description || '',
-                                active: categoryModal.category.active,
-                                rules: categoryModal.category.rules || '',
-                                submissionRequirements: categoryModal.category.requirements || ''
-                              }, user.token);
-                              setCategoriesList(prev => prev.map(c => (c._id || c.id) === (categoryModal.category._id || categoryModal.category.id) ? categoryModal.category : c));
-                            }
-                            setCategoryModal({ isOpen: false, mode: 'add', category: null });
-                            showToast(`Category ${categoryModal.mode === 'add' ? 'created' : 'updated'} successfully`, 'success');
-                          } catch (error) {
-                            showToast(`Error: ${error.message}`, 'error');
-                          }
-                        }} style={{ background: "#FF5500", border: "none", color: "white", padding: "10px 24px", borderRadius: "8px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}>Save Category</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ==================== 8. AGE GROUP / DIVISIONS MANAGEMENT ==================== */}
-          {activeTab === "divisions" && (
-            <div>
-              {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "40px" }}>
-                <div>
-                  <div style={{ color: "#FF5500", fontSize: "11px", fontWeight: "900", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "8px" }}>Demographic Settings</div>
-                  <h2 style={{ fontSize: "56px", fontWeight: "950", margin: "0 0 12px 0", color: "white", letterSpacing: "-2px", textTransform: "uppercase", lineHeight: "1" }}>AGE GROUP<br />MANAGEMENT</h2>
-                  <p style={{ color: "#888", fontSize: "14px", margin: 0 }}>Manage age divisions that apply to all record submissions and leaderboards.</p>
-                </div>
-                <button onClick={() => setDivisionModal({ isOpen: true, mode: 'add', division: { name: "", minAge: 0, maxAge: 100, description: "", color: "#FF5500", active: true } })} style={{ background: "#FF5500", color: "white", border: "none", padding: "14px 28px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "1px", marginTop: "12px", boxShadow: "0 4px 14px rgba(255,85,0,0.4)" }}>
-                  <Plus size={14} /> ADD NEW DIVISION
-                </button>
-              </div>
-
-              {/* Divisions List */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px", paddingBottom: "60px" }}>
-                {divisionsList.map(group => (
-                  <div key={group.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "24px", display: "flex", alignItems: "center", gap: "24px", opacity: group.active ? 1 : 0.4 }}>
-                    <div style={{ background: `${group.color}18`, border: `1px solid ${group.color}44`, width: "64px", height: "64px", borderRadius: "12px", display: "flex", justifyContent: "center", alignItems: "center", flexShrink: 0 }}>
-                      <User size={24} color={group.color} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
-                        <h3 style={{ fontSize: "22px", fontWeight: "950", color: "white", margin: 0, letterSpacing: "-0.5px" }}>{group.name}</h3>
-                        <span style={{ background: "rgba(255,255,255,0.1)", color: "white", padding: "4px 12px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", letterSpacing: "1px" }}>AGES {group.minAge}–{group.maxAge === 120 ? '100+' : group.maxAge}</span>
-                        {!group.active && <span style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", padding: "4px 12px", borderRadius: "100px", fontSize: "11px", fontWeight: "900" }}>INACTIVE</span>}
-                      </div>
-                      <p style={{ color: "#888", fontSize: "14px", margin: 0, lineHeight: "1.5" }}>{group.description}</p>
-                    </div>
-                    <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                      <button onClick={() => setDivisionModal({ isOpen: true, mode: 'edit', division: JSON.parse(JSON.stringify(group)) })} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", padding: "12px 20px", borderRadius: "8px", fontSize: "11px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <Edit3 size={14} /> EDIT
-                      </button>
-                      <button onClick={() => {
-                        if (window.confirm(`Delete division "${group.name}"?`)) {
-                          setDivisionsList(prev => prev.filter(d => d.id !== group.id));
-                          showToast(`Division "${group.name}" deleted`, 'success');
-                        }
-                      }} style={{ background: "rgba(239,68,68,0.1)", border: "none", color: "#ef4444", width: "40px", height: "40px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Division Add/Edit Modal */}
-              {divisionModal.isOpen && divisionModal.division && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000, backdropFilter: "blur(8px)", padding: "20px" }}>
-                  <div style={{ background: "#0c0c0e", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "24px", width: "100%", maxWidth: "600px", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
-                      <h3 style={{ fontSize: "20px", fontWeight: "900", color: "white", margin: 0 }}>{divisionModal.mode === 'add' ? 'Add New Division' : `Edit: ${divisionModal.division.name}`}</h3>
-                      <button onClick={() => setDivisionModal({ isOpen: false, mode: 'add', division: null })} style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", padding: "8px" }}><X size={24} /></button>
-                    </div>
-                    <div style={{ padding: "32px", display: "flex", flexDirection: "column", gap: "20px" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Division Name</label>
-                        <input type="text" value={divisionModal.division.name} onChange={(e) => setDivisionModal(prev => ({ ...prev, division: { ...prev.division, name: e.target.value } }))} placeholder="e.g. Junior Champions" style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "14px", fontWeight: "700" }} />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Minimum Age</label>
-                          <input type="number" value={divisionModal.division.minAge} onChange={(e) => setDivisionModal(prev => ({ ...prev, division: { ...prev.division, minAge: parseInt(e.target.value) || 0 } }))} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "14px", fontWeight: "700" }} />
-                        </div>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Maximum Age</label>
-                          <input type="number" value={divisionModal.division.maxAge} onChange={(e) => setDivisionModal(prev => ({ ...prev, division: { ...prev.division, maxAge: parseInt(e.target.value) || 100 } }))} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "14px", fontWeight: "700" }} />
-                        </div>
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Description</label>
-                        <textarea value={divisionModal.division.description} onChange={(e) => setDivisionModal(prev => ({ ...prev, division: { ...prev.division, description: e.target.value } }))} placeholder="Describe this age division..." rows={3} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px", resize: "vertical" }} />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Badge Color</label>
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <input type="color" value={divisionModal.division.color} onChange={(e) => setDivisionModal(prev => ({ ...prev, division: { ...prev.division, color: e.target.value } }))} style={{ width: "48px", height: "48px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", background: "transparent", cursor: "pointer", padding: "4px" }} />
-                            <span style={{ color: "#888", fontSize: "13px" }}>{divisionModal.division.color}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label style={{ display: "block", fontSize: "11px", color: "#888", marginBottom: "8px", fontWeight: "700", textTransform: "uppercase" }}>Status</label>
-                          <select value={divisionModal.division.active ? "true" : "false"} onChange={(e) => setDivisionModal(prev => ({ ...prev, division: { ...prev.division, active: e.target.value === "true" } }))} style={{ width: "100%", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 14px", color: "white", fontSize: "13px", outline: "none" }}>
-                            <option value="true">Active</option>
-                            <option value="false">Inactive</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", padding: "20px 32px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
-                      <button onClick={() => setDivisionModal({ isOpen: false, mode: 'add', division: null })} style={{ background: "transparent", border: "none", color: "#888", padding: "10px 20px", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer" }}>Cancel</button>
-                      <button onClick={() => {
-                        if (!divisionModal.division.name.trim()) return showToast('Division name is required', 'error');
-                        if (divisionModal.mode === 'add') {
-                          setDivisionsList(prev => [...prev, { ...divisionModal.division, id: Date.now() }]);
-                        } else {
-                          setDivisionsList(prev => prev.map(d => d.id === divisionModal.division.id ? divisionModal.division : d));
-                        }
-                        setDivisionModal({ isOpen: false, mode: 'add', division: null });
-                        showToast(`Division ${divisionModal.mode === 'add' ? 'created' : 'updated'} successfully`, 'success');
-                      }} style={{ background: "#FF5500", border: "none", color: "white", padding: "10px 24px", borderRadius: "8px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}>Save Division</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* ==================== 8. DIVISIONS (live) ==================== */}
+          {activeTab === "divisions" && <AdminDivisionPanels />}
 
           {/* ==================== 9. CHALLENGE RECORD MANAGEMENT ==================== */}
           {activeTab === "challenges" && (
@@ -5006,6 +4160,10 @@ const Admin = () => {
                       }
                       if (challengeForm.thumbnailImage) {
                         formData.append("thumbnailUrl", await uploadDirect(challengeForm.thumbnailImage, "admin-image", user.token));
+                      } else if (challengeForm.thumbnail_url) {
+                        formData.append("thumbnailUrl", challengeForm.thumbnail_url);
+                      } else if (challengeFormMode === "edit" && selectedChallenge?.thumbnail_url) {
+                        formData.append("removeThumbnail", "true");
                       }
                       const url = challengeFormMode === "edit" ? `/admin/challenges/${selectedChallenge.id}` : "/admin/challenges";
                       const method = challengeFormMode === "edit" ? "PUT" : "POST";
@@ -5085,9 +4243,7 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label style={{ display: "block", color: "#888", fontSize: "12px", fontWeight: "700", marginBottom: "8px" }}>Thumbnail Image (JPG, PNG, WEBP)</label>
-                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setChallengeForm({ ...challengeForm, thumbnailImage: e.target.files[0] })} style={{ color: "white" }} />
-                      {challengeFormMode === "edit" && selectedChallenge?.thumbnail_url && !challengeForm.thumbnailImage && <img loading="lazy" decoding="async" src={selectedChallenge.thumbnail_url} alt="Current" style={{ display: "block", marginTop: "12px", height: "60px", borderRadius: "8px" }} />}
+                      <ImageUploadField label="Thumbnail image" value={challengeForm.thumbnail_url || ""} onChange={(url) => setChallengeForm({ ...challengeForm, thumbnail_url: url, thumbnailImage: null })} hint="Upload an image or paste a link. Shown on the challenge card." />
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "20px" }}>
@@ -6015,6 +5171,7 @@ const Admin = () => {
             };
 
             const VQ_STATUSES = [
+              // Pending Review: new, not picked up yet. Under Review: an adjudicator is actively checking it.
               { key: "pending_review",  label: "Pending Review",        color: "#FF6A00", bg: "rgba(255,106,0,0.12)",  icon: <Clock size={14} /> },
               { key: "under_review",    label: "Under Review",          color: "#3b82f6", bg: "rgba(59,130,246,0.12)", icon: <Eye size={14} /> },
               { key: "approved",        label: "Approved",              color: "#22c55e", bg: "rgba(34,197,94,0.12)",  icon: <CheckCircle size={14} /> },
@@ -6904,55 +6061,7 @@ const Admin = () => {
           })()}
 
           {/* ==================== 5E. COMMUNICATIONS (PHASE 1) ==================== */}
-          {activeTab === "communications" && (
-            <div>
-              <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h1 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0", color: "#FF5500" }}>COMMUNICATIONS COMMAND</h1>
-                  <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Internal Messaging and Notification Center</p>
-                </div>
-                <button style={{ background: "#FF5500", color: "white", padding: "10px 24px", borderRadius: "100px", border: "none", fontWeight: "800", display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                  <MessageSquare size={16} /> NEW MESSAGE
-                </button>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "24px" }}>
-                <div style={{ background: "#111", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.05)", padding: "24px" }}>
-                  <h3 style={{ margin: "0 0 20px 0", fontSize: "16px" }}>Push Notifications</h3>
-                  <div style={{ background: "rgba(255,255,255,0.03)", padding: "16px", borderRadius: "12px", borderLeft: "4px solid #FF5500", marginBottom: "12px" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold" }}>System Maintenance</div>
-                    <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>Target: All Users • Sent 2hrs ago</div>
-                  </div>
-                  <div style={{ background: "rgba(255,255,255,0.03)", padding: "16px", borderRadius: "12px", borderLeft: "4px solid #22c55e" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold" }}>New Challenge Live!</div>
-                    <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>Target: Competitors • Sent yesterday</div>
-                  </div>
-                </div>
-
-                <div style={{ background: "#111", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.05)", padding: "24px" }}>
-                   <h3 style={{ margin: "0 0 20px 0", fontSize: "16px" }}>Internal Inbox</h3>
-                   <div style={{ border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", overflow: "hidden" }}>
-                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead style={{ background: "rgba(255,255,255,0.02)" }}>
-                          <tr>
-                            <th style={{ padding: "16px", textAlign: "left", fontSize: "12px", color: "#666" }}>SUBJECT</th>
-                            <th style={{ padding: "16px", textAlign: "left", fontSize: "12px", color: "#666" }}>SENDER</th>
-                            <th style={{ padding: "16px", textAlign: "left", fontSize: "12px", color: "#666" }}>DATE</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                            <td style={{ padding: "16px", fontSize: "13px" }}>Appeal Request #902</td>
-                            <td style={{ padding: "16px", fontSize: "13px", color: "#888" }}>JohnDoe</td>
-                            <td style={{ padding: "16px", fontSize: "13px", color: "#888" }}>Just now</td>
-                          </tr>
-                        </tbody>
-                     </table>
-                   </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === "communications" && <AdminCommunications />}
 
           {/* ==================== 5F. MODERATION (PHASE 1) ==================== */}
           {activeTab === "moderation" && (
@@ -7022,35 +6131,8 @@ const Admin = () => {
 
             return (
             <div>
-              <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h1 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0" }}>MEDIA LIBRARY</h1>
-                  <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Manage graphics, banners, and view record evidence.</p>
-                </div>
-                <button style={{ background: "#fff", color: "#000", padding: "10px 24px", borderRadius: "100px", border: "none", fontWeight: "800", cursor: "pointer" }}>
-                  UPLOAD ASSET
-                </button>
-              </div>
-
-              <div style={{ marginBottom: "40px" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: "900", color: "#FF5500", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "1px" }}>SYSTEM MEDIA ASSETS</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "20px" }}>
-                   {mediaAssets.map(asset => (
-                     <div key={asset.id} style={{ background: "#111", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
-                       <img loading="lazy" decoding="async" src={asset.file_url} style={{ width: "100%", height: "140px", objectFit: "cover" }} />
-                       <div style={{ padding: "12px" }}>
-                         <div style={{ fontSize: "13px", fontWeight: "bold", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{asset.title}</div>
-                         <div style={{ fontSize: "11px", color: "#888", display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-                           <span style={{ textTransform: "uppercase" }}>{asset.asset_type}</span>
-                           <span>{new Date(asset.created_at).toLocaleDateString()}</span>
-                         </div>
-                       </div>
-                     </div>
-                   ))}
-                   {mediaAssets.length === 0 && <div style={{ color: "#888", fontSize: "14px", gridColumn: "1 / -1", textAlign: "center", padding: "40px", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: "12px" }}>No media assets uploaded yet.</div>}
-                </div>
-              </div>
-
+              <AdminMediaLibrary />
+              <div style={{ height: "40px" }} />
               <div>
                 <h2 style={{ fontSize: "18px", fontWeight: "900", color: "#FF5500", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "1px" }}>RECORD VIDEO EVIDENCE</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "24px" }}>
@@ -7536,48 +6618,35 @@ const Admin = () => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
                   <div>
                     <label style={{ fontSize: "12px", color: "#888" }}>Default Meta Title</label>
-                    <input type="text" defaultValue="Rogue World Records | Elite Athlete Database" style={{ width: "100%", background: "#000", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "10px", borderRadius: "8px", marginTop: "4px" }} />
+                    <input type="text" value={seoForm.title} maxLength={70} onChange={(e) => setSeoForm({ ...seoForm, title: e.target.value })} style={{ width: "100%", background: "#000", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "10px", borderRadius: "8px", marginTop: "4px" }} />
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>{seoForm.title.length}/70 · shown in browser tabs and search results</div>
                   </div>
                   <div>
                     <label style={{ fontSize: "12px", color: "#888" }}>Default Meta Description</label>
-                    <textarea defaultValue="The global authority on extreme sports and elite world records." style={{ width: "100%", height: "60px", background: "#000", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "10px", borderRadius: "8px", marginTop: "4px", resize: "none" }} />
+                    <textarea value={seoForm.description} maxLength={160} onChange={(e) => setSeoForm({ ...seoForm, description: e.target.value })} style={{ width: "100%", height: "70px", background: "#000", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "10px", borderRadius: "8px", marginTop: "4px", resize: "vertical" }} />
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>{seoForm.description.length}/160</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#888" }}>Keywords (comma separated)</label>
+                    <input type="text" value={seoForm.keywords} onChange={(e) => setSeoForm({ ...seoForm, keywords: e.target.value })} style={{ width: "100%", background: "#000", border: "1px solid rgba(255,255,255,0.1)", color: "white", padding: "10px", borderRadius: "8px", marginTop: "4px" }} />
                   </div>
                 </div>
                 <button onClick={async () => {
+                  if (!seoForm.title.trim()) { setSeoStatus("The meta title cannot be empty."); return; }
+                  setSeoStatus("Saving...");
                   try {
-                    const res = await apiCall('/admin/security/seo', 'PUT', { title: 'Rogue World Records', meta_description: 'The global authority...', keywords: 'sports, records' }, user.token);
-                    if (res) alert("Global SEO tags updated successfully.");
-                  } catch (e) { alert("Failed to save SEO settings."); }
+                    await apiCall('/admin/security/seo', 'PUT', { title: seoForm.title.trim(), meta_description: seoForm.description.trim(), keywords: seoForm.keywords.trim() }, user.token);
+                    document.title = seoForm.title.trim();
+                    setSeoStatus("Saved. The new title is live on the website.");
+                  } catch (e) { setSeoStatus(`Could not save: ${e.message}`); }
                 }} style={{ background: "white", color: "black", padding: "8px 24px", borderRadius: "100px", border: "none", fontSize: "12px", fontWeight: "bold", cursor: "pointer", marginTop: "16px" }}>SAVE SEO</button>
+                {seoStatus && <span style={{ marginLeft: "12px", fontSize: "12px", color: seoStatus.startsWith("Saved") ? "#22c55e" : seoStatus === "Saving..." ? "#aaa" : "#ef4444" }}>{seoStatus}</span>}
               </div>
             </div>
           )}
 
           {/* ==================== 5K. MONETIZATION (PHASE 4) ==================== */}
-          {activeTab === "monetization" && (
-            <div>
-              <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h1 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0", color: "#10b981" }}>MONETIZATION COMMAND</h1>
-                  <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Revenue metrics, Subscription Billing, and Financial Overview.</p>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px", marginBottom: "24px" }}>
-                 <div style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "16px", padding: "20px" }}>
-                   <div style={{ color: "#10b981", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase" }}>Monthly Recurring Revenue</div>
-                   <div style={{ fontSize: "32px", fontWeight: "950", marginTop: "8px" }}>${(revenueMetrics?.totalRevenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                 </div>
-                 <div style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "16px", padding: "20px" }}>
-                   <div style={{ color: "#10b981", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase" }}>Active Memberships</div>
-                   <div style={{ fontSize: "32px", fontWeight: "950", marginTop: "8px" }}>{(revenueMetrics?.activeSubscriptions || 0).toLocaleString()}</div>
-                 </div>
-                 <div style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "16px", padding: "20px" }}>
-                   <div style={{ color: "#10b981", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase" }}>Failed Billing Attempts</div>
-                   <div style={{ fontSize: "32px", fontWeight: "950", marginTop: "8px", color: "#ef4444" }}>42</div>
-                 </div>
-              </div>
-            </div>
-          )}
+          {activeTab === "monetization" && <AdminMonetizationBreakdown />}
 
           {/* ==================== 5L. SPONSORSHIPS — FULL MANAGEMENT ==================== */}
           {activeTab === "sponsorships" && (() => {
@@ -7644,7 +6713,9 @@ const Admin = () => {
                     k === "package_type" ? "packageType" :
                     k === "active_status" ? "activeStatus" :
                     k === "start_date" ? "startDate" :
-                    k === "end_date" ? "endDate" : k,
+                    k === "end_date" ? "endDate" :
+                    k === "image_fit" ? "imageFit" :
+                    k === "image_position" ? "imagePosition" : k,
                     v
                   );
                 });
@@ -7725,7 +6796,7 @@ const Admin = () => {
                 </div>
 
                 {/* Status messages */}
-                {sponsorSaveStatus === "success"    && <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#22c55e", fontWeight: "700" }}>✅ {sponsorFormMode === "add" ? "Sponsor added successfully." : "Sponsor updated successfully."}</div>}
+                {sponsorSaveStatus === "success"    && <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#22c55e", fontWeight: "700" }}>✅ Sponsor saved successfully.</div>}
                 {sponsorSaveStatus === "error"      && <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#ef4444", fontWeight: "700" }}>❌ Sponsor could not be saved.</div>}
                 {sponsorSaveStatus === "imageError" && <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#ef4444", fontWeight: "700" }}>❌ Image upload failed.</div>}
 
@@ -7766,19 +6837,48 @@ const Admin = () => {
                       </div>
                       <div>
                         <label style={labelStyle}>Start Date</label>
-                        <input type="date" max={new Date().toISOString().split('T')[0]} value={sponsorForm.start_date || ""} onChange={e => setSponsorForm(p => ({ ...p, start_date: e.target.value }))} style={{ ...inputStyle, colorScheme: "dark" }} />
+                        <input type="date" value={sponsorForm.start_date || ""} onChange={e => setSponsorForm(p => ({ ...p, start_date: e.target.value }))} style={{ ...inputStyle, colorScheme: "dark" }} />
                       </div>
                       <div>
                         <label style={labelStyle}>End Date</label>
-                        <input type="date" max={new Date().toISOString().split('T')[0]} value={sponsorForm.end_date || ""} onChange={e => setSponsorForm(p => ({ ...p, end_date: e.target.value }))} style={{ ...inputStyle, colorScheme: "dark" }} />
+                        <input type="date" value={sponsorForm.end_date || ""} onChange={e => setSponsorForm(p => ({ ...p, end_date: e.target.value }))} style={{ ...inputStyle, colorScheme: "dark" }} />
                       </div>
                       <div>
                         <label style={labelStyle}>Upload Banner (JPG/PNG/WEBP)</label>
                         <input type="file" accept="image/jpg,image/jpeg,image/png,image/webp"
                           onChange={e => setSponsorForm(p => ({ ...p, _bannerFile: e.target.files[0], banner_url: e.target.files[0] ? URL.createObjectURL(e.target.files[0]) : p.banner_url }))}
                           style={{ ...inputStyle, padding: "8px" }} />
-                        {sponsorForm.banner_url && <img loading="lazy" decoding="async" src={sponsorForm.banner_url} alt="Banner Preview" style={{ marginTop: "8px", maxHeight: "60px", borderRadius: "6px", objectFit: "cover" }} />}
+                        {(() => {
+                          const size = SPONSOR_SIZES[sponsorForm.placement || "homepage"] || SPONSOR_SIZES.homepage;
+                          return (
+                            <div style={{ fontSize: "11px", color: "#888", marginTop: "6px", lineHeight: 1.5 }}>
+                              Recommended: <strong style={{ color: "#FF5500" }}>{size.w} × {size.h} px</strong> ({(size.w / size.h).toFixed(1)}:1). {size.note}.
+                            </div>
+                          );
+                        })()}
                       </div>
+                      <div>
+                        <label style={labelStyle}>Banner fit</label>
+                        <select value={sponsorForm.image_fit || "contain"} onChange={e => setSponsorForm(p => ({ ...p, image_fit: e.target.value }))} style={{ ...inputStyle }}>
+                          <option value="contain">Show the whole banner (never cropped)</option>
+                          <option value="cover">Fill the space (edges may be cropped)</option>
+                        </select>
+                        <label style={{ ...labelStyle, marginTop: "10px" }}>Focus point</label>
+                        <select value={sponsorForm.image_position || "center"} onChange={e => setSponsorForm(p => ({ ...p, image_position: e.target.value }))} style={{ ...inputStyle }}>
+                          {["center", "top", "bottom", "left", "right"].map(pos => <option key={pos} value={pos}>{pos.charAt(0).toUpperCase() + pos.slice(1)}</option>)}
+                        </select>
+                      </div>
+                      {sponsorForm.banner_url && (() => {
+                        const size = SPONSOR_SIZES[sponsorForm.placement || "homepage"] || SPONSOR_SIZES.homepage;
+                        return (
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <label style={labelStyle}>Preview (as it appears on the site)</label>
+                            <div style={{ width: "100%", maxWidth: `${Math.min(size.w, 900)}px`, aspectRatio: `${size.w} / ${size.h}`, background: "#0a0a0a", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: "10px", overflow: "hidden" }}>
+                              <img src={sponsorForm.banner_url} alt="Banner preview" style={{ width: "100%", height: "100%", objectFit: sponsorForm.image_fit === "cover" ? "cover" : "contain", objectPosition: sponsorForm.image_position || "center", display: "block" }} />
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <div>
                         <label style={labelStyle}>Upload Logo (JPG/PNG/WEBP)</label>
                         <input type="file" accept="image/jpg,image/jpeg,image/png,image/webp"
@@ -8270,10 +7370,14 @@ const Admin = () => {
                                   )}
                                 </td>
                                 <td style={{ padding: "20px 24px", color: "white", fontWeight: "700" }}>
-                                  <div style={{ fontSize: "13px" }}>{coupon.redemptions_count || 0} Uses</div>
-                                  <div style={{ fontSize: "10px", color: "#555" }}>
-                                    {coupon.max_redemptions ? `Limit: ${coupon.max_redemptions}` : 'Unlimited Uses'}
+                                  <div style={{ fontSize: "13px" }}>{coupon.redemptions_count || 0}{coupon.max_redemptions ? ` / ${coupon.max_redemptions}` : ""} uses</div>
+                                  <div style={{ fontSize: "10px", color: "#888" }}>
+                                    {coupon.max_redemptions ? `${Math.max(0, coupon.max_redemptions - (coupon.redemptions_count || 0))} left` : 'No total limit'}
+                                    {" · "}{coupon.max_per_user ? `${coupon.max_per_user} per account` : 'no per-account limit'}
                                   </div>
+                                  {(coupon.unique_accounts > 0 || coupon.total_discount_given > 0) && (
+                                    <div style={{ fontSize: "10px", color: "#555" }}>{coupon.unique_accounts || 0} accounts · ${Number(coupon.total_discount_given || 0).toFixed(2)} saved</div>
+                                  )}
                                 </td>
                                 <td style={{ padding: "20px 24px", color: "#888", fontWeight: "600" }}>
                                   <div style={{ fontSize: "11px" }}>Min Spend: ${parseFloat(coupon.min_purchase).toFixed(2)}</div>
@@ -9695,8 +8799,7 @@ const Admin = () => {
                       </div>
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EVENT IMAGE URL</label>
-                      <input type="url" value={eventForm.imageUrl} onChange={(e) => setEventForm({ ...eventForm, imageUrl: e.target.value })} placeholder="https://images.unsplash.com/..." style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      <ImageUploadField label="EVENT IMAGE" value={eventForm.imageUrl} onChange={(url) => setEventForm({ ...eventForm, imageUrl: url })} hint="Upload an image or paste a link. Wide images (16:9) look best." />
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EVENT DESCRIPTION</label>
@@ -9831,12 +8934,13 @@ const Admin = () => {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>CATALOG CATEGORY</label>
-                        <select value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }}>
-                          <option value="Accessories">Accessories</option>
-                          <option value="Apparel">Apparel</option>
-                          <option value="Equipment">Equipment</option>
-                          <option value="Supplements">Supplements</option>
+                        <select value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value, requiresAuthorization: AUTHORIZATION_CATEGORIES.includes(e.target.value) ? true : productForm.requiresAuthorization })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }}>
+                          {[...new Set([...SHOP_CATEGORIES, productForm.category].filter(Boolean))].map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", color: "#bbb", fontSize: "12px", cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!productForm.requiresAuthorization || AUTHORIZATION_CATEGORIES.includes(productForm.category)} disabled={AUTHORIZATION_CATEGORIES.includes(productForm.category)} onChange={(e) => setProductForm({ ...productForm, requiresAuthorization: e.target.checked })} />
+                          Requires admin approval to buy{AUTHORIZATION_CATEGORIES.includes(productForm.category) ? " (always on for belts)" : ""}
+                        </label>
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>STOCK INVENTORY COUNT</label>
@@ -10099,6 +9203,16 @@ const Admin = () => {
                         <input type="number" value={couponForm.discountValue} onChange={(e) => setCouponForm({ ...couponForm, discountValue: e.target.value })} required placeholder={couponForm.discountType === 'percentage' ? '20' : '10.00'} min="0" style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
                       </div>
                     </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>TOTAL REDEMPTION LIMIT</label>
+                        <input type="number" min="1" inputMode="numeric" value={couponForm.maxRedemptions} onChange={(e) => setCouponForm({ ...couponForm, maxRedemptions: e.target.value })} placeholder="Empty = unlimited" style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>USES PER ACCOUNT</label>
+                        <input type="number" min="0" inputMode="numeric" value={couponForm.maxPerUser} onChange={(e) => setCouponForm({ ...couponForm, maxPerUser: e.target.value })} placeholder="Empty = unlimited" style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      </div>
+                    </div>
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EXPIRATION DATE</label>
                       <input type="date" min={new Date().toISOString().split('T')[0]} value={couponForm.expirationDate} onChange={(e) => setCouponForm({ ...couponForm, expirationDate: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
@@ -10124,7 +9238,7 @@ const Admin = () => {
                               onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
                               required={!couponForm.autoGenerate}
                               disabled={couponForm.autoGenerate}
-                              placeholder={couponForm.autoGenerate ? "ROGUE-XXXXX" : "e.g. ROGUE30"}
+                              placeholder={couponForm.autoGenerate ? "AMPEX-XXXXX" : "e.g. AMPEX30"}
                               style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", textTransform: "uppercase" }}
                             />
                           </div>
@@ -10218,6 +9332,16 @@ const Admin = () => {
                           </div>
                         </div>
 
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>TOTAL REDEMPTION LIMIT</label>
+                        <input type="number" min="1" inputMode="numeric" value={couponForm.maxRedemptions} onChange={(e) => setCouponForm({ ...couponForm, maxRedemptions: e.target.value })} placeholder="Empty = unlimited" style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>USES PER ACCOUNT</label>
+                        <input type="number" min="0" inputMode="numeric" value={couponForm.maxPerUser} onChange={(e) => setCouponForm({ ...couponForm, maxPerUser: e.target.value })} placeholder="Empty = unlimited" style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      </div>
+                    </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
                           <div>
                             <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EXPIRATION DATE</label>
@@ -10291,7 +9415,7 @@ const Admin = () => {
                                 value={revenueForm.title}
                                 onChange={(e) => setRevenueForm({ ...revenueForm, title: e.target.value })}
                                 required
-                                placeholder="e.g. Rogue Powerlifting Submission Payment"
+                                placeholder="e.g. AMPEX Powerlifting Submission Payment"
                                 style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", outline: "none", fontSize: "12px" }}
                               />
                             </div>
@@ -10511,7 +9635,7 @@ const Admin = () => {
                 <h3 style={{ fontSize: "18px", fontWeight: "950", margin: 0, textTransform: "uppercase", color: "white", display: "flex", alignItems: "center", gap: "8px" }}>
                   <Trophy size={18} color="#FF5500" /> SUBMISSION EVIDENCE SHEET
                 </h3>
-                <span style={{ fontSize: "11px", color: "#666", fontWeight: "700" }}>OFFICIAL ROGUE WORLD RECORD REVIEW SHEET</span>
+                <span style={{ fontSize: "11px", color: "#666", fontWeight: "700" }}>OFFICIAL AMPEX WORLD RECORD REVIEW SHEET</span>
               </div>
               <button onClick={() => setIsRecordDetailModalOpen(false)} style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer" }}><X size={20} /></button>
             </div>
@@ -10542,7 +9666,7 @@ const Admin = () => {
               <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "20px", background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "16px", padding: "20px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#666", marginBottom: "6px", letterSpacing: "1px" }}>ATHLETE DETAILS</label>
-                  <div style={{ fontSize: "15px", fontWeight: "800", color: "white" }}>{selectedRecordDetail.user?.name || "Rogue Athlete"}</div>
+                  <div style={{ fontSize: "15px", fontWeight: "800", color: "white" }}>{selectedRecordDetail.user?.name || "AMPEX Athlete"}</div>
                   <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>{selectedRecordDetail.user?.email || ""}</div>
                   {selectedRecordDetail.athleteId && <div style={{ fontSize: "11px", color: "#FF5500", fontWeight: "800", marginTop: "4px" }}>@{selectedRecordDetail.athleteId}</div>}
                 </div>
@@ -10669,7 +9793,7 @@ const Admin = () => {
 
               {/* Row 5: Witnesses */}
               <div>
-                <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#666", marginBottom: "8px", letterSpacing: "1px" }}>ROGUE VERIFIED WITNESS REGISTRY</label>
+                <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#666", marginBottom: "8px", letterSpacing: "1px" }}>AMPEX VERIFIED WITNESS REGISTRY</label>
                 {(() => {
                   let parsedWitnesses = [];
                   if (selectedRecordDetail.witnesses) {
@@ -10723,17 +9847,22 @@ const Admin = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      alert("Status changed to Pending Review.");
+                      // "Pending Review" = new, nobody has picked it up. "Under Review" = an adjudicator is working on it.
+                      apiCall(`/records/admin/adjudicate/${selectedRecordDetail.id}`, "PUT", { status: "pending", verification_status: "under_review" }, user.token)
+                        .then(() => { showToast("Marked Under Review: an adjudicator is working on this submission.", "success"); fetchData(); })
+                        .catch((err) => showToast(`Could not update: ${err.message}`, "error"));
                       setIsRecordDetailModalOpen(false);
                     }}
                     style={{ background: "transparent", border: "1px solid #3b82f6", color: "#3b82f6", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}
                   >
-                    MARK PENDING REVIEW
+                    MARK UNDER REVIEW
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      alert("Requested more info from the athlete.");
+                      apiCall(`/records/admin/adjudicate/${selectedRecordDetail.id}`, "PUT", { status: "pending", verification_status: "needs_info" }, user.token)
+                        .then(() => { showToast("Marked Needs More Information. Message the athlete from Communications.", "success"); fetchData(); })
+                        .catch((err) => showToast(`Could not update: ${err.message}`, "error"));
                       setIsRecordDetailModalOpen(false);
                     }}
                     style={{ background: "transparent", border: "1px solid #ffcc00", color: "#ffcc00", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer" }}

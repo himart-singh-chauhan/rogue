@@ -234,7 +234,7 @@ const Privacy = () => {
                     TRUST & <span className="orange-cta-highlight">INTEGRITY</span>
                   </h2>
                   <p className="orange-cta-subtitle" style={{ maxWidth: "800px", margin: "0 auto 40px", fontSize: "18px", color: "rgba(255,255,255,0.9)", lineHeight: "1.6" }}>
-                    Rogue World Records is committed to building a trusted, secure, and fair environment for competitors worldwide. Your privacy and trust are our highest priorities.
+                    AMPEX World Records is committed to building a trusted, secure, and fair environment for competitors worldwide. Your privacy and trust are our highest priorities.
                   </p>
                   <div style={{ fontSize: "20px", fontWeight: "950", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                     Break Limits. Make History. Become Legendary.

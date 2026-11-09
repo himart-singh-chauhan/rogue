@@ -39,7 +39,7 @@ const Cookies = () => {
       title: "2. How We Use Cookies",
       scope: "02 / USAGE",
       icon: <Settings size={24} color="#FF6A00" />,
-      content: "Rogue World Records uses cookies to keep users logged into accounts, remember user settings and preferences, improve website speed and functionality, analyze visitor activity and traffic, protect against fraud and unauthorized access, track competition participation and sessions, personalize content and recommendations, and improve customer experience.",
+      content: "AMPEX World Records uses cookies to keep users logged into accounts, remember user settings and preferences, improve website speed and functionality, analyze visitor activity and traffic, protect against fraud and unauthorized access, track competition participation and sessions, personalize content and recommendations, and improve customer experience.",
     },
     {
       id: "03",
@@ -53,7 +53,7 @@ const Cookies = () => {
       title: "4. Third-Party Cookies",
       scope: "04 / EXTERNAL",
       icon: <Globe size={24} color="#FF6A00" />,
-      content: "Some cookies may be placed by third-party services integrated into the platform, including payment processors, social media platforms, video hosting services, analytics providers, and advertising networks. Rogue World Records does not control third-party cookies and recommends reviewing their individual privacy and cookie policies.",
+      content: "Some cookies may be placed by third-party services integrated into the platform, including payment processors, social media platforms, video hosting services, analytics providers, and advertising networks. AMPEX World Records does not control third-party cookies and recommends reviewing their individual privacy and cookie policies.",
     },
     {
       id: "05",
@@ -81,7 +81,7 @@ const Cookies = () => {
       title: "8. Changes to This Cookie Policy",
       scope: "08 / UPDATES",
       icon: <RefreshCw size={24} color="#FF6A00" />,
-      content: "Rogue World Records reserves the right to update this Cookie Policy at any time. Updated versions will be posted on the platform with revised effective dates. Continued use of the platform after updates constitutes acceptance of the revised policy.",
+      content: "AMPEX World Records reserves the right to update this Cookie Policy at any time. Updated versions will be posted on the platform with revised effective dates. Continued use of the platform after updates constitutes acceptance of the revised policy.",
       fullWidth: true
     },
     {
@@ -127,7 +127,7 @@ const Cookies = () => {
                   <span style={{ color: "#FF6A00" }}><ScrollReveal>POLICY</ScrollReveal></span>
                 </h1>
                 <p style={{ marginTop: "40px", fontSize: "18px", color: "rgba(255,255,255,0.5)", maxWidth: "500px", lineHeight: "1.6" }}>
-                  Rogue World Records uses cookies to optimize your experience, maintain security, and analyze platform performance.
+                  AMPEX World Records uses cookies to optimize your experience, maintain security, and analyze platform performance.
                 </p>
               </div>
 
@@ -237,7 +237,7 @@ const Cookies = () => {
                   YOUR SECURITY IS <br /><span className="orange-cta-highlight">OUR COMMITMENT</span>
                 </h2>
                 <p className="orange-cta-subtitle" style={{ maxWidth: "800px", margin: "0 auto 40px", fontSize: "18px", color: "rgba(255,255,255,0.9)", lineHeight: "1.6" }}>
-                  Rogue World Records is committed to transparency, security, and providing users with a safe and reliable online experience.
+                  AMPEX World Records is committed to transparency, security, and providing users with a safe and reliable online experience.
                 </p>
                 <div style={{ display: "flex", justifyContent: "center", gap: "24px", flexWrap: "wrap", marginBottom: "48px" }}>
                   <div style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "100px", padding: "12px 28px", fontSize: "11px", fontWeight: "900", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>

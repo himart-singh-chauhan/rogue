@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { syncRecordAward } = require('../utils/rankings');
 
 // Seed a deterministic mock scan based on the record details
 const createDeterministicMockScan = (record) => {
@@ -199,14 +200,27 @@ const updateAIScanOverride = async (req, res) => {
       vqStatus = 'denied';
     }
 
+    const { data: before } = await supabase.from('records').select('id, title, user_id, status, record_type, verified_at').eq('id', id).maybeSingle();
+
     await supabase
       .from('records')
       .update({
         status: recordStatus,
         verification_status: vqStatus,
+        // keep the original verification date when an already-verified record is approved again
+        verified_at: recordStatus === 'verified' ? (before?.verified_at || new Date()) : null,
         updated_at: new Date()
       })
       .eq('id', id);
+
+    // Approving here counts exactly like approving in the Verification Queue: points, counters and rank.
+    if (before) {
+      try {
+        await syncRecordAward(before, { verified: recordStatus === 'verified', adminId: req.user?.id || null });
+      } catch (pointsErr) {
+        console.warn('[Rankings Warning] Could not update points (AI override):', pointsErr.message);
+      }
+    }
 
     res.json({ success: true, scan: updatedScan });
   } catch (error) {

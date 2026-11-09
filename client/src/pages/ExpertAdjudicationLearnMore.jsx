@@ -104,7 +104,7 @@ const ExpertAdjudicationLearnMore = () => {
             Professional Verification <span style={{ color: "#FF6A00" }}>You Can Trust</span>
           </h1>
           <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "18px", maxWidth: "750px", lineHeight: "1.7", margin: "0 auto 32px" }}>
-            At Rogue World Records, Expert Adjudication is the official judging and verification system used to review world record attempts with fairness, accuracy, professionalism, and integrity. Our adjudication process is designed to help ensure that every approved record is legitimate, properly documented, and completed according to official rules and standards.
+            At AMPEX World Records, Expert Adjudication is the official judging and verification system used to review world record attempts with fairness, accuracy, professionalism, and integrity. Our adjudication process is designed to help ensure that every approved record is legitimate, properly documented, and completed according to official rules and standards.
           </p>
           <Link to="/appeals" style={{ textDecoration: "none" }}>
             <button style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px 48px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", transition: "0.3s" }}

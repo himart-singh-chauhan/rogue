@@ -61,7 +61,7 @@ const Leaderboard = () => {
           <div style={{ maxWidth: "800px", margin: "0 auto", position: "relative", zIndex: 1 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: "10px", background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.2)", padding: "8px 24px", borderRadius: "100px", marginBottom: "32px" }}>
               <Compass size={16} color="#FF6A00" />
-              <span style={{ fontSize: "11px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.2em", textTransform: "uppercase" }}>ROGUE LEADERBOARD PORTAL</span>
+              <span style={{ fontSize: "11px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.2em", textTransform: "uppercase" }}>AMPEX LEADERBOARD PORTAL</span>
             </div>
 
             <h1 style={{ fontSize: "clamp(44px, 7vw, 100px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", lineHeight: "0.95", marginBottom: "32px" }}>

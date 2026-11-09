@@ -1612,7 +1612,7 @@ const Verify = () => {
                               List all specialized gear, weights, or tools used during the attempt. Include calibration details if applicable.
                             </p>
                             <textarea
-                              placeholder="E.G. ROGUE OHIO BAR, 25KG CALIBRATED PLATES, OFFICIAL TIMER..."
+                              placeholder="E.G. AMPEX OHIO BAR, 25KG CALIBRATED PLATES, OFFICIAL TIMER..."
                               value={formData.equipment}
                               onChange={(e) => setFormData({...formData, equipment: e.target.value})}
                               style={{ width: "100%", minHeight: "200px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", fontSize: "13px", resize: "none" }}
@@ -2078,7 +2078,7 @@ const Verify = () => {
                       <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "32px", padding: "40px" }}>
                         <h4 style={{ fontSize: "20px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>AUTHENTICITY PROTOCOL_v4.2</h4>
                         <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "32px", maxWidth: "800px" }}>
-                          Our AI Vision Analysis scrutinizes 420 unique joint positions per second. By comparing your movement signature against the global standard for this record, we ensure the absolute integrity of the ROGUE ecosystem.
+                          Our AI Vision Analysis scrutinizes 420 unique joint positions per second. By comparing your movement signature against the global standard for this record, we ensure the absolute integrity of the AMPEX ecosystem.
                         </p>
                         <div style={{ display: "flex", gap: "48px" }}>
                            <div>
@@ -2170,7 +2170,7 @@ const Verify = () => {
                             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                               {[
                                 "Biometric signature confirmed via heart rate strap log.",
-                                "Location data matches Rogue Certified Facility #422.",
+                                "Location data matches AMPEX Certified Facility #422.",
                                 "Equipment calibration certificate uploaded."
                               ].map((text, i) => (
                                 <div key={i} style={{ display: "flex", gap: "12px", fontSize: "12px", color: "rgba(255,255,255,0.6)", lineHeight: "1.4" }}>
@@ -2215,7 +2215,7 @@ const Verify = () => {
                             YOUR NAME IN STONE.
                           </div>
                           <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "16px", maxWidth: "600px", margin: "0 auto", lineHeight: "1.6" }}>
-                            Once submitted, your record will be etched into the Rogue Global Ledger, visible to every athlete across the world.
+                            Once submitted, your record will be etched into the AMPEX Global Ledger, visible to every athlete across the world.
                           </p>
                         </div>
                       </div>
@@ -2225,7 +2225,7 @@ const Verify = () => {
                         <div style={{ textAlign: "center", marginBottom: "40px" }}>
                           <div style={{ fontSize: "11px", fontWeight: "900", color: "#FF6A00", textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: "16px" }}>LEGAL DISCLAIMER</div>
                           <p style={{ fontSize: "12px", color: "white", lineHeight: "1.6" }}>
-                            By hitting 'Submit to Global Ledger', you certify that all performance data, video evidence, and biometric logs are 100% authentic and unmanipulated. Any attempt to falsify record data will result in immediate permanent disqualification and revocation of Elite Membership. The Rogue World Records committee reserves the right to request a live re-verification of any performance.
+                            By hitting 'Submit to Global Ledger', you certify that all performance data, video evidence, and biometric logs are 100% authentic and unmanipulated. Any attempt to falsify record data will result in immediate permanent disqualification and revocation of Elite Membership. The AMPEX World Records committee reserves the right to request a live re-verification of any performance.
                           </p>
                         </div>
 

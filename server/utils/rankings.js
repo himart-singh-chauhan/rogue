@@ -1,16 +1,23 @@
 const supabase = require('../config/supabase');
 
 // Single source of truth for tier thresholds (used by rankings API and record adjudication).
+// Points were rescaled in Nov 2026 (awards of 100 became 10), so thresholds are 1/10 of before.
 const tierFor = (points) => {
-  if (points >= 50000) return 'Grand Champion';
-  if (points >= 20000) return 'Elite Master';
-  if (points >= 5000) return 'Pro Competitor';
+  if (points >= 5000) return 'Grand Champion';
+  if (points >= 2000) return 'Elite Master';
+  if (points >= 500) return 'Pro Competitor';
   return 'Challenger';
 };
 
 const toInt = (v, fallback = 0) => {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : fallback;
+};
+
+// Recompute everyone's global_rank in one SQL statement (cheap; keeps profiles and leaderboards in sync).
+const refreshGlobalRanks = async () => {
+  const { error } = await supabase.rpc('recalculate_global_ranks');
+  if (error) console.warn('[Rankings] rank refresh failed:', error.message);
 };
 
 /**
@@ -55,11 +62,13 @@ const awardPoints = async ({ userId, points, source, referenceId = null, reason 
     .select()
     .single();
   if (saveError) throw saveError;
+
+  await refreshGlobalRanks();
   return saved;
 };
 
 // Points configured in the points_rules table (admin editable), with sane defaults.
-const DEFAULT_RULE_POINTS = { verified_record: 100, world_record: 250 };
+const DEFAULT_RULE_POINTS = { verified_record: 10, world_record: 25 };
 const rulePoints = async (ruleName) => {
   const { data } = await supabase.from('points_rules').select('points_value, active').eq('rule_name', ruleName).maybeSingle();
   if (data && data.active !== false) return toInt(data.points_value);
@@ -67,10 +76,62 @@ const rulePoints = async (ruleName) => {
 };
 
 // Points for a newly verified record when the admin didn't type an explicit amount.
+// (An extra bonus applies only when the admin explicitly flags the record as a world record.)
 const pointsForVerifiedRecord = async (record) => {
   let pts = await rulePoints('verified_record');
   if (record.record_type === 'world_record') pts += await rulePoints('world_record');
   return pts;
 };
 
-module.exports = { tierFor, awardPoints, toInt, rulePoints, pointsForVerifiedRecord };
+// Every verified record is an official world record (as the AMPEX certificate states),
+// so verifying a record counts towards both "Verified" and "W.R." on the leaderboards.
+const VERIFIED_RECORD_COUNTERS = { verified_records_count: 1, world_records_count: 1 };
+const UNVERIFIED_RECORD_COUNTERS = { verified_records_count: -1, world_records_count: -1 };
+
+// Does this record currently hold its "verified" award? Read from the record's own points history,
+// so it stays right however many times a record is approved, rejected and approved again.
+const recordAwardState = async (recordId) => {
+  const { data, error } = await supabase
+    .from('user_points_history')
+    .select('points_awarded, source')
+    .eq('reference_id', String(recordId))
+    .in('source', ['record_verified', 'record_unverified']);
+  if (error) throw error;
+  const rows = data || [];
+  const awards = rows.filter((r) => r.source === 'record_verified').length;
+  const reversals = rows.filter((r) => r.source === 'record_unverified').length;
+  return { held: awards > reversals, net: rows.reduce((sum, r) => sum + toInt(r.points_awarded), 0) };
+};
+
+/**
+ * Keep a record's points, leaderboard counters and certificate in step with its verified status.
+ * Call it after every status change from any admin screen. It awards once on verification and
+ * takes the points back (and revokes the certificate) if the record stops being verified.
+ */
+const syncRecordAward = async (record, { verified, points = 0, adminId = null } = {}) => {
+  if (!record?.id || !record.user_id) return null;
+  const { held, net } = await recordAwardState(record.id);
+
+  if (verified && !held) {
+    const pts = toInt(points) > 0 ? toInt(points) : await pointsForVerifiedRecord(record);
+    return awardPoints({
+      userId: record.user_id, points: pts, source: 'record_verified', referenceId: record.id,
+      reason: `Record verified: ${record.title || ''}`.trim(), adminId, counters: VERIFIED_RECORD_COUNTERS,
+    });
+  }
+
+  if (!verified && held) {
+    await supabase
+      .from('certificate_issuances')
+      .update({ status: 'revoked', revoked_at: new Date(), revoke_reason: 'The record is no longer verified' })
+      .eq('record_id', record.id)
+      .eq('status', 'issued');
+    return awardPoints({
+      userId: record.user_id, points: -Math.max(0, net), source: 'record_unverified', referenceId: record.id,
+      reason: `Record no longer verified: ${record.title || ''}`.trim(), adminId, counters: UNVERIFIED_RECORD_COUNTERS,
+    });
+  }
+  return null;
+};
+
+module.exports = { tierFor, awardPoints, toInt, rulePoints, pointsForVerifiedRecord, refreshGlobalRanks, syncRecordAward, VERIFIED_RECORD_COUNTERS };

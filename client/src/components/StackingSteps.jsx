@@ -48,7 +48,7 @@ const steps = [
     desc: "Receive your official certificate and take your rightful place on the global leaderboard.",
     features: [
       { icon: <ShieldCheck />, title: "Official Certification", desc: "Receive a physical and digital world record certificate." },
-      { icon: <Search />, title: "Wall of Fame", desc: "Permanent placement in the Rogue World Records database." },
+      { icon: <Search />, title: "Wall of Fame", desc: "Permanent placement in the AMPEX World Records database." },
       { icon: <CheckCircle2 />, title: "Creator Economy", desc: "Unlock monetization opportunities for your record content." },
       { icon: <Globe />, title: "PR Support", desc: "Global press release and social media feature for record holders." }
     ],

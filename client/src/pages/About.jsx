@@ -31,13 +31,13 @@ const About = () => {
               WELCOME TO
             </motion.div>
             <h1 style={{ fontSize: "clamp(36px, 6vw, 70px)", fontWeight: "950", lineHeight: "0.9", textTransform: "uppercase", letterSpacing: "-0.04em", marginBottom: "24px" }}>
-              <ScrollReveal>ROGUE WORLD</ScrollReveal> <br />
+              <ScrollReveal>AMPEX WORLD</ScrollReveal> <br />
               <span style={{ color: "#FF6A00" }}><ScrollReveal>RECORDS</ScrollReveal></span>
             </h1>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2 }} style={{ color: "rgba(255,255,255,0.7)", fontSize: "14px", maxWidth: "700px", margin: "0 auto 40px", lineHeight: "1.7" }}>
-              At Rogue World Records, we believe greatness belongs to everyone — not just professional athletes, celebrities, or people with millions of followers. Our mission is to give everyday people from around the world the opportunity to push limits, break barriers, and earn recognition for extraordinary achievements.
+              At AMPEX World Records, we believe greatness belongs to everyone — not just professional athletes, celebrities, or people with millions of followers. Our mission is to give everyday people from around the world the opportunity to push limits, break barriers, and earn recognition for extraordinary achievements.
               <br/><br/>
-              We were created for the dreamers, the grinders, the risk-takers, and the people willing to step outside their comfort zones to make history. Whether you are breaking a strength record, endurance challenge, gaming achievement, stunt performance, reaction challenge, balance record, or creating an entirely new category, Rogue World Records is built to showcase human potential at every level.
+              We were created for the dreamers, the grinders, the risk-takers, and the people willing to step outside their comfort zones to make history. Whether you are breaking a strength record, endurance challenge, gaming achievement, stunt performance, reaction challenge, balance record, or creating an entirely new category, AMPEX World Records is built to showcase human potential at every level.
             </motion.div>
             <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 0.6, delay: 0.6 }} style={{ width: "80px", height: "4px", background: "#FF6A00", margin: "0 auto" }}></motion.div>
           </div>
@@ -115,7 +115,7 @@ const About = () => {
                     <ShieldCheck size={24} color="white" />
                   </div>
                   <h2 style={{ fontSize: "32px", fontWeight: "950", textTransform: "uppercase", letterSpacing: '-0.02em' }}>
-                    WHY <span style={{ color: "#FF6A00" }}>ROGUE?</span>
+                    WHY <span style={{ color: "#FF6A00" }}>AMPEX?</span>
                   </h2>
                 </div>
                 
@@ -260,7 +260,7 @@ const About = () => {
                 OUR <span style={{ color: "#FF6A00" }}>VISION</span>
               </h3>
               <p style={{ color: "rgba(255,255,255,0.6)", lineHeight: "1.7", marginBottom: "20px", fontSize: "14px" }}>
-                We envision Rogue World Records becoming one of the world’s leading competitive achievement platforms — bringing together athletes, creators, gamers, entertainers, and innovators from across the globe.
+                We envision AMPEX World Records becoming one of the world’s leading competitive achievement platforms — bringing together athletes, creators, gamers, entertainers, and innovators from across the globe.
               </p>
               <p style={{ color: "rgba(255,255,255,0.6)", lineHeight: "1.7", marginBottom: "16px", fontSize: "14px", fontWeight: "bold" }}>
                 We want to inspire future generations to:
@@ -293,7 +293,7 @@ const About = () => {
                 READY TO <span className="orange-cta-highlight">CHALLENGE</span> YOURSELF?
               </h2>
               <p className="orange-cta-subtitle" style={{ color: "rgba(255,255,255,0.9)", fontSize: "16px", maxWidth: "700px", margin: "0 auto 40px", lineHeight: "1.6" }}>
-                If you are ready to challenge yourself, inspire others, and become part of a growing worldwide community of record breakers, we invite you to join Rogue World Records.
+                If you are ready to challenge yourself, inspire others, and become part of a growing worldwide community of record breakers, we invite you to join AMPEX World Records.
                 <br/><br/>
                 <strong style={{ fontSize: "20px", textTransform: "uppercase", letterSpacing: "0.05em", color: "white" }}>Break Limits. Make History. Become Legendary.</strong>
               </p>

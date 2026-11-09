@@ -25,8 +25,11 @@ const getSponsors = async (req, res) => {
 const createSponsor = async (req, res) => {
   const {
     companyName, bannerUrl, logoUrl, linkUrl, placement,
-    startDate, endDate, description, notes, packageType, activeStatus
+    startDate, endDate, description, notes, packageType, activeStatus, imageFit, imagePosition
   } = req.body;
+  const fit = imageFit === 'cover' ? 'cover' : 'contain';
+  const POSITIONS = ['center', 'top', 'bottom', 'left', 'right'];
+  const position = POSITIONS.includes(imagePosition) ? imagePosition : 'center';
 
   try {
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
@@ -63,6 +66,8 @@ const createSponsor = async (req, res) => {
         description: description || null,
         notes: notes || null,
         active_status: activeStatus !== undefined ? (activeStatus === 'true' || activeStatus === true) : true,
+        image_fit: fit,
+        image_position: position,
         views_count: 0,
         clicks_count: 0,
         created_at: new Date(),
@@ -85,8 +90,11 @@ const updateSponsor = async (req, res) => {
   const { id } = req.params;
   const {
     companyName, bannerUrl, logoUrl, linkUrl, placement,
-    startDate, endDate, description, notes, packageType, activeStatus
+    startDate, endDate, description, notes, packageType, activeStatus, imageFit, imagePosition
   } = req.body;
+  const fit = imageFit === 'cover' ? 'cover' : 'contain';
+  const POSITIONS = ['center', 'top', 'bottom', 'left', 'right'];
+  const position = POSITIONS.includes(imagePosition) ? imagePosition : 'center';
 
   try {
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
@@ -101,6 +109,8 @@ const updateSponsor = async (req, res) => {
     if (notes !== undefined)        updateData.notes = notes || null;
     if (packageType !== undefined)  updateData.package_type = packageType || 'standard';
     if (activeStatus !== undefined) updateData.active_status = activeStatus === 'true' || activeStatus === true;
+    if (imageFit !== undefined)     updateData.image_fit = fit;
+    if (imagePosition !== undefined) updateData.image_position = position;
 
     if (req.files) {
       if (req.files.bannerImage && req.files.bannerImage[0]) {
@@ -199,7 +209,7 @@ const updateVipStatus = async (req, res) => {
 const getRevenueMetrics = async (req, res) => {
   try {
     const { data: orders } = await supabase.from('orders').select('total');
-    const { data: memberships } = await supabase.from('memberships').select('price');
+    const { data: memberships } = await supabase.from('memberships').select('price').eq('status', 'active');
     const totalOrders = (orders || []).reduce((acc, curr) => acc + (parseFloat(curr.total) || 0), 0);
     const totalMemberships = (memberships || []).reduce((acc, curr) => acc + (parseFloat(curr.price) || 0), 0);
 

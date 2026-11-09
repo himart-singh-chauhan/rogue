@@ -299,7 +299,7 @@ const Appeals = () => {
                 <span style={{ color: "#FF6A00" }}>PROCESS</span>
               </h1>
               <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "18px", maxWidth: "800px", margin: "0 auto", lineHeight: "1.6" }}>
-                At Rogue World Records, fairness and transparency are important to us. If you believe your submission was denied unfairly, you may file an official appeal for reconsideration.
+                At AMPEX World Records, fairness and transparency are important to us. If you believe your submission was denied unfairly, you may file an official appeal for reconsideration.
               </p>
             </motion.div>
           </div>

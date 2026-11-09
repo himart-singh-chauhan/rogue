@@ -1,20 +1,20 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { 
-  Star, 
-  ShieldCheck, 
-  Zap, 
-  Crown, 
-  ArrowRight, 
-  Check, 
-  Trophy, 
-  Activity, 
-  Shield, 
-  Globe, 
-  User, 
-  Award, 
-  Clock, 
-  CheckCircle2, 
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Star,
+  ShieldCheck,
+  Zap,
+  Crown,
+  ArrowRight,
+  Check,
+  Trophy,
+  Activity,
+  Shield,
+  Globe,
+  User,
+  Award,
+  Clock,
+  CheckCircle2,
   XCircle,
   Gem,
   Rocket,
@@ -27,9 +27,37 @@ import ScrollReveal from "../components/ScrollReveal";
 import { motion } from "motion/react";
 import { apiCall } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { formatCardNumber, formatExpiry, formatCvv, validateCard, CARD_INPUT_PROPS, EXPIRY_INPUT_PROPS, CVV_INPUT_PROPS } from "../utils/cardInput";
+
+const PLAN_ICONS = { free: User, bronze: Award, silver: Gem, gold: Crown, diamond: Star, vip_package: Rocket };
+const periodLabel = (interval) => (interval === "year" ? "/year" : interval === "one_time" ? " one-time" : "/month");
+const money = (n) => (Number(n) % 1 === 0 ? `$${Number(n)}` : `$${Number(n).toFixed(2)}`);
+
+// Plan from the database (Admin → Memberships → Plans) -> pricing card
+const planToTier = (p) => {
+  const Icon = PLAN_ICONS[p.slug] || Shield;
+  return {
+    name: p.name,
+    id: p.slug,
+    cost: Number(p.price) > 0 ? money(p.price) : "FREE",
+    price: Number(p.price) || 0,
+    period: Number(p.price) > 0 ? periodLabel(p.billingInterval) : "",
+    billingInterval: p.billingInterval,
+    limit: p.submissionLimit == null ? "Unlimited Submissions" : `${p.submissionLimit} Submissions / Month`,
+    submissionLimit: p.submissionLimit,
+    priorityReview: !!p.priorityReview,
+    vipProfile: !!p.vipProfile,
+    color: p.color || "#FF6A00",
+    icon: <Icon size={32} />,
+    perfectFor: p.description || "",
+    includes: Array.isArray(p.features) ? p.features : [],
+    popular: p.slug === "silver",
+  };
+};
 
 const EliteMembership = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [coupon, setCoupon] = useState("");
   const [couponMessage, setCouponMessage] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -53,57 +81,40 @@ const EliteMembership = () => {
   const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [plans, setPlans] = useState([]);
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const formatAmex = (digits) => {
-    let formatted = "";
-    if (digits.length > 0) formatted += digits.substring(0, 4);
-    if (digits.length > 4) formatted += " " + digits.substring(4, 10);
-    if (digits.length > 10) formatted += " " + digits.substring(10, 15);
-    return formatted;
-  };
+  React.useEffect(() => {
+    apiCall("/membership-plans", "GET")
+      .then((res) => setPlans(Array.isArray(res) ? res : res?.plans || []))
+      .catch(() => setPlans([]));
+  }, []);
 
-  const formatStandard = (digits) => {
-    let parts = [];
-    for (let i = 0; i < digits.length; i += 4) {
-      parts.push(digits.substring(i, i + 4));
-    }
-    return parts.join(" ");
-  };
+  // Esc closes the checkout
+  React.useEffect(() => {
+    if (!showCheckout) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") closeCheckout(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  function closeCheckout() {
+    setShowCheckout(false);
+    setIsSuccess(false);
+    setIsProcessing(false);
+    setFormError("");
+  }
 
   const handleCardNumberChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const isAmex = raw.startsWith("34") || raw.startsWith("37");
-    const isStandard = raw.startsWith("4") || 
-                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(raw) || 
-                       /^(6011|622|64[4-9]|65)/.test(raw);
-    const maxLength = isAmex ? 15 : (isStandard ? 16 : 19);
-    const limited = raw.substring(0, maxLength);
-    
-    if (isAmex) {
-      setCardNumber(formatAmex(limited));
-    } else {
-      setCardNumber(formatStandard(limited));
-    }
+    setCardNumber(formatCardNumber(e.target.value));
   };
 
   const handleExpiryDateChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, 4);
-    let formatted = "";
-    if (limited.length > 2) {
-      formatted = `${limited.substring(0, 2)}/${limited.substring(2)}`;
-    } else {
-      formatted = limited;
-    }
-    setExpiryDate(formatted);
+    setExpiryDate(formatExpiry(e.target.value));
   };
 
   const handleCvvChange = (e) => {
-    const cleanCard = cardNumber.replace(/\s/g, "");
-    const isAmex = cleanCard.startsWith("34") || cleanCard.startsWith("37");
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, isAmex ? 4 : 3);
-    setCvv(limited);
+    setCvv(formatCvv(e.target.value, cardNumber));
   };
 
   const handleBillingZipChange = (e) => {
@@ -120,60 +131,8 @@ const EliteMembership = () => {
       return "Name on card can only contain letters, spaces, hyphens, and periods.";
     }
 
-    const cleanCard = cardNumber.replace(/\s/g, "");
-    if (!cleanCard) {
-      return "Please enter a valid card number.";
-    }
-    if (/[^\d]/.test(cleanCard)) {
-      return "Card number must contain numbers only.";
-    }
-
-    const isAmex = cleanCard.startsWith("34") || cleanCard.startsWith("37");
-    const isStandard = cleanCard.startsWith("4") || 
-                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(cleanCard) || 
-                       /^(6011|622|64[4-9]|65)/.test(cleanCard);
-
-    if (isAmex) {
-      if (cleanCard.length < 15) return "Card number is incomplete.";
-      if (cleanCard.length > 15) return "Card number is too long.";
-    } else if (isStandard) {
-      if (cleanCard.length < 16) return "Card number is incomplete.";
-      if (cleanCard.length > 16) return "Card number is too long.";
-    } else {
-      if (cleanCard.length < 12) return "Card number is incomplete.";
-      if (cleanCard.length > 19) return "Card number is too long.";
-    }
-
-    if (!expiryDate) {
-      return "Expiration date is required.";
-    }
-    if (!/^\d{2}\/\d{2}$/.test(expiryDate)) {
-      return "Expiration date must be in MM/YY format.";
-    }
-    const [mmStr, yyStr] = expiryDate.split("/");
-    const mm = parseInt(mmStr, 10);
-    const yy = parseInt(yyStr, 10);
-    if (mm < 1 || mm > 12) {
-      return "Please enter a valid expiration month (01-12).";
-    }
-    const now = new Date();
-    const currentYear = now.getFullYear() % 100;
-    const currentMonth = now.getMonth() + 1;
-    if (yy < currentYear || (yy === currentYear && mm < currentMonth)) {
-      return "Expiration date must be a valid future date.";
-    }
-
-    const rawCvv = cvv.replace(/\s/g, "");
-    if (!rawCvv) {
-      return "CVV/CVC is required.";
-    }
-    if (/[^\d]/.test(rawCvv)) {
-      return "CVV/CVC must contain numbers only.";
-    }
-    const requiredCvvLength = isAmex ? 4 : 3;
-    if (rawCvv.length !== requiredCvvLength) {
-      return `CVV/CVC must be exactly ${requiredCvvLength} digits.`;
-    }
+    const cardError = validateCard({ number: cardNumber, expiry: expiryDate, cvv });
+    if (cardError) return cardError;
 
     const rawZip = billingZip.replace(/\s/g, "");
     if (!rawZip) {
@@ -198,9 +157,10 @@ const EliteMembership = () => {
         code: coupon,
         subtotal: originalPrice,
         checkoutType: "membership",
-        targetId: checkoutItem.name.toLowerCase().replace(" membership", ""), // e.g. "silver" or "gold" or "bronze"
-        userId: user?.id || null
-      });
+        targetId: checkoutItem.slug || checkoutItem.name.toLowerCase().replace(" membership", ""),
+        userId: user?.id || null,
+        customerEmail: user?.email || email || null
+      }, user?.token);
 
       if (response && response.valid) {
         setAppliedCoupon(response);
@@ -225,12 +185,12 @@ const EliteMembership = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const tiers = [
+  const fallbackTiers = [
     {
       name: "Free",
       id: "free",
       cost: "FREE",
-      limit: "2 Submissions / Month",
+      limit: "3 Submissions / Month",
       color: "#94A3B8",
       icon: <User size={32} />,
       perfectFor: "New users exploring the platform and casual competitors.",
@@ -238,7 +198,7 @@ const EliteMembership = () => {
         "Create an official account",
         "Browse all world records",
         "View public leaderboards",
-        "2 standard record submissions monthly",
+        "3 standard record submissions monthly",
         "Access to community forums",
         "Digital participation badges",
         "Basic profile customization",
@@ -254,14 +214,14 @@ const EliteMembership = () => {
     {
       name: "Bronze",
       id: "bronze",
-      cost: "$9.99",
-      limit: "5 Submissions / Month",
+      cost: "$10.99",
+      limit: "10 Submissions / Month",
       color: "#CD7F32",
       icon: <Award size={32} />,
       perfectFor: "Competitors beginning their journey and wanting more platform access.",
       includes: [
         "Everything in Free Membership",
-        "5 monthly record submissions",
+        "10 monthly record submissions",
         "Bronze Member verification badge",
         "Faster support response times",
         "Access to member-only challenges",
@@ -274,7 +234,7 @@ const EliteMembership = () => {
     {
       name: "Silver",
       id: "silver",
-      cost: "$19.99",
+      cost: "$20",
       limit: "15 Submissions / Month",
       color: "#C0C0C0",
       icon: <Gem size={32} />,
@@ -294,7 +254,7 @@ const EliteMembership = () => {
     {
       name: "Gold",
       id: "gold",
-      cost: "$39.99",
+      cost: "$50",
       limit: "Unlimited Submissions",
       color: "#FFD700",
       icon: <Crown size={32} />,
@@ -313,16 +273,10 @@ const EliteMembership = () => {
     }
   ];
 
-  const comparisonData = [
-    { feature: "Record Submissions", free: "2 / Month", bronze: "5 / Month", silver: "15 / Month", gold: "Unlimited" },
-    { feature: "Verification Priority", free: "Standard", bronze: "Basic", silver: "Priority", gold: "VIP Priority" },
-    { feature: "Competition Access", free: "Limited", bronze: "Expanded", silver: "Premium", gold: "Elite" },
-    { feature: "Cash Prize Eligibility", free: "No", bronze: "Select Events", silver: "Yes", gold: "Yes" },
-    { feature: "Member Badge", free: "Basic", bronze: "Bronze", silver: "Silver", gold: "Gold" },
-    { feature: "VIP Support", free: "No", bronze: "No", silver: "No", gold: "Yes (Direct)" },
-    { feature: "Global Ranking Priority", free: "No", bronze: "Limited", silver: "Expanded", gold: "Premium" },
-    { feature: "Exclusive Events", free: "No", bronze: "No", silver: "Limited", gold: "Yes" },
-  ];
+  const tiers = plans.length
+    ? plans.map(planToTier)
+    : fallbackTiers.map((t) => ({ ...t, price: parseFloat(String(t.cost).replace("$", "")) || 0, period: t.id === "free" ? "" : "/month", billingInterval: "month" }));
+
 
   return (
     <PageTransition>
@@ -333,12 +287,12 @@ const EliteMembership = () => {
         <section style={{ padding: "220px 5% 100px", position: "relative", overflow: "hidden" }}>
           {/* Decorative Elements */}
           <div style={{ position: "absolute", top: "0", right: "0", width: "800px", height: "800px", background: "radial-gradient(circle, rgba(255,106,0,0.06) 0%, transparent 70%)", zIndex: 0 }} />
-          
+
           <div style={{ maxWidth: "1200px", margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
             <ScrollReveal>
               <div style={{ display: "inline-flex", alignItems: "center", gap: "10px", background: "rgba(255,106,0,0.1)", padding: "8px 24px", borderRadius: "100px", border: "1px solid rgba(255,106,0,0.2)", marginBottom: "32px" }}>
                 <Gem size={16} color="#FF6A00" />
-                <span style={{ fontSize: "12px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.2em", textTransform: "uppercase" }}>ROGUE MEMBERSHIPS</span>
+                <span style={{ fontSize: "12px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.2em", textTransform: "uppercase" }}>AMPEX MEMBERSHIPS</span>
               </div>
               <h1 style={{ fontSize: "clamp(40px, 9vw, 110px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", lineHeight: "0.85", marginBottom: "40px" }}>
                 CHOOSE YOUR <br />
@@ -353,24 +307,24 @@ const EliteMembership = () => {
 
         {/* PRICING CARDS */}
         <section style={{ padding: "0 5% 120px" }}>
-          <div style={{ 
-            maxWidth: "1200px", 
-            margin: "0 auto", 
-            display: "grid", 
-            gridTemplateColumns: windowWidth > 1024 ? "repeat(2, 1fr)" : "1fr", 
-            gap: "32px" 
+          <div style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            display: "grid",
+            gridTemplateColumns: windowWidth > 1100 ? "repeat(3, 1fr)" : windowWidth > 700 ? "repeat(2, 1fr)" : "1fr",
+            gap: "24px"
           }}>
             {tiers.map((tier) => {
               const isSelected = selectedTier === tier.id;
               return (
                 <ScrollReveal key={tier.id}>
-                  <div 
+                  <div
                     onClick={() => setSelectedTier(tier.id)}
-                    style={{ 
-                      background: isSelected ? "linear-gradient(135deg, rgba(255,106,0,0.06) 0%, rgba(10,10,10,0.95) 100%)" : "rgba(255,255,255,0.02)", 
-                      border: isSelected ? "2px solid #FF6A00" : "1px solid rgba(255,255,255,0.05)", 
-                      borderRadius: "48px", 
-                      padding: "60px",
+                    style={{
+                      background: isSelected ? "linear-gradient(135deg, rgba(255,106,0,0.06) 0%, rgba(10,10,10,0.95) 100%)" : "rgba(255,255,255,0.02)",
+                      border: isSelected ? "2px solid #FF6A00" : "1px solid rgba(255,255,255,0.05)",
+                      borderRadius: "36px",
+                      padding: windowWidth > 700 ? "44px 36px" : "36px 24px",
                       height: "100%",
                       position: "relative",
                       display: "flex",
@@ -400,17 +354,17 @@ const EliteMembership = () => {
                         MOST POPULAR
                       </div>
                     )}
-                    
+
                     <div style={{ color: isSelected ? "#FF6A00" : tier.color, marginBottom: "24px", transition: "color 0.3s" }}>{tier.icon}</div>
                     <h3 style={{ fontSize: "24px", fontWeight: "900", textTransform: "uppercase", marginBottom: "8px" }}>{tier.name}</h3>
                     <div style={{ fontSize: "40px", fontWeight: "950", marginBottom: "8px", color: isSelected ? "#FF6A00" : tier.name === "Free" ? "white" : tier.color, transition: "color 0.3s" }}>
-                      {tier.cost}{tier.name !== "Free" && <span style={{ fontSize: "16px", color: "rgba(255,255,255,0.4)", fontWeight: "600" }}>/month</span>}
+                      {tier.cost}{tier.period && <span style={{ fontSize: "16px", color: "rgba(255,255,255,0.4)", fontWeight: "600" }}>{tier.period}</span>}
                     </div>
                     <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.05)", padding: "6px 16px", borderRadius: "100px", fontSize: "12px", fontWeight: "800", color: "#FF6A00", marginBottom: "32px", width: "fit-content" }}>
                       {tier.limit}
                     </div>
 
-                    <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "40px", height: "45px" }}>
+                    <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "32px", minHeight: "45px" }}>
                       {tier.perfectFor}
                     </p>
 
@@ -430,11 +384,29 @@ const EliteMembership = () => {
                       </ul>
                     </div>
 
-                    <button 
+                    <button
                       onClick={() => {
+                        if (!tier.price) {
+                          setCheckoutItem({ name: `${tier.name.toUpperCase()} MEMBERSHIP`, slug: tier.id, price: "$0", kind: "plan" });
+                          setSuccessMessage("Every account starts on the Free plan, so there is nothing to pay. You can upgrade at any time.");
+                          setIsSuccess(true);
+                          setShowCheckout(true);
+                          return;
+                        }
+                        // Upgrades are linked to an account, so log in first
+                        if (!user) {
+                          navigate("/login", { state: { from: "/elite", message: "Please log in or create an account to upgrade your membership." } });
+                          return;
+                        }
+                        setSuccessMessage("");
+                        setIsSuccess(false);
+                        setFormError("");
                         setCheckoutItem({
                           name: `${tier.name.toUpperCase()} MEMBERSHIP`,
-                          price: tier.cost
+                          slug: tier.id,
+                          price: money(tier.price),
+                          period: tier.period,
+                          kind: "plan"
                         });
                         setCardholderName("");
                         setCardNumber("");
@@ -446,9 +418,9 @@ const EliteMembership = () => {
                         setDiscount(0);
                         setShowCheckout(true);
                       }}
-                      style={{ 
-                        width: "100%", 
-                        background: isSelected ? "#FF6A00" : "rgba(255,255,255,0.05)", 
+                      style={{
+                        width: "100%",
+                        background: isSelected ? "#FF6A00" : "rgba(255,255,255,0.05)",
                         color: isSelected ? "white" : "rgba(255,255,255,0.6)",
                         border: isSelected ? "none" : "1px solid rgba(255,255,255,0.1)",
                         borderRadius: "100px",
@@ -465,7 +437,7 @@ const EliteMembership = () => {
                         transition: "all 0.3s"
                       }}
                     >
-                      {tier.name === "Free" ? "JOIN FOR FREE" : `GET ${tier.name.toUpperCase()}`} <ArrowRight size={18} />
+                      {!tier.price ? "FREE PLAN" : `GET ${tier.name.toUpperCase()}`} <ArrowRight size={18} />
                     </button>
                   </div>
                 </ScrollReveal>
@@ -480,24 +452,32 @@ const EliteMembership = () => {
             <ScrollReveal>
               <h2 style={{ fontSize: "40px", fontWeight: "950", textTransform: "uppercase", textAlign: "center", marginBottom: "60px" }}>FULL COMPARISON</h2>
               <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: "40px", border: "1px solid rgba(255,255,255,0.05)", overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "860px" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <th style={{ padding: "32px", textAlign: "left", fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>FEATURES</th>
-                      <th style={{ padding: "32px", textAlign: "center", fontSize: "14px", fontWeight: "900" }}>FREE</th>
-                      <th style={{ padding: "32px", textAlign: "center", fontSize: "14px", fontWeight: "900", color: "#CD7F32" }}>BRONZE</th>
-                      <th style={{ padding: "32px", textAlign: "center", fontSize: "14px", fontWeight: "900", color: "#C0C0C0" }}>SILVER</th>
-                      <th style={{ padding: "32px", textAlign: "center", fontSize: "14px", fontWeight: "900", color: "#FFD700" }}>GOLD</th>
+                      <th style={{ padding: "28px 24px", textAlign: "left", fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>FEATURES</th>
+                      {tiers.map((t) => (
+                        <th key={t.id} style={{ padding: "28px 16px", textAlign: "center", fontSize: "14px", fontWeight: "900", color: t.color, textTransform: "uppercase" }}>{t.name}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {comparisonData.map((row, i) => (
-                      <tr key={i} style={{ borderBottom: i === comparisonData.length - 1 ? "none" : "1px solid rgba(255,255,255,0.03)" }}>
-                        <td style={{ padding: "24px 32px", fontSize: "15px", fontWeight: "700" }}>{row.feature}</td>
-                        <td style={{ padding: "24px 32px", textAlign: "center", fontSize: "14px", color: "rgba(255,255,255,0.5)" }}>{row.free === "No" ? <XCircle size={16} color="rgba(255,255,255,0.1)" style={{ margin: "0 auto" }} /> : row.free}</td>
-                        <td style={{ padding: "24px 32px", textAlign: "center", fontSize: "14px", color: "rgba(255,255,255,0.8)" }}>{row.bronze === "No" ? <XCircle size={16} color="rgba(255,255,255,0.1)" style={{ margin: "0 auto" }} /> : row.bronze}</td>
-                        <td style={{ padding: "24px 32px", textAlign: "center", fontSize: "14px", color: "white" }}>{row.silver}</td>
-                        <td style={{ padding: "24px 32px", textAlign: "center", fontSize: "14px", color: "#FFD700", fontWeight: "800" }}>{row.gold}</td>
+                    {[
+                      { feature: "Price", value: (t) => (t.price ? `${t.cost}${t.period}` : "Free") },
+                      { feature: "Record Submissions", value: (t) => (t.submissionLimit == null && t.id !== "free" && /unlimited/i.test(t.limit) ? "Unlimited" : t.limit.replace(" Submissions", "")) },
+                      { feature: "Priority Review", value: (t) => (t.priorityReview ? "Yes" : "No") },
+                      { feature: "VIP Profile", value: (t) => (t.vipProfile ? "Yes" : "No") },
+                    ].map((row, i, rows) => (
+                      <tr key={row.feature} style={{ borderBottom: i === rows.length - 1 ? "none" : "1px solid rgba(255,255,255,0.03)" }}>
+                        <td style={{ padding: "22px 24px", fontSize: "15px", fontWeight: "700" }}>{row.feature}</td>
+                        {tiers.map((t) => {
+                          const v = row.value(t);
+                          return (
+                            <td key={t.id} style={{ padding: "22px 16px", textAlign: "center", fontSize: "14px", color: "rgba(255,255,255,0.8)" }}>
+                              {v === "No" ? <XCircle size={16} color="rgba(255,255,255,0.15)" style={{ margin: "0 auto" }} /> : v === "Yes" ? <Check size={16} color={t.color} style={{ margin: "0 auto" }} /> : v}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -513,7 +493,7 @@ const EliteMembership = () => {
             <ScrollReveal>
               <h2 style={{ fontSize: "48px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>EXTRA SUBMISSION PACKS</h2>
               <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "18px", marginBottom: "60px" }}>Need just one more shot at history? Unlock additional submission slots instantly.</p>
-              
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
                 {[
                   { count: "1 EXTRA SUBMISSION", price: "$4.99", icon: <Zap size={24} /> },
@@ -522,14 +502,14 @@ const EliteMembership = () => {
                 ].map((pack, i) => {
                   const isSelected = selectedPack === i;
                   return (
-                    <div 
-                      key={i} 
+                    <div
+                      key={i}
                       onClick={() => setSelectedPack(i)}
-                      style={{ 
-                        background: "#0A0A0A", 
-                        borderRadius: "32px", 
-                        padding: "40px", 
-                        border: isSelected ? "2px solid #FF6A00" : "1px solid rgba(255,255,255,0.05)", 
+                      style={{
+                        background: "#0A0A0A",
+                        borderRadius: "32px",
+                        padding: "40px",
+                        border: isSelected ? "2px solid #FF6A00" : "1px solid rgba(255,255,255,0.05)",
                         position: "relative",
                         cursor: "pointer",
                         transform: isSelected ? "translateY(-8px)" : "translateY(0)",
@@ -541,13 +521,17 @@ const EliteMembership = () => {
                       <div style={{ color: "#FF6A00", marginBottom: "20px", display: "flex", justifyContent: "center" }}>{pack.icon}</div>
                       <div style={{ fontSize: "14px", fontWeight: "800", color: "rgba(255,255,255,0.4)", marginBottom: "12px" }}>{pack.count}</div>
                       <div style={{ fontSize: "40px", fontWeight: "950", color: "white", marginBottom: "32px" }}>{pack.price}</div>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedPack(i);
+                          setSuccessMessage("");
+                          setIsSuccess(false);
+                          setFormError("");
                           setCheckoutItem({
                             name: pack.count,
-                            price: pack.price
+                            price: pack.price,
+                            kind: "pack"
                           });
                           setCardholderName("");
                           setCardNumber("");
@@ -559,22 +543,22 @@ const EliteMembership = () => {
                           setDiscount(0);
                           setShowCheckout(true);
                         }}
-                        style={{ 
-                          width: "100%", 
-                          background: isSelected ? "#FF6A00" : "rgba(255,255,255,0.05)", 
-                          color: "white", 
-                          border: isSelected ? "none" : "1px solid rgba(255,255,255,0.1)", 
-                          borderRadius: "100px", 
-                          padding: "18px", 
-                          fontSize: "14px", 
-                          fontWeight: "900", 
-                          cursor: "pointer", 
+                        style={{
+                          width: "100%",
+                          background: isSelected ? "#FF6A00" : "rgba(255,255,255,0.05)",
+                          color: "white",
+                          border: isSelected ? "none" : "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "100px",
+                          padding: "18px",
+                          fontSize: "14px",
+                          fontWeight: "900",
+                          cursor: "pointer",
                           transition: "all 0.3s ease",
                           boxShadow: isSelected ? "0 10px 20px rgba(255, 106, 0, 0.3)" : "none"
-                        }} 
+                        }}
                         onMouseEnter={e => {
                           if (!isSelected) e.currentTarget.style.background = "rgba(255, 106, 0, 0.2)";
-                        }} 
+                        }}
                         onMouseLeave={e => {
                           if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
                         }}
@@ -659,40 +643,50 @@ const EliteMembership = () => {
 
         {/* SECURE CHECKOUT MODAL OVERLAY */}
         {showCheckout && checkoutItem && (
-          <div style={{
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget && !isProcessing) closeCheckout(); }}
+            data-lenis-prevent
+            style={{
             position: "fixed",
             inset: 0,
             background: "rgba(0, 0, 0, 0.85)",
             backdropFilter: "blur(12px)",
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "center",
             zIndex: 9999,
-            padding: "20px"
+            padding: "20px",
+            overflowY: "auto"
           }}>
-            <div style={{
+            <div role="dialog" aria-modal="true" aria-label="Membership checkout" style={{
               background: "#161616",
               border: "1px solid rgba(255, 106, 0, 0.2)",
               borderRadius: "32px",
               width: "100%",
-              maxWidth: "500px",
-              padding: "40px",
+              maxWidth: "540px",
+              margin: "auto",
+              padding: windowWidth > 600 ? "40px" : "28px 20px",
               position: "relative",
               boxShadow: "0 30px 60px rgba(0, 0, 0, 0.8), 0 0 100px rgba(255, 106, 0, 0.05)",
               color: "white"
             }}>
-              {/* CLOSE BUTTON */}
-              <button 
+              {/* BACK + CLOSE */}
+              <button
                 type="button"
-                onClick={() => {
-                  setShowCheckout(false);
-                  setIsSuccess(false);
-                  setIsProcessing(false);
-                }}
+                onClick={closeCheckout}
+                style={{ background: "none", border: "none", color: "rgba(255,255,255,0.55)", fontSize: "13px", fontWeight: 700, cursor: "pointer", padding: 0, marginBottom: "18px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                ← Back to plans
+              </button>
+              <button
+                type="button"
+                aria-label="Close checkout"
+                onClick={closeCheckout}
                 style={{
                   position: "absolute",
-                  top: "24px",
-                  right: "24px",
+                  top: "20px",
+                  right: "20px",
+                  zIndex: 2,
                   background: "rgba(255,255,255,0.05)",
                   border: "none",
                   borderRadius: "50%",
@@ -726,16 +720,13 @@ const EliteMembership = () => {
                   }}>
                     <CheckCircle2 size={48} color="#FF6A00" />
                   </div>
-                  <h3 style={{ fontSize: "28px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>Membership Application Submitted Successfully.</h3>
-                  <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", lineHeight: "1.6", marginBottom: "32px" }}>
-                    Thank you! Your purchase of <strong style={{ color: "#FF6A00" }}>{checkoutItem.name}</strong> was processed securely. Your application is now saved.
+                  <h3 style={{ fontSize: "24px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>{checkoutItem.price === "$0" ? "You're all set" : "Request received"}</h3>
+                  <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "15px", lineHeight: "1.6", marginBottom: "32px" }}>
+                    {successMessage || <>Thank you! Your request for <strong style={{ color: "#FF6A00" }}>{checkoutItem.name}</strong> has been saved.</>}
                   </p>
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => {
-                      setShowCheckout(false);
-                      setIsSuccess(false);
-                    }}
+                    onClick={closeCheckout}
                     style={{
                       background: "#FF6A00",
                       color: "white",
@@ -764,12 +755,12 @@ const EliteMembership = () => {
                     margin: "0 auto 24px",
                     animation: "spin 1s linear infinite"
                   }} />
-                  <h3 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px" }}>Processing Membership Application...</h3>
-                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Verifying application details and securely saving to system...</p>
+                  <h3 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px" }}>Sending your request...</h3>
+                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Saving your upgrade request securely.</p>
                 </div>
               ) : (
                 /* CHECKOUT CARD FORM FLOW */
-                <form 
+                <form
                   onSubmit={async (e) => {
                     e.preventDefault();
                     setFormError("");
@@ -786,34 +777,32 @@ const EliteMembership = () => {
                     }
 
                     setIsProcessing(true);
-                    
+
                     try {
                       const originalPrice = parseFloat(checkoutItem.price.replace("$", "")) || 0;
                       const finalPrice = Math.max(0, originalPrice - discount);
 
-                      const applicationData = {
-                        fullName,
-                        email,
-                        phone,
-                        address,
-                        memberNumber: user?.member_number || "PENDING",
-                        cardholderName,
-                        billingZip
-                      };
+                      if (checkoutItem.kind === "pack") {
+                        // Extra submission packs are sold through Stripe Checkout once it is connected.
+                        setSuccessMessage("Extra submission packs can be bought as soon as online card payments go live. Nothing has been charged. Please check back soon.");
+                        setIsProcessing(false);
+                        setIsSuccess(true);
+                        return;
+                      }
 
-                      await apiCall("/memberships", "POST", {
-                        userId: user?.id,
-                        tier: checkoutItem.name.toLowerCase().replace(" membership", "").trim(),
-                        autoRenew: true,
+                      const res = await apiCall("/memberships/request", "POST", {
+                        tier: checkoutItem.slug,
                         paymentAmount: finalPrice,
-                        applicationData: applicationData
-                      });
+                        couponCode: appliedCoupon?.code || null,
+                        applicationData: { fullName, email, phone, address }
+                      }, user?.token);
 
+                      setSuccessMessage(res?.message || "");
                       setIsProcessing(false);
                       setIsSuccess(true);
                     } catch (err) {
                       setIsProcessing(false);
-                      setFormError(err.message || "There was a problem submitting your application. Please try again.");
+                      setFormError(/token|authorized/i.test(err.message || "") ? "Your session has expired. Please log in again, then choose your plan." : (err.message || "There was a problem submitting your request. Please try again."));
                     }
                   }}
                   style={{ display: "flex", flexDirection: "column", gap: "24px" }}
@@ -833,7 +822,7 @@ const EliteMembership = () => {
                   {(() => {
                     const originalPrice = parseFloat(checkoutItem.price.replace("$", "")) || 0;
                     const finalPrice = Math.max(0, originalPrice - discount);
-                    
+
                     return (
                       <>
                         <div style={{
@@ -852,7 +841,7 @@ const EliteMembership = () => {
                             </div>
                             <div style={{ textAlign: "right" }}>
                               <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)" }}>BASE PRICE</div>
-                              <div style={{ fontSize: "16px", fontWeight: "800", color: "white" }}>{checkoutItem.price}</div>
+                              <div style={{ fontSize: "16px", fontWeight: "800", color: "white" }}>{checkoutItem.price}{checkoutItem.period ? <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)" }}>{checkoutItem.period}</span> : null}</div>
                             </div>
                           </div>
 
@@ -876,14 +865,14 @@ const EliteMembership = () => {
                               Redeem Coupon Code
                             </label>
                             <div style={{ display: "flex", gap: "8px" }}>
-                              <input 
-                                type="text" 
-                                placeholder="e.g. ELITE20" 
+                              <input
+                                type="text"
+                                placeholder="e.g. ELITE20"
                                 value={coupon}
                                 onChange={(e) => setCoupon(e.target.value)}
                                 style={{ flex: 1, background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "10px", padding: "10px 14px", color: "white", fontSize: "12px", outline: "none", fontWeight: "700" }}
                               />
-                              <button 
+                              <button
                                 type="button"
                                 onClick={applyCoupon}
                                 style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "10px", padding: "10px 18px", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}
@@ -904,7 +893,7 @@ const EliteMembership = () => {
 
                   {/* APPLICATION DETAILS FORM */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: windowWidth > 600 ? "1fr 1fr" : "1fr", gap: "16px" }}>
                       <div style={{ textAlign: "left" }}>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>FULL NAME</label>
                         <input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
@@ -914,14 +903,14 @@ const EliteMembership = () => {
                         <input type="email" placeholder="john@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: windowWidth > 600 ? "1fr 1fr" : "1fr", gap: "16px" }}>
                       <div style={{ textAlign: "left" }}>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>PHONE NUMBER</label>
                         <input type="tel" placeholder="+1 (555) 000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                       <div style={{ textAlign: "left" }}>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>FULL ADDRESS</label>
-                        <input type="text" placeholder="123 Rogue St, City, ST" value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" placeholder="123 Main St, City, ST" value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                     </div>
                   </div>
@@ -934,25 +923,25 @@ const EliteMembership = () => {
                     </div>
                     <div style={{ textAlign: "left" }}>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARD NUMBER</label>
-                      <input type="text" placeholder="•••• •••• •••• ••••" value={cardNumber} onChange={handleCardNumberChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                      <input type="text" {...CARD_INPUT_PROPS} placeholder="•••• •••• •••• ••••" value={cardNumber} onChange={handleCardNumberChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", textAlign: "left" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: windowWidth > 420 ? "1fr 1fr 1fr" : "1fr 1fr", gap: "16px", textAlign: "left" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>EXPIRY DATE</label>
-                        <input type="text" placeholder="MM/YY" value={expiryDate} onChange={handleExpiryDateChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" {...EXPIRY_INPUT_PROPS} placeholder="MM/YY" value={expiryDate} onChange={handleExpiryDateChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CVV</label>
-                        <input type="text" placeholder="•••" value={cvv} onChange={handleCvvChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" {...CVV_INPUT_PROPS} placeholder="•••" value={cvv} onChange={handleCvvChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>ZIP CODE</label>
-                        <input type="text" placeholder="10001" value={billingZip} onChange={handleBillingZipChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" inputMode="numeric" autoComplete="postal-code" placeholder="10001" value={billingZip} onChange={handleBillingZipChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     style={{
                       background: "#FF6A00",
@@ -972,10 +961,16 @@ const EliteMembership = () => {
                       marginTop: "8px"
                     }}
                   >
-                    <span>SECURELY PAY ${(() => {
+                    <span>{checkoutItem.kind === "pack" ? "CONTINUE" : "REQUEST UPGRADE"} · ${(() => {
                       const originalPrice = parseFloat(checkoutItem.price.replace("$", "")) || 0;
                       return Math.max(0, originalPrice - discount).toFixed(2);
                     })()}</span> <Shield size={16} />
+                  </button>
+                  <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", textAlign: "center", lineHeight: 1.5, margin: "-8px 0 0" }}>
+                    Your card is not charged yet. Online payments open soon; our team confirms your upgrade by email.
+                  </p>
+                  <button type="button" onClick={closeCheckout} style={{ background: "none", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", borderRadius: "100px", padding: "14px", fontSize: "13px", fontWeight: 800, cursor: "pointer" }}>
+                    Cancel
                   </button>
                 </form>
               )}

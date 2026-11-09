@@ -6,6 +6,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { apiCall, formatProductImage } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { formatCardNumber, formatExpiry, formatCvv, validateCard, CARD_INPUT_PROPS, EXPIRY_INPUT_PROPS, CVV_INPUT_PROPS } from "../utils/cardInput";
+
+const isTicket = (item) => item.type === "ticket" || String(item.title || "").toLowerCase().includes("spectator pass");
 
 
 const Cart = () => {
@@ -19,15 +22,7 @@ const Cart = () => {
     } catch (e) {
       console.error("Failed to load cart items from localStorage:", e);
     }
-    return [
-      {
-        id: 1,
-        title: "OFFICIAL RECORD CERTIFICATE",
-        price: 45.00,
-        img: "/images/athlete-certificate.webp",
-        qty: 1
-      }
-    ];
+    return [];
   });
 
   React.useEffect(() => {
@@ -49,6 +44,9 @@ const Cart = () => {
   const [cvv, setCvv] = React.useState("");
   const [billingZip, setBillingZip] = React.useState("");
   const [shippingAddress, setShippingAddress] = React.useState("");
+  const [buyerEmail, setBuyerEmail] = React.useState("");
+  const needsShipping = items.some((item) => !isTicket(item));
+  const hasTickets = items.some(isTicket);
   const [formError, setFormError] = React.useState("");
 
   const [successMessages, setSuccessMessages] = React.useState({
@@ -74,56 +72,16 @@ const Cart = () => {
     fetchMessages();
   }, []);
 
-  const formatAmex = (digits) => {
-    let formatted = "";
-    if (digits.length > 0) formatted += digits.substring(0, 4);
-    if (digits.length > 4) formatted += " " + digits.substring(4, 10);
-    if (digits.length > 10) formatted += " " + digits.substring(10, 15);
-    return formatted;
-  };
-
-  const formatStandard = (digits) => {
-    let parts = [];
-    for (let i = 0; i < digits.length; i += 4) {
-      parts.push(digits.substring(i, i + 4));
-    }
-    return parts.join(" ");
-  };
-
   const handleCardNumberChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const isAmex = raw.startsWith("34") || raw.startsWith("37");
-    const isStandard = raw.startsWith("4") ||
-                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(raw) ||
-                       /^(6011|622|64[4-9]|65)/.test(raw);
-    const maxLength = isAmex ? 15 : (isStandard ? 16 : 19);
-    const limited = raw.substring(0, maxLength);
-
-    if (isAmex) {
-      setCardNumber(formatAmex(limited));
-    } else {
-      setCardNumber(formatStandard(limited));
-    }
+    setCardNumber(formatCardNumber(e.target.value));
   };
 
   const handleExpiryDateChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, 4);
-    let formatted = "";
-    if (limited.length > 2) {
-      formatted = `${limited.substring(0, 2)}/${limited.substring(2)}`;
-    } else {
-      formatted = limited;
-    }
-    setExpiryDate(formatted);
+    setExpiryDate(formatExpiry(e.target.value));
   };
 
   const handleCvvChange = (e) => {
-    const cleanCard = cardNumber.replace(/\s/g, "");
-    const isAmex = cleanCard.startsWith("34") || cleanCard.startsWith("37");
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, isAmex ? 4 : 3);
-    setCvv(limited);
+    setCvv(formatCvv(e.target.value, cardNumber));
   };
 
   const handleBillingZipChange = (e) => {
@@ -133,8 +91,15 @@ const Cart = () => {
   };
 
   const validateCardDetails = () => {
-    if (!shippingAddress.trim()) {
+    if (needsShipping && !shippingAddress.trim()) {
       return "Shipping address is required.";
+    }
+    const email = (user?.email || buyerEmail).trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return "Please enter a valid email address for your receipt.";
+    }
+    if (hasTickets && !user) {
+      return "Please log in to buy event tickets. Tickets are linked to your account.";
     }
     if (!cardholderName.trim()) {
       return "Name on card is required.";
@@ -143,60 +108,8 @@ const Cart = () => {
       return "Name on card can only contain letters, spaces, hyphens, and periods.";
     }
 
-    const cleanCard = cardNumber.replace(/\s/g, "");
-    if (!cleanCard) {
-      return "Please enter a valid card number.";
-    }
-    if (/[^\d]/.test(cleanCard)) {
-      return "Card number must contain numbers only.";
-    }
-
-    const isAmex = cleanCard.startsWith("34") || cleanCard.startsWith("37");
-    const isStandard = cleanCard.startsWith("4") ||
-                       /^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[0-1]|2720)/.test(cleanCard) ||
-                       /^(6011|622|64[4-9]|65)/.test(cleanCard);
-
-    if (isAmex) {
-      if (cleanCard.length < 15) return "Card number is incomplete.";
-      if (cleanCard.length > 15) return "Card number is too long.";
-    } else if (isStandard) {
-      if (cleanCard.length < 16) return "Card number is incomplete.";
-      if (cleanCard.length > 16) return "Card number is too long.";
-    } else {
-      if (cleanCard.length < 12) return "Card number is incomplete.";
-      if (cleanCard.length > 19) return "Card number is too long.";
-    }
-
-    if (!expiryDate) {
-      return "Expiration date is required.";
-    }
-    if (!/^\d{2}\/\d{2}$/.test(expiryDate)) {
-      return "Expiration date must be in MM/YY format.";
-    }
-    const [mmStr, yyStr] = expiryDate.split("/");
-    const mm = parseInt(mmStr, 10);
-    const yy = parseInt(yyStr, 10);
-    if (mm < 1 || mm > 12) {
-      return "Please enter a valid expiration month (01-12).";
-    }
-    const now = new Date();
-    const currentYear = now.getFullYear() % 100;
-    const currentMonth = now.getMonth() + 1;
-    if (yy < currentYear || (yy === currentYear && mm < currentMonth)) {
-      return "Expiration date must be a valid future date.";
-    }
-
-    const rawCvv = cvv.replace(/\s/g, "");
-    if (!rawCvv) {
-      return "CVV/CVC is required.";
-    }
-    if (/[^\d]/.test(rawCvv)) {
-      return "CVV/CVC must contain numbers only.";
-    }
-    const requiredCvvLength = isAmex ? 4 : 3;
-    if (rawCvv.length !== requiredCvvLength) {
-      return `CVV/CVC must be exactly ${requiredCvvLength} digits.`;
-    }
+    const cardError = validateCard({ number: cardNumber, expiry: expiryDate, cvv });
+    if (cardError) return cardError;
 
     const rawZip = billingZip.replace(/\s/g, "");
     if (!rawZip) {
@@ -243,7 +156,8 @@ const Cart = () => {
           category: item.category || null
         })),
         checkoutType: "shop",
-        userId: user?.id || null
+        userId: user?.id || null,
+        customerEmail: user?.email || buyerEmail || null
       }, user?.token);
 
       if (response && response.valid) {
@@ -306,11 +220,11 @@ const Cart = () => {
                     const uniqueKey = `${item.id}-${item.size || ""}-${item.color || ""}`;
                     return (
                       <div key={uniqueKey} style={{ background: "#161616", borderRadius: "24px", padding: "24px", display: "flex", gap: "24px", border: "1px solid rgba(255,255,255,0.05)", transition: "all 0.3s ease" }}>
-                        <img loading="lazy" decoding="async" src={formatProductImage(item.img)} alt={item.title} style={{ width: "120px", height: "120px", borderRadius: "16px", objectFit: "cover" }} />
+                        <img loading="lazy" decoding="async" src={formatProductImage(item.img)} alt={item.title} style={{ width: "120px", height: "120px", borderRadius: "16px", objectFit: "contain", objectPosition: "center", background: "#0d0d0d", padding: "6px", boxSizing: "border-box", flexShrink: 0 }} />
                         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "flex-start" }}>
-                              <h3 style={{ fontSize: "18px", fontWeight: "900", textTransform: "uppercase", letterSpacing: "-0.01em" }}>{item.title}</h3>
+                              <h3 style={{ fontSize: "18px", fontWeight: "800", textTransform: "none", letterSpacing: "-0.01em" }}>{item.title}{isTicket(item) && <span style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#FF6A00", marginTop: "4px" }}>Event ticket{item.eventDate ? ` · ${new Date(item.eventDate).toLocaleDateString()}` : ""}</span>}</h3>
                               <div style={{ fontSize: "18px", fontWeight: "900", color: "#FF6A00" }}>${(item.price * item.qty).toFixed(2)}</div>
                             </div>
 
@@ -448,7 +362,7 @@ const Cart = () => {
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
-                    placeholder="ROGUE20"
+                    placeholder="AMPEX20"
                     value={coupon}
                     onChange={(e) => setCoupon(e.target.value)}
                     style={{
@@ -567,8 +481,8 @@ const Cart = () => {
                   <h3 style={{ fontSize: "28px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>PAYMENT SUCCESSFUL</h3>
                   <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
                     {(() => {
-                      const hasPass = items.some(item => item.title.toLowerCase().includes("spectator pass"));
-                      const hasOtherItems = items.some(item => !item.title.toLowerCase().includes("spectator pass"));
+                      const hasPass = items.some(isTicket);
+                      const hasOtherItems = items.some(item => !isTicket(item));
 
                       if (hasPass && !hasOtherItems) {
                         return successMessages.msg_spectator;
@@ -635,10 +549,12 @@ const Cart = () => {
                     try {
                       const payload = {
                         customerName: cardholderName,
-                        customerEmail: user?.email || (cardholderName.toLowerCase().replace(/\s+/g, '') + "@example.com"),
-                        shippingAddress: shippingAddress || 'Digital Delivery',
+                        customerEmail: (user?.email || buyerEmail).trim(),
+                        shippingAddress: needsShipping ? shippingAddress : 'Digital Delivery',
                         items: items.map(item => ({
                           id: item.id,
+                          type: item.type || 'product',
+                          eventId: item.eventId || null,
                           title: item.title,
                           price: parseFloat(item.price),
                           qty: parseInt(item.qty),
@@ -652,7 +568,7 @@ const Cart = () => {
                         couponCode: appliedCoupon?.code || null
                       };
 
-                      await apiCall("/shop/checkout", "POST", payload);
+                      await apiCall("/shop/checkout", "POST", payload, user?.token);
                       setIsProcessing(false);
                       setIsSuccess(true);
                     } catch (err) {
@@ -703,30 +619,38 @@ const Cart = () => {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {!user && (
+                      <div style={{ textAlign: "left" }}>
+                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>EMAIL FOR RECEIPT</label>
+                        <input type="email" autoComplete="email" placeholder="you@example.com" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                      </div>
+                    )}
+                    {needsShipping && (
                     <div style={{ textAlign: "left" }}>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>SHIPPING ADDRESS</label>
                       <textarea placeholder="123 Main St, New York, NY 10001" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px", minHeight: "60px", fontFamily: "inherit" }} />
                     </div>
+                    )}
                     <div style={{ textAlign: "left" }}>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARDHOLDER NAME</label>
                       <input type="text" placeholder="John Doe" value={cardholderName} onChange={(e) => setCardholderName(e.target.value.replace(/[^a-zA-Z\s.-]/g, ""))} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                     </div>
                     <div style={{ textAlign: "left" }}>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARD NUMBER</label>
-                      <input type="text" placeholder="•••• •••• •••• ••••" value={cardNumber} onChange={handleCardNumberChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                      <input type="text" {...CARD_INPUT_PROPS} placeholder="•••• •••• •••• ••••" value={cardNumber} onChange={handleCardNumberChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", textAlign: "left" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>EXPIRY DATE</label>
-                        <input type="text" placeholder="MM/YY" value={expiryDate} onChange={handleExpiryDateChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" {...EXPIRY_INPUT_PROPS} placeholder="MM/YY" value={expiryDate} onChange={handleExpiryDateChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CVV</label>
-                        <input type="text" placeholder="•••" value={cvv} onChange={handleCvvChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" {...CVV_INPUT_PROPS} placeholder="•••" value={cvv} onChange={handleCvvChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>ZIP CODE</label>
-                        <input type="text" placeholder="10001" value={billingZip} onChange={handleBillingZipChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                        <input type="text" inputMode="numeric" autoComplete="postal-code" placeholder="10001" value={billingZip} onChange={handleBillingZipChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                       </div>
                     </div>
                   </div>

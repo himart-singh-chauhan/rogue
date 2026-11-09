@@ -32,6 +32,21 @@ const getAllCategories = async (req, res) => {
 
     const categories = dbCategories.map(getFormattedCategory);
 
+    // Verified/total record counts per category (records store the category name; newer ones also the id)
+    const { data: recs } = await supabase.from('records').select('category, category_id, status');
+    const byName = {};
+    (recs || []).forEach((r) => {
+      const key = (r.category || '').trim().toLowerCase();
+      byName[key] = byName[key] || { total: 0, verified: 0 };
+      byName[key].total++;
+      if (r.status === 'verified') byName[key].verified++;
+    });
+    categories.forEach((c) => {
+      const s = byName[c.name.trim().toLowerCase()] || { total: 0, verified: 0 };
+      c.recordCount = s.total;
+      c.verifiedCount = s.verified;
+    });
+
     // Build tree
     const map = {};
     categories.forEach(c => map[c.id] = { ...c, children: [] });
@@ -115,7 +130,6 @@ const updateCategory = async (req, res) => {
       .single();
 
     if (findError || !existingCat) return res.status(404).json({ message: 'Category not found' });
-    if (existingCat.is_default) return res.status(403).json({ message: "Cannot modify default category" });
 
     const updates = {
       updated_at: new Date()
@@ -125,7 +139,10 @@ const updateCategory = async (req, res) => {
       updates.slug = slugify(name);
     }
     if (typeof description !== 'undefined') updates.description = description;
-    if (typeof parent !== 'undefined') updates.parent = parent || null;
+    if (typeof parent !== 'undefined') {
+      if (parent && parent === req.params.id) return res.status(400).json({ message: 'A category cannot be its own parent' });
+      updates.parent = parent || null;
+    }
     if (typeof order !== 'undefined') updates.order_num = parseInt(order);
     if (typeof active !== 'undefined') updates.active = active;
     if (typeof rules !== 'undefined') updates.rules = rules;
@@ -155,7 +172,6 @@ const deleteCategory = async (req, res) => {
       .single();
 
     if (findError || !cat) return res.status(404).json({ message: 'Category not found' });
-    if (cat.is_default) return res.status(403).json({ message: 'Cannot delete default category' });
 
     // Check subcategories
     const { data: children, error: childrenError } = await supabase
@@ -165,7 +181,9 @@ const deleteCategory = async (req, res) => {
 
     if (childrenError) throw childrenError;
     if (children && children.length > 0) {
-      return res.status(400).json({ message: 'Category has subcategories; remove or reassign them first' });
+      // Keep the subcategories: they move up to the top level (the admin can re-parent them later)
+      const { error: moveError } = await supabase.from('categories').update({ parent: cat.parent || null, updated_at: new Date() }).eq('parent', cat.id);
+      if (moveError) throw moveError;
     }
 
     const { error } = await supabase

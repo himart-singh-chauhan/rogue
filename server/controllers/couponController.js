@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 
 // Helper to generate a random coupon code
-const generateRandomCouponCode = (prefix = 'ROGUE', length = 5) => {
+const generateRandomCouponCode = (prefix = 'AMPEX', length = 5) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let randomPart = '';
   for (let i = 0; i < length; i++) {
@@ -14,7 +14,10 @@ const generateRandomCouponCode = (prefix = 'ROGUE', length = 5) => {
 // @route   POST /api/coupons/validate
 // @access  Public
 const validateCoupon = async (req, res) => {
-  const { code, subtotal, items = [], checkoutType, targetId, userId, country } = req.body;
+  const { code, subtotal, items = [], checkoutType, targetId, country } = req.body;
+  // Who is redeeming: the logged-in account (never a userId sent by the browser), or the guest's email.
+  const userId = req.user?.id || null;
+  const customerEmail = String(req.body.customerEmail || req.body.email || req.user?.email || '').trim().toLowerCase() || null;
 
   if (!code) {
     return res.status(400).json({ valid: false, message: 'Coupon code is required' });
@@ -52,6 +55,22 @@ const validateCoupon = async (req, res) => {
     if (coupon.max_redemptions !== null && coupon.max_redemptions !== undefined) {
       if ((coupon.redemptions_count || 0) >= coupon.max_redemptions) {
         return res.status(400).json({ valid: false, message: 'This coupon has reached its maximum redemption limit' });
+      }
+    }
+
+    // 3b. Per-account limit (default: once per account)
+    const maxPerUser = coupon.max_per_user === null || coupon.max_per_user === undefined ? 1 : Number(coupon.max_per_user);
+    if (maxPerUser > 0 && (userId || customerEmail)) {
+      let usedQuery = supabase.from('coupon_redemptions').select('id', { count: 'exact', head: true }).eq('coupon_id', coupon.id);
+      usedQuery = userId && customerEmail
+        ? usedQuery.or(`user_id.eq.${userId},customer_email.eq.${customerEmail.replace(/[,()]/g, '')}`)
+        : userId ? usedQuery.eq('user_id', userId) : usedQuery.eq('customer_email', customerEmail);
+      const { count: used, error: usedError } = await usedQuery;
+      if (!usedError && (used || 0) >= maxPerUser) {
+        return res.status(400).json({
+          valid: false,
+          message: maxPerUser === 1 ? 'You have already used this coupon' : `This coupon can be used ${maxPerUser} times per account, and you have reached that limit`,
+        });
       }
     }
 
@@ -101,7 +120,9 @@ const validateCoupon = async (req, res) => {
         }
       }
 
-      const tiersOrder = ['free', 'bronze', 'silver', 'gold'];
+      // plan order comes from Admin → Memberships → Plans
+      const { data: planRows } = await supabase.from('membership_plans').select('slug').order('sort_order');
+      const tiersOrder = planRows && planRows.length ? planRows.map((p) => p.slug) : ['free', 'bronze', 'silver', 'gold'];
       const requiredIndex = tiersOrder.indexOf(coupon.restricted_membership_tier.toLowerCase());
       const userIndex = tiersOrder.indexOf(userTier.toLowerCase());
 
@@ -256,7 +277,20 @@ const getAllCouponsByAdmin = async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(coupons || []);
+    const { data: reds } = await supabase.from('coupon_redemptions').select('coupon_id, user_id, customer_email, discount_amount');
+    const usage = {};
+    (reds || []).forEach((r) => {
+      const u = usage[r.coupon_id] || (usage[r.coupon_id] = { uses: 0, accounts: new Set(), discount: 0 });
+      u.uses++;
+      u.accounts.add(r.user_id || r.customer_email || 'guest');
+      u.discount += Number(r.discount_amount) || 0;
+    });
+    res.json((coupons || []).map((c) => ({
+      ...c,
+      max_per_user: c.max_per_user ?? 1,
+      unique_accounts: usage[c.id] ? usage[c.id].accounts.size : 0,
+      total_discount_given: usage[c.id] ? Math.round(usage[c.id].discount * 100) / 100 : 0,
+    })));
   } catch (error) {
     console.error('Fetch coupons error:', error);
     res.status(500).json({ message: error.message || 'Server error fetching coupons' });
@@ -277,6 +311,7 @@ const createCouponByAdmin = async (req, res) => {
     targetId,
     minPurchase,
     maxRedemptions,
+    maxPerUser,
     restrictedMembershipTier,
     restrictedCountry,
     autoGenerate
@@ -320,6 +355,7 @@ const createCouponByAdmin = async (req, res) => {
           target_id: targetId || null,
           min_purchase: parseFloat(minPurchase) || 0.00,
           max_redemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
+          max_per_user: maxPerUser === '' || maxPerUser === null || maxPerUser === undefined ? 1 : Math.max(0, parseInt(maxPerUser) || 0),
           redemptions_count: 0,
           restricted_membership_tier: restrictedMembershipTier || null,
           restricted_country: restrictedCountry || null
@@ -351,6 +387,7 @@ const updateCouponByAdmin = async (req, res) => {
     targetId,
     minPurchase,
     maxRedemptions,
+    maxPerUser,
     restrictedMembershipTier,
     restrictedCountry
   } = req.body;
@@ -366,6 +403,7 @@ const updateCouponByAdmin = async (req, res) => {
     if (targetId !== undefined) updateData.target_id = targetId || null;
     if (minPurchase !== undefined) updateData.min_purchase = parseFloat(minPurchase) || 0.00;
     if (maxRedemptions !== undefined) updateData.max_redemptions = maxRedemptions ? parseInt(maxRedemptions) : null;
+    if (maxPerUser !== undefined) updateData.max_per_user = maxPerUser === '' || maxPerUser === null ? 1 : Math.max(0, parseInt(maxPerUser) || 0);
     if (restrictedMembershipTier !== undefined) updateData.restricted_membership_tier = restrictedMembershipTier || null;
     if (restrictedCountry !== undefined) updateData.restricted_country = restrictedCountry || null;
     updateData.updated_at = new Date();
@@ -461,8 +499,20 @@ const getCouponStatsByAdmin = async (req, res) => {
   }
 };
 
+// Server-side coupon check for checkout: runs exactly the same rules as POST /coupons/validate
+// and resolves to { status, data } where data.discountAmount is the discount to apply.
+const evaluateCoupon = (body, user) => new Promise((resolve) => {
+  const res = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(data) { resolve({ status: this.statusCode, data }); return this; },
+  };
+  validateCoupon({ body, user }, res).catch(() => resolve({ status: 500, data: { valid: false, message: 'Coupon could not be checked.' } }));
+});
+
 module.exports = {
   validateCoupon,
+  evaluateCoupon,
   getAllCouponsByAdmin,
   createCouponByAdmin,
   updateCouponByAdmin,

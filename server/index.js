@@ -92,10 +92,15 @@ app.use('/api/coupons', require('./routes/couponRoutes'));
 app.use('/api/rankings', require('./routes/rankingRoutes'));
 app.use('/api/countries', require('./routes/countryRoutes'));
 app.use('/api/sponsors', require('./routes/sponsorRoutes'));
+app.use('/api/membership-plans', require('./routes/planRoutes'));
+app.use('/api/weight-classes', require('./routes/weightClassRoutes'));
+app.use('/api/certificates', require('./routes/certificateRoutes'));
+app.use('/api/messages', require('./routes/messageRoutes'));
+app.get('/api/settings/public', require('./controllers/adminExtrasController').getPublicSettings);
 app.use('/api/social', require('./routes/socialRoutes'));
 
 app.get('/', (req, res) => {
-  res.send('ROGUE API is running...');
+  res.send('AMPEX World Records API is running...');
 });
 
 // Unknown API routes -> JSON 404 instead of Express's HTML page
@@ -123,7 +128,7 @@ const PORT = process.env.PORT || 5000;
 // Locally (and on any traditional host) start a normal HTTP server.
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {
-    console.log(`🚀 ROGUE API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+    console.log(`🚀 AMPEX World Records API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
   });
 }
 

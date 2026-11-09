@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
-const { awardPoints, toInt, pointsForVerifiedRecord } = require('../utils/rankings');
+const { toInt, syncRecordAward } = require('../utils/rankings');
+const { evaluateCoupon } = require('./couponController');
 const { thumbnailFor } = require('../utils/youtubeIntegration');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
@@ -7,7 +8,7 @@ const str = (v) => (v === undefined || v === null ? '' : String(v));
 
 // Columns safe to show on public pages (no witness contacts, judge/admin notes or AI scan internals).
 const PUBLIC_RECORD_COLUMNS =
-  'id, slug, user_id, athlete_id, title, category, category_id, description, value, unit, status, record_type, evidence_url, thumbnail_url, video_url, video_type, venue_name, city, state, country, is_featured, views, likes_count, comments_count, date_set, created_at, updated_at';
+  'id, slug, user_id, athlete_id, title, category, category_id, description, value, unit, status, record_type, evidence_url, thumbnail_url, video_url, video_type, venue_name, city, state, country, is_featured, views, likes_count, comments_count, date_set, verified_at, created_at, updated_at';
 const PUBLIC_USER_EMBED = 'user:users!records_user_id_fkey(id, name, username, profile_image, country)';
 
 // record_meta has UNIQUE(record_id), so PostgREST embeds it as an object; the admin UI expects an array.
@@ -253,8 +254,39 @@ const processCheckout = async (req, res) => {
       return res.status(403).json({ message: 'You can only pay for your own submission' });
     }
 
-    const trackingNumber = `RWR-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
-    const fee = Math.max(0, parseFloat(req.body.finalAmount ?? 3.50) || 0);
+    const trackingNumber = `AWR-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
+    // The fee and any coupon discount are worked out here; amounts sent by the browser are ignored.
+    const BASE_FEE = 3.5;
+    const couponCode = req.body.couponCode ? String(req.body.couponCode).trim().toUpperCase() : null;
+    let discount = 0;
+    if (couponCode) {
+      const verdict = await evaluateCoupon({ code: couponCode, subtotal: BASE_FEE, items: [], checkoutType: 'ticket', targetId: record.id }, req.user);
+      if (!verdict.data?.valid) return res.status(400).json({ message: verdict.data?.message || 'Coupon could not be applied.' });
+      discount = Math.min(BASE_FEE, Math.max(0, Number(verdict.data.discountAmount) || 0));
+    }
+    const fee = Math.round((BASE_FEE - discount) * 100) / 100;
+
+    // Coupon limits (total + per account) are enforced here too, not only in the shop
+    if (couponCode && discount > 0) {
+      const { data: result, error: redeemError } = await supabase.rpc('redeem_coupon_v2', {
+        p_code: couponCode,
+        p_user: req.user.id,
+        p_email: req.user.email || null,
+        p_context: 'submission',
+        p_reference: req.params.id,
+        p_discount: discount,
+      });
+      if (redeemError) throw redeemError;
+      if (result !== 'ok') {
+        const reasons = {
+          not_found: 'That coupon code is not valid.',
+          inactive: 'That coupon is no longer active.',
+          limit_total: 'That coupon has reached its maximum number of uses.',
+          limit_user: 'You have already used this coupon the maximum number of times.',
+        };
+        return res.status(400).json({ message: reasons[result] || 'Coupon could not be applied.' });
+      }
+    }
 
     const { error: metaError } = await supabase
       .from('record_meta')
@@ -262,7 +294,7 @@ const processCheckout = async (req, res) => {
         record_id: req.params.id,
         payment_status: 'paid',
         submission_fee: fee,
-        coupon_code: req.body.couponCode || null,
+        coupon_code: discount > 0 ? couponCode : null,
         tracking_number: trackingNumber,
         updated_at: new Date(),
       }], { onConflict: 'record_id' });
@@ -367,6 +399,9 @@ const adjudicateRecord = async (req, res) => {
       updateData.verification_status = 'denied';
     }
 
+    if (status === 'verified' && before.status !== 'verified') updateData.verified_at = new Date();
+    if (status !== 'verified') updateData.verified_at = null;
+
     const { data: updatedRecord, error } = await supabase
       .from('records')
       .update(updateData)
@@ -376,26 +411,11 @@ const adjudicateRecord = async (req, res) => {
 
     if (error) throw error;
 
-    // Award points only on the transition into "verified", so re-saving never double-counts.
-    const pts = toInt(points);
-    const becameVerified = status === 'verified' && before.status !== 'verified';
-    if (becameVerified && updatedRecord.user_id) {
-      try {
-        await awardPoints({
-          userId: updatedRecord.user_id,
-          points: pts > 0 ? pts : await pointsForVerifiedRecord(updatedRecord),
-          source: 'record_verified',
-          referenceId: updatedRecord.id,
-          reason: `Record verified: ${updatedRecord.title}`,
-          adminId: req.user.id,
-          counters: {
-            verified_records_count: 1,
-            world_records_count: updatedRecord.record_type === 'world_record' ? 1 : 0,
-          },
-        });
-      } catch (pointsErr) {
-        console.warn('[Rankings Warning] Could not award points:', pointsErr.message);
-      }
+    // Points are awarded once on verification and taken back if the record is un-verified later.
+    try {
+      await syncRecordAward(updatedRecord, { verified: status === 'verified', points: toInt(points), adminId: req.user.id });
+    } catch (pointsErr) {
+      console.warn('[Rankings Warning] Could not update points:', pointsErr.message);
     }
 
     res.json(updatedRecord);

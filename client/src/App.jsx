@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import LoadingScreen from './components/LoadingScreen'
 import ScrollToTop from './components/ScrollToTop'
 import ProtectedRoute from './components/ProtectedRoute'
+import { API_URL } from './utils/api'
 import './App.css'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -44,7 +45,23 @@ const MemberProfilePage = lazy(() => import('./pages/MemberProfilePage'))
 const ExploreRecords = lazy(() => import('./pages/ExploreRecords'))
 const RecordDetailPage = lazy(() => import('./pages/RecordDetailPage'))
 const Admin = lazy(() => import('./pages/Admin'))
+const AdminGuide = lazy(() => import('./pages/AdminGuide'))
+const CertificateVerify = lazy(() => import('./pages/CertificateVerify'))
 const SubmissionCheckout = lazy(() => import('./pages/SubmissionCheckout'))
+
+// Site title / description from Admin → System Settings → Global SEO
+const applySeo = () => {
+  const base = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL
+  fetch(`${base}/settings/public`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((s) => {
+      if (!s) return
+      if (s.seoTitle) document.title = s.seoTitle
+      if (s.seoDescription) document.querySelector('meta[name="description"]')?.setAttribute('content', s.seoDescription)
+    })
+    .catch(() => {})
+}
+if (typeof window !== 'undefined') applySeo()
 
 function App() {
   const [loading, setLoading] = useState(true)
@@ -98,6 +115,9 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><Admin /></ProtectedRoute>} />
+            <Route path="/admin/guide" element={<ProtectedRoute requireAdmin={true}><AdminGuide /></ProtectedRoute>} />
+            <Route path="/certificate" element={<CertificateVerify />} />
+            <Route path="/certificate/:number" element={<CertificateVerify />} />
             <Route path="/submit-evidence-info" element={<SubmitEvidenceLearnMore />} />
             <Route path="/global-recognition-info" element={<GlobalRecognitionLearnMore />} />
             <Route path="/adjudication-info" element={<ExpertAdjudicationLearnMore />} />

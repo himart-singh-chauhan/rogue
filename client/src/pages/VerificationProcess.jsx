@@ -25,7 +25,7 @@ import GlowCard from "../components/GlowCard";
 
 const VerificationProcess = () => {
   const steps = [
-    { step: "01", title: "Create Account", desc: "Before submitting a record attempt, competitors must create an official account on the Rogue World Records platform. Your account allows you to submit attempts, upload evidence, and track verification progress." },
+    { step: "01", title: "Create Account", desc: "Before submitting a record attempt, competitors must create an official account on the AMPEX World Records platform. Your account allows you to submit attempts, upload evidence, and track verification progress." },
     { step: "02", title: "Choose Category", desc: "Applicants must select the correct category for their attempt (Athletics, Strength, Gaming, etc.). If a category does not exist, users may request approval for a new world record category." },
     { step: "03", title: "Review Official Rules", desc: "Before attempting a record, competitors must carefully read all official rules including time limits, equipment requirements, safety standards, and witness requirements." },
     { step: "04", title: "Complete Attempt", desc: "The competitor performs the challenge while following all required rules and safety guidelines. Attempts may require continuous video recording, independent witnesses, and official timers." },
@@ -58,10 +58,10 @@ const VerificationProcess = () => {
                 <span style={{ fontSize: "14px", fontWeight: "900", color: "#FF6A00", letterSpacing: "0.2em", textTransform: "uppercase" }}>Official Protocol</span>
               </div>
               <h1 style={{ fontSize: "clamp(40px, 7vw, 90px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.04em", lineHeight: "1", marginBottom: "32px", color: "white" }}>
-                ROGUE WORLD <br /> <span style={{ color: "#FF6A00" }}>VERIFICATION</span>
+                AMPEX WORLD <br /> <span style={{ color: "#FF6A00" }}>VERIFICATION</span>
               </h1>
               <p style={{ fontSize: "20px", color: "rgba(255,255,255,0.5)", maxWidth: "800px", lineHeight: "1.6", margin: "0 auto 48px" }}>
-                At Rogue World Records, every world record attempt goes through a detailed verification process designed to maintain fairness, accuracy, safety, and integrity.
+                At AMPEX World Records, every world record attempt goes through a detailed verification process designed to maintain fairness, accuracy, safety, and integrity.
               </p>
             </ScrollReveal>
           </div>
@@ -175,7 +175,7 @@ const VerificationProcess = () => {
                     <h2 style={{ fontSize: "32px", fontWeight: "950", textTransform: "uppercase" }}>SAFETY & FAIRNESS</h2>
                   </div>
                   <p style={{ fontSize: "16px", color: "rgba(255,255,255,0.6)", lineHeight: "1.7", marginBottom: "24px" }}>
-                    Rogue World Records prioritizes safety and fairness above all else. Immediate disqualification results from:
+                    AMPEX World Records prioritizes safety and fairness above all else. Immediate disqualification results from:
                   </p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                     {["Dangerous Behavior", "Fraudulent Evidence", "Edited Footage", "Rule Violations", "Unsportsmanlike Conduct", "Unsafe Environments"].map(item => (

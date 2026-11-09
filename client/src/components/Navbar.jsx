@@ -84,7 +84,7 @@ const Navbar = () => {
           <Link to="/" className="nav-logo-link-main">
             <img 
               src={location.pathname === "/" ? "/images/logo-dark.webp" : "/images/logo-light.webp"} 
-              alt="ROGUE Logo"
+              alt="AMPEX Logo"
               width={450}
               height={300}
               fetchPriority="high"

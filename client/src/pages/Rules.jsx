@@ -45,7 +45,7 @@ const Rules = () => {
       title: "2. Official Authority",
       scope: "02 / GOVERNANCE",
       icon: <Shield size={24} color="#FF6A00" />,
-      content: "Only authorized representatives of Rogue World Records may officially verify or adjudicate records. This includes certified adjudicators, senior verification staff, official judges, event referees, technical reviewers, and category specialists.",
+      content: "Only authorized representatives of AMPEX World Records may officially verify or adjudicate records. This includes certified adjudicators, senior verification staff, official judges, event referees, technical reviewers, and category specialists.",
     },
     {
       id: "03",
@@ -87,7 +87,7 @@ const Rules = () => {
       title: "8. Safety Rules",
       scope: "08 / PROTOCOL",
       icon: <AlertTriangle size={24} color="#FF6A00" />,
-      content: "Safety is mandatory. Attempts may be denied if unsafe conditions exist, illegal activities are involved, or public safety is at risk. Rogue World Records may reject any challenge considered excessively dangerous.",
+      content: "Safety is mandatory. Attempts may be denied if unsafe conditions exist, illegal activities are involved, or public safety is at risk. AMPEX World Records may reject any challenge considered excessively dangerous.",
       fullWidth: true
     },
     {
@@ -138,7 +138,7 @@ const Rules = () => {
       title: "15. Final Decision Authority",
       scope: "15 / BINDING",
       icon: <Zap size={24} color="#FF6A00" />,
-      content: "Rogue World Records reserves the right to approve or deny submissions, modify procedures, and revoke records if violations are discovered. Final decisions made after appeal are considered binding.",
+      content: "AMPEX World Records reserves the right to approve or deny submissions, modify procedures, and revoke records if violations are discovered. Final decisions made after appeal are considered binding.",
     },
     {
       id: "16",
@@ -188,7 +188,7 @@ const Rules = () => {
                   <span style={{ color: "#FF6A00" }}><ScrollReveal>RULES</ScrollReveal></span>
                 </h1>
                 <p style={{ marginTop: "40px", fontSize: "18px", color: "rgba(255,255,255,0.5)", maxWidth: "600px", lineHeight: "1.6" }}>
-                  The official judging and verification standards of Rogue World Records. Ensuring every achievement is authenticated with absolute integrity.
+                  The official judging and verification standards of AMPEX World Records. Ensuring every achievement is authenticated with absolute integrity.
                 </p>
               </div>
 
@@ -298,7 +298,7 @@ const Rules = () => {
                   INTEGRITY IN <br /><span className="orange-cta-highlight">EVERY ATTEMPT</span>
                 </h2>
                 <p className="orange-cta-subtitle" style={{ maxWidth: "800px", margin: "0 auto 40px", fontSize: "18px", color: "rgba(255,255,255,0.9)", lineHeight: "1.6" }}>
-                  Rogue World Records is committed to creating a fair, transparent, exciting, and respected platform where competitors earns official recognition for their achievements.
+                  AMPEX World Records is committed to creating a fair, transparent, exciting, and respected platform where competitors earns official recognition for their achievements.
                 </p>
                 <div style={{ display: "flex", justifyContent: "center", gap: "24px", flexWrap: "wrap", marginBottom: "48px" }}>
                   <div style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "100px", padding: "12px 28px", fontSize: "11px", fontWeight: "900", color: "white", textTransform: "uppercase", letterSpacing: "0.1em" }}>

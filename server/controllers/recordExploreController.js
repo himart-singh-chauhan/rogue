@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const socialController = require('./socialController');
 const { PUBLIC_RECORD_COLUMNS } = require('./recordController');
+const { syncRecordAward } = require('../utils/rankings');
 
 const USER_EMBED = 'user:users!records_user_id_fkey(username, name, display_name:name, profile_image, country)';
 const SELECT = `${PUBLIC_RECORD_COLUMNS}, homepage_section, homepage_order, ${USER_EMBED}`;
@@ -271,13 +272,30 @@ exports.changeRecordStatus = async (req, res) => {
       return res.status(400).json({ message: 'status must be pending, verified or rejected' });
     }
 
+    const { data: before } = await supabase.from('records').select('verified_at, approved_at').eq('id', recordId).maybeSingle();
+    if (!before) return res.status(404).json({ message: 'Record not found' });
+
     const updateData = { status, updated_at: new Date() };
-    if (status === 'verified') updateData.approved_at = new Date();
+    if (status === 'verified') {
+      updateData.approved_at = before.approved_at || new Date();
+      updateData.verified_at = before.verified_at || new Date();
+      updateData.verification_status = 'approved';
+    } else {
+      updateData.verified_at = null;
+      if (status === 'rejected') updateData.verification_status = 'denied';
+    }
     if (notes) updateData.admin_notes = notes;
 
     const { data, error } = await supabase.from('records').update(updateData).eq('id', recordId).select();
     if (error) throw error;
     if (!data || !data.length) return res.status(404).json({ message: 'Record not found' });
+
+    // Same points/counters/certificate handling as the Verification Queue.
+    try {
+      await syncRecordAward(data[0], { verified: status === 'verified', adminId: req.user?.id || null });
+    } catch (pointsErr) {
+      console.warn('[Rankings Warning] Could not update points:', pointsErr.message);
+    }
     res.json({ success: true, record: data[0] });
   } catch (error) {
     console.error('Change status error:', error);

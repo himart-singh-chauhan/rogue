@@ -7,7 +7,7 @@ import Footer from "../components/Footer";
 
 const Schedule = () => {
   const events = [
-    { date: "OCT 20", time: "10:00 AM", title: "ROGUE OPENING CEREMONY", loc: "Tokyo Main Arena" },
+    { date: "OCT 20", time: "10:00 AM", title: "AMPEX OPENING CEREMONY", loc: "Tokyo Main Arena" },
     { date: "OCT 20", time: "02:00 PM", title: "THE SUMMIT LIFT: QUALIFIERS", loc: "Tokyo Main Arena" },
     { date: "OCT 21", time: "09:00 AM", title: "100M DASH: ROUND 1", loc: "Olympic Hub" },
     { date: "OCT 21", time: "04:00 PM", title: "STREET WORKOUT FREESTYLE", loc: "Shibuya Plaza" },

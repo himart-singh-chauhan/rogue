@@ -5,6 +5,7 @@ import { apiCall, formatProductImage } from '../utils/api';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
 import Footer from '../components/Footer';
+import { useCategories, namesWithChildren } from '../utils/categoryMeta';
 
 export default function ExploreRecords() {
   const navigate = useNavigate();
@@ -20,8 +21,8 @@ export default function ExploreRecords() {
     setAuthMessage(msg);
     setTimeout(() => setAuthMessage(''), 3000);
   };
-  
-  
+
+
 
   const handleWatchRecord = (e, recordId) => {
     e.stopPropagation();
@@ -43,7 +44,25 @@ export default function ExploreRecords() {
     }
   };
 
-  const categories = ['All', 'Athletics', 'Strength', 'Endurance', 'Gaming', 'Skills'];
+  const { tree: categoryTree } = useCategories();
+  const categoryChips = [{ name: 'All', isSub: false }];
+  categoryTree.forEach((c) => {
+    categoryChips.push({ name: c.name, isSub: false });
+    (c.children || []).forEach((child) => categoryChips.push({ name: child.name, isSub: true, parent: c.name }));
+  });
+  // Choosing a parent category also shows its subcategories' records (Talent includes Funny Talent)
+  const findNode = (nodes, name) => {
+    for (const n of nodes) {
+      if (n.name.toLowerCase() === String(name).toLowerCase()) return n;
+      const hit = findNode(n.children || [], name);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const activeNode = activeCategory !== 'All' ? findNode(categoryTree, activeCategory) : null;
+  const activeNames = activeNode ? namesWithChildren(activeNode).map((n) => n.toLowerCase()) : [String(activeCategory).toLowerCase()];
+  const hasChildren = !!(activeNode && activeNode.children && activeNode.children.length);
+  const parentFilter = hasChildren ? activeNode.name.toLowerCase() : '';
   const tabs = [
     { id: 'new', label: '🆕 New Records' },
     { id: 'featured', label: '⭐ Featured' },
@@ -56,8 +75,9 @@ export default function ExploreRecords() {
     const cat = params.get('category') || 'All';
     setSearchQuery(q);
     setActiveCategory(cat);
-    fetchRecords(q, cat, filterType);
-  }, [location.search, filterType]);
+    // a parent with subcategories is filtered here in the page (records store one category name)
+    fetchRecords(q, parentFilter && parentFilter === cat.toLowerCase() ? 'All' : cat, filterType);
+  }, [location.search, filterType, parentFilter]);
 
   const handleCategoryClick = (cat) => {
     setActiveCategory(cat);
@@ -94,11 +114,11 @@ export default function ExploreRecords() {
 
   let filteredRecords = records.filter(r => {
     const matchesSearch = !searchQuery || (r.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || (r.user?.display_name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = activeCategory === 'All' || (r.category || '').toLowerCase() === activeCategory.toLowerCase() || (r.category_name || '').toLowerCase() === activeCategory.toLowerCase();
-    
+    const matchesCategory = activeCategory === 'All' || activeNames.includes((r.category || '').toLowerCase()) || activeNames.includes((r.category_name || '').toLowerCase());
+
     // Featured status is managed by admin / backend, with local fallback for legacy stats.
     const matchesFeatured = filterType === 'featured' ? (r.is_featured || r.isFeatured) : true;
-    
+
     return matchesSearch && matchesCategory && matchesFeatured;
   });
 
@@ -108,7 +128,7 @@ export default function ExploreRecords() {
       const viewsB = b.views || 0;
       return viewsB - viewsA;
     });
-    
+
     if (filteredRecords.length > 0) {
       const maxViews = filteredRecords[0].views || 0;
       filteredRecords = filteredRecords.filter(r => (r.views || 0) === maxViews);
@@ -162,23 +182,32 @@ export default function ExploreRecords() {
             />
           </form>
 
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryClick(cat)}
-              style={{
-                background: activeCategory === cat ? '#FF6A00' : '#1a1a1a',
-                color: 'white',
-                border: activeCategory === cat ? 'none' : '1px solid #333',
-                borderRadius: '99px',
-                padding: '10px 20px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {cat}
-            </button>
-          ))}
+        </div>
+
+        {/* All categories and subcategories (subcategories are marked with ›) */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', marginBottom: '32px' }}>
+          {categoryChips.map(chip => {
+            const isActive = String(activeCategory).toLowerCase() === chip.name.toLowerCase();
+            return (
+              <button
+                key={`${chip.parent || ''}-${chip.name}`}
+                onClick={() => handleCategoryClick(chip.name)}
+                title={chip.isSub ? `${chip.parent} › ${chip.name}` : chip.name}
+                style={{
+                  background: isActive ? '#FF6A00' : chip.isSub ? 'transparent' : '#1a1a1a',
+                  color: isActive ? 'white' : chip.isSub ? '#FF8A3D' : 'white',
+                  border: isActive ? '1px solid #FF6A00' : chip.isSub ? '1px dashed rgba(255,106,0,0.45)' : '1px solid #333',
+                  borderRadius: '99px',
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                {chip.isSub ? `› ${chip.name}` : chip.name}
+              </button>
+            );
+          })}
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '12px' }}>
@@ -209,8 +238,8 @@ export default function ExploreRecords() {
           </div>
         ) : filteredRecords.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 20px', color: '#888', background: 'rgba(255,255,255,0.02)', borderRadius: '24px', border: '1px dashed rgba(255,85,0,0.3)' }}>
-            <div style={{ 
-              width: '80px', height: '80px', background: 'rgba(255,85,0,0.1)', borderRadius: '50%', 
+            <div style={{
+              width: '80px', height: '80px', background: 'rgba(255,85,0,0.1)', borderRadius: '50%',
               display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 auto 24px auto',
               border: '1px solid rgba(255,85,0,0.2)'
             }}>
@@ -220,16 +249,16 @@ export default function ExploreRecords() {
               No Records Here Yet!
             </h3>
             <p style={{ fontSize: '15px', color: '#aaa', maxWidth: '400px', margin: '0 auto 30px auto', lineHeight: '1.6' }}>
-              This category is currently wide open. It looks like nobody has set a verified record here yet. This is your chance to shine and etch your name into the ROGUE history!
+              This category is currently wide open. It looks like nobody has set a verified record here yet. This is your chance to shine and etch your name into the AMPEX history!
             </p>
-            <button 
+            <button
               onClick={() => navigate('/verify')}
               style={{
                 background: 'linear-gradient(135deg, #FF5500 0%, #ff8800 100%)',
                 color: 'white', border: 'none', padding: '14px 32px', borderRadius: '100px',
                 fontSize: '14px', fontWeight: '900', letterSpacing: '0.5px', cursor: 'pointer',
                 boxShadow: '0 10px 25px rgba(255, 85, 0, 0.35)', transition: 'all 0.2s'
-              }} 
+              }}
               className="btn-glow-neon"
               onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
               onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
@@ -260,10 +289,10 @@ export default function ExploreRecords() {
                     <Trophy size={48} color="white" opacity={0.3} />
                   </div>
                   {record.thumbnail_url && record.thumbnail_url !== "pending_upload" && (
-                    <img loading="lazy" decoding="async" 
-                      src={formatProductImage(record.thumbnail_url)} 
-                      alt={record.title} 
-                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} 
+                    <img loading="lazy" decoding="async"
+                      src={formatProductImage(record.thumbnail_url)}
+                      alt={record.title}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {
                         e.target.style.display = 'none';
                       }}

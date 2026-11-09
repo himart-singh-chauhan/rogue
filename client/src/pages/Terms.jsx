@@ -12,13 +12,13 @@ const Terms = () => {
       id: "acceptance",
       icon: <Shield size={24} />,
       title: "1. Acceptance of Terms",
-      content: "By using Rogue World Records, you confirm that:\n• You are at least 18 years old or have parental/guardian permission.\n• You understand and accept these Terms of Service.\n• You agree to follow all rules, policies, and guidelines established by the organization.\nIf you do not agree with these terms, you should not use the platform."
+      content: "By using AMPEX World Records, you confirm that:\n• You are at least 18 years old or have parental/guardian permission.\n• You understand and accept these Terms of Service.\n• You agree to follow all rules, policies, and guidelines established by the organization.\nIf you do not agree with these terms, you should not use the platform."
     },
     {
       id: "services",
       icon: <RefreshCw size={24} />,
       title: "2. Services Provided",
-      content: "Rogue World Records provides services including but not limited to:\n• World record submissions\n• Verification services\n• Membership programs\n• Online competitions\n• Live events\n• Rankings and statistics\n• Award and certificate programs\n• Community engagement tools\n• Digital content and media\nWe reserve the right to modify, suspend, or discontinue services at any time."
+      content: "AMPEX World Records provides services including but not limited to:\n• World record submissions\n• Verification services\n• Membership programs\n• Online competitions\n• Live events\n• Rankings and statistics\n• Award and certificate programs\n• Community engagement tools\n• Digital content and media\nWe reserve the right to modify, suspend, or discontinue services at any time."
     },
     {
       id: "accounts",
@@ -36,7 +36,7 @@ const Terms = () => {
       id: "submission-rules",
       icon: <Book size={24} />,
       title: "5. Record Submission Rules",
-      content: "All submissions must:\n• Follow official category rules\n• Include accurate evidence\n• Be truthful and authentic\n• Meet safety standards\n• Avoid cheating, manipulation, or fraud\nRogue World Records reserves the right to deny or revoke records at any time if violations are discovered."
+      content: "All submissions must:\n• Follow official category rules\n• Include accurate evidence\n• Be truthful and authentic\n• Meet safety standards\n• Avoid cheating, manipulation, or fraud\nAMPEX World Records reserves the right to deny or revoke records at any time if violations are discovered."
     },
     {
       id: "judging",
@@ -54,19 +54,19 @@ const Terms = () => {
       id: "safety",
       icon: <Shield size={24} />,
       title: "8. Safety Disclaimer",
-      content: "Participation in physical activities, challenges, or competitions involves risk.\nBy participating, users acknowledge:\n• They voluntarily assume all risks.\n• They are responsible for their own safety.\n• They should seek medical advice before attempting strenuous activities.\n• Rogue World Records is not responsible for injuries, accidents, or damages resulting from participation.\nNever attempt dangerous or unsafe stunts."
+      content: "Participation in physical activities, challenges, or competitions involves risk.\nBy participating, users acknowledge:\n• They voluntarily assume all risks.\n• They are responsible for their own safety.\n• They should seek medical advice before attempting strenuous activities.\n• AMPEX World Records is not responsible for injuries, accidents, or damages resulting from participation.\nNever attempt dangerous or unsafe stunts."
     },
     {
       id: "intellectual",
       icon: <Scale size={24} />,
       title: "9. Intellectual Property",
-      content: "All website content, branding, graphics, logos, videos, text, and materials associated with Rogue World Records are protected by intellectual property laws.\nUsers may not:\n• Copy website content without permission\n• Reproduce branding or logos\n• Sell or distribute protected content\n• Use company materials for unauthorized commercial purposes"
+      content: "All website content, branding, graphics, logos, videos, text, and materials associated with AMPEX World Records are protected by intellectual property laws.\nUsers may not:\n• Copy website content without permission\n• Reproduce branding or logos\n• Sell or distribute protected content\n• Use company materials for unauthorized commercial purposes"
     },
     {
       id: "user-content",
       icon: <Book size={24} />,
       title: "10. User-Submitted Content",
-      content: "By submitting videos, photos, or content, you grant Rogue World Records permission to:\n• Review submitted content\n• Display approved submissions publicly\n• Share achievements on social media\n• Use content for promotional or marketing purposes\nUsers confirm they own or have permission to use all submitted materials."
+      content: "By submitting videos, photos, or content, you grant AMPEX World Records permission to:\n• Review submitted content\n• Display approved submissions publicly\n• Share achievements on social media\n• Use content for promotional or marketing purposes\nUsers confirm they own or have permission to use all submitted materials."
     },
     {
       id: "privacy",
@@ -78,13 +78,13 @@ const Terms = () => {
       id: "third-party",
       icon: <RefreshCw size={24} />,
       title: "12. Third-Party Services",
-      content: "The platform may contain links or integrations with third-party services, sponsors, or payment processors.\nRogue World Records is not responsible for third-party content, policies, or services."
+      content: "The platform may contain links or integrations with third-party services, sponsors, or payment processors.\nAMPEX World Records is not responsible for third-party content, policies, or services."
     },
     {
       id: "liability",
       icon: <Scale size={24} />,
       title: "13. Limitation of Liability",
-      content: "To the maximum extent permitted by law:\n• Rogue World Records shall not be liable for indirect, incidental, or consequential damages.\n• Participation is at the user's own risk.\n• We do not guarantee uninterrupted access or error-free services."
+      content: "To the maximum extent permitted by law:\n• AMPEX World Records shall not be liable for indirect, incidental, or consequential damages.\n• Participation is at the user's own risk.\n• We do not guarantee uninterrupted access or error-free services."
     },
     {
       id: "termination",
@@ -102,7 +102,7 @@ const Terms = () => {
       id: "changes",
       icon: <RefreshCw size={24} />,
       title: "16. Changes to Terms",
-      content: "Rogue World Records may update these Terms of Service at any time.\nContinued use of the platform after updates constitutes acceptance of the revised terms."
+      content: "AMPEX World Records may update these Terms of Service at any time.\nContinued use of the platform after updates constitutes acceptance of the revised terms."
     },
     {
       id: "law",
@@ -147,7 +147,7 @@ const Terms = () => {
                 <span style={{ color: "#FF6A00" }}>Service</span>
               </h1>
               <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "16px", maxWidth: "600px", margin: "0 auto" }}>
-                Please read these terms carefully before using our platform. Your use of Rogue World Records indicates your agreement to these terms.
+                Please read these terms carefully before using our platform. Your use of AMPEX World Records indicates your agreement to these terms.
               </p>
               <div style={{ marginTop: "40px", fontSize: "14px", color: "rgba(255,255,255,0.3)" }}>
                 Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}

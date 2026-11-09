@@ -7,6 +7,10 @@ import { API_URL, apiCall, formatProductImage } from "../utils/api";
  *
  * placements: array of placement values from the admin form (e.g. ["homepage_top_banner", "homepage"])
  * variant:    "banner" (full-width image card) | "compact" (small "Sponsored by" row, used in the footer)
+ *             | "overlay" (small card in the corner of a video player; the parent must be position: relative)
+ *
+ * Each sponsor can set image_fit ("contain" = whole banner always visible, the default; "cover" = fill
+ * the strip and crop) and image_position (center/top/bottom/left/right) in Admin → Sponsorships.
  */
 const tracked = new Set(); // one impression per sponsor per page load
 
@@ -29,6 +33,10 @@ const safeHref = (raw) => {
   return null;
 };
 
+const POSITIONS = ["center", "top", "bottom", "left", "right"];
+const fitOf = (s) => (s?.image_fit === "cover" ? "cover" : "contain");
+const positionOf = (s) => (POSITIONS.includes(s?.image_position) ? s.image_position : "center");
+
 const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
   const [sponsors, setSponsors] = useState([]);
   const [index, setIndex] = useState(0);
@@ -48,7 +56,7 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
 
   // Rotate when several sponsors share the spot
   useEffect(() => {
-    if (variant !== "banner" || sponsors.length < 2) return undefined;
+    if (variant === "compact" || sponsors.length < 2) return undefined;
     const t = setInterval(() => setIndex((i) => (i + 1) % sponsors.length), 6000);
     return () => clearInterval(t);
   }, [sponsors.length, variant]);
@@ -94,6 +102,27 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
 
   const s = visible[0];
   const Tag = safeHref(s.link_url) ? "a" : "div";
+
+  if (variant === "overlay") {
+    const img = s.logo_url || s.banner_url;
+    return (
+      <Tag
+        {...linkProps(s)}
+        aria-label={`Sponsored by ${s.company_name}`}
+        style={{ position: "absolute", right: 16, bottom: 16, zIndex: 11, display: "flex", alignItems: "center", gap: 10, maxWidth: "min(260px, 60%)", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "8px 12px", textDecoration: "none", color: "white", ...style }}
+      >
+        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "1.2px", color: "rgba(255,255,255,0.6)", textTransform: "uppercase", whiteSpace: "nowrap" }}>Sponsored by</span>
+        {img ? (
+          <img src={formatProductImage(img)} alt={s.company_name} loading="lazy" decoding="async" style={{ height: 28, maxWidth: 140, width: "auto", objectFit: "contain", display: "block" }} />
+        ) : (
+          <span style={{ fontWeight: 800, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.company_name}</span>
+        )}
+      </Tag>
+    );
+  }
+
+  const fit = fitOf(s);
+  const position = positionOf(s);
   return (
     <section style={{ padding: "32px 0", ...style }}>
       <div className="container">
@@ -108,12 +137,14 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
               alt={s.company_name}
               loading="lazy"
               decoding="async"
-              style={{ display: "block", width: "100%", height: "auto", maxHeight: 260, objectFit: "cover" }}
+              style={fit === "cover"
+                ? { display: "block", width: "100%", height: "clamp(110px, 22vw, 260px)", objectFit: "cover", objectPosition: position }
+                : { display: "block", width: "100%", height: "auto", maxHeight: "min(360px, 70vw)", objectFit: "contain", objectPosition: position, margin: "0 auto" }}
             />
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "24px 28px" }}>
-              <img src={formatProductImage(s.logo_url)} alt={s.company_name} loading="lazy" decoding="async" style={{ height: 56, width: "auto", objectFit: "contain" }} />
-              <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "clamp(16px, 3vw, 24px) clamp(16px, 3vw, 28px)", flexWrap: "wrap" }}>
+              <img src={formatProductImage(s.logo_url)} alt={s.company_name} loading="lazy" decoding="async" style={{ height: 56, width: "auto", maxWidth: "40%", objectFit: "contain", flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
                 <div style={{ color: "white", fontWeight: 900, fontSize: 20 }}>{s.company_name}</div>
                 {s.description && <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginTop: 4 }}>{s.description}</div>}
               </div>

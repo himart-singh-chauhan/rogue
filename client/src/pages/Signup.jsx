@@ -188,7 +188,7 @@ const Signup = () => {
                   <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "6px", textTransform: "uppercase" }}>EMAIL ADDRESS</label>
                   <input 
                     type="email" 
-                    placeholder="champion@rogue.com" 
+                    placeholder="champion@example.com" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required

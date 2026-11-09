@@ -12,7 +12,7 @@ const GlobalRecognitionLearnMore = () => {
       id: "what-it-means",
       icon: <Award size={24} color="#FF6A00" />,
       title: "What Global Recognition Means",
-      subtitle: "Verified record holders receive public acknowledgment for their achievements on Rogue World Records.",
+      subtitle: "Verified record holders receive public acknowledgment for their achievements on AMPEX World Records.",
       points: [
         "Official, shareable record holder profile page.",
         "Permanent placement on record category listings.",
@@ -50,7 +50,7 @@ const GlobalRecognitionLearnMore = () => {
         "Targeted record and subcategory video catalog pages.",
         "Personalized competitor and team profile cards.",
         "Featured Record Holder showcases on landing pages.",
-        "Rogue World Records official social channels and YouTube highlights.",
+        "AMPEX World Records official social channels and YouTube highlights.",
         "Promotional material for ticketed Live Spectator Events.",
         "Dedicated verification certificate archives."
       ]
@@ -75,7 +75,7 @@ const GlobalRecognitionLearnMore = () => {
     { name: "Category Recognition", desc: "Verifiable rank within a targeted record discipline." },
     { name: "Country Recognition", desc: "Top status as the leading competitor in your home nation." },
     { name: "Age Division", desc: "Top placement inside Youth, Teen, Adult, or Masters brackets." },
-    { name: "Global Recognition", desc: "Ultimate crown spanning the full Rogue World Records leaderboard." }
+    { name: "Global Recognition", desc: "Ultimate crown spanning the full AMPEX World Records leaderboard." }
   ];
 
   return (
@@ -94,7 +94,7 @@ const GlobalRecognitionLearnMore = () => {
             Become Recognized <span style={{ color: "#FF6A00" }}>Worldwide</span>
           </h1>
           <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "18px", maxWidth: "750px", lineHeight: "1.7", margin: "0 auto 32px" }}>
-            Global Recognition is where verified record holders receive public acknowledgment for their official achievements on Rogue World Records. Once a record is approved, the competitor can be featured across the platform and recognized as part of the worldwide Rogue record-breaking community.
+            Global Recognition is where verified record holders receive public acknowledgment for their official achievements on AMPEX World Records. Once a record is approved, the competitor can be featured across the platform and recognized as part of the worldwide AMPEX record-breaking community.
           </p>
           <Link to="/leaderboard" style={{ textDecoration: "none" }}>
             <button style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px 48px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", transition: "0.3s" }}
@@ -168,7 +168,7 @@ const GlobalRecognitionLearnMore = () => {
                 <h3 style={{ fontSize: "24px", fontWeight: "900", textTransform: "uppercase" }}>Recognition Brackets</h3>
               </div>
               <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
-                Rogue record breakers are categorized into hierarchical tiers:
+                AMPEX record breakers are categorized into hierarchical tiers:
               </p>
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
@@ -187,7 +187,7 @@ const GlobalRecognitionLearnMore = () => {
           <div style={{ gridColumn: "1 / -1", background: "linear-gradient(135deg, rgba(255,106,0,0.1) 0%, rgba(255,255,255,0.02) 100%)", border: "1px solid #FF6A00", borderRadius: "32px", padding: "40px", textAlign: "center", marginTop: "40px" }}>
             <h3 style={{ fontSize: "28px", fontWeight: "950", textTransform: "uppercase", marginBottom: "12px", color: "#FF6A00" }}>Final Message</h3>
             <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "16px", maxWidth: "650px", margin: "0 auto 24px", lineHeight: "1.6" }}>
-              Every verified record tells a story of discipline, effort, and determination. Rogue World Records gives competitors a place to be seen, respected, and remembered.
+              Every verified record tells a story of discipline, effort, and determination. AMPEX World Records gives competitors a place to be seen, respected, and remembered.
             </p>
             <h4 style={{ fontSize: "20px", fontWeight: "900", letterSpacing: "0.05em", color: "white", textTransform: "uppercase", marginBottom: "32px" }}>
               Break Limits. Make History. Become Legendary.

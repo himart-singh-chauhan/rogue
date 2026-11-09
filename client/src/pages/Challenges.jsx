@@ -8,6 +8,21 @@ import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall } from "../utils/api";
 
+// Official score = the verified value and unit saved on the record
+const officialScore = (record) => {
+  const value = record.value ?? record.performance_metrics;
+  const unit = record.unit ?? record.unit_of_measurement;
+  if (value === null || value === undefined || value === "") return "Pending verification";
+  return unit ? `${value} ${unit}` : String(value);
+};
+
+// Date Verified = when an adjudicator verified it; unverified uploads show pending
+const verifiedDate = (record) => {
+  if (record.status && record.status !== "verified") return "Pending verification";
+  const when = record.verified_at || (record.status === "verified" ? record.updated_at : null);
+  return when ? new Date(when).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "Pending verification";
+};
+
 const Challenges = () => {
   const [categories, setCategories] = useState(["ALL"]);
   const [challengeCards, setChallengeCards] = useState([]);
@@ -23,8 +38,8 @@ const Challenges = () => {
           holder: record.user?.name || "Unknown Holder",
           cat: (record.category || "UNCATEGORIZED").toUpperCase(),
           subcat: record.subcategory || "General",
-          score: record.unit_of_measurement ? `${record.performance_metrics} ${record.unit_of_measurement}` : (record.performance_metrics || "N/A"),
-          dateVerified: record.date_of_attempt ? new Date(record.date_of_attempt).toLocaleDateString() : "Unknown",
+          score: officialScore(record),
+          dateVerified: verifiedDate(record),
           description: record.description || "No description provided.",
           rules: record.rules ? record.rules.split("\n") : ["Official rules apply.", "Must provide uncut video evidence.", "Follow all safety guidelines."],
           videoUrl: record.evidence_url || record.video_url || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
@@ -152,7 +167,7 @@ const Challenges = () => {
         <div style={{ padding: "0 5% 60px", display: "flex", gap: "20px", flexWrap: "wrap" }}>
           {[
             { title: "1000M ROW SPRINT", tag: "ELITE STATUS", progress: "40%" },
-            { title: "ROGUE PLANK HOLD", tag: "TIME TRIAL", progress: "75%" }
+            { title: "AMPEX PLANK HOLD", tag: "TIME TRIAL", progress: "75%" }
           ].map((c, idx) => (
             <div key={idx} style={{ background: "#161616", padding: "20px 24px", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.05)", width: "240px" }}>
               <div style={{ fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>{c.tag}</div>
@@ -469,7 +484,7 @@ const Challenges = () => {
 
                     <div style={{ marginTop: "auto", paddingTop: "20px" }}>
                       {hasWatched ? (
-                        <Link to="/challenge-verify" style={{ textDecoration: "none" }}>
+                        <Link to={`/challenge-verify?recordId=${encodeURIComponent(selectedChallenge.id)}&record=${encodeURIComponent(selectedChallenge.title)}`} style={{ textDecoration: "none" }}>
                           <button style={{
                             width: "100%",
                             background: "#FF6A00",

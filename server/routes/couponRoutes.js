@@ -8,10 +8,10 @@ const {
   deleteCouponByAdmin,
   getCouponStatsByAdmin
 } = require('../controllers/couponController');
-const { protect, admin } = require('../middleware/authMiddleware');
+const { protect, admin, optionalAuth } = require('../middleware/authMiddleware');
 
 // Public route for validating coupon codes during checkout
-router.post('/validate', validateCoupon);
+router.post('/validate', optionalAuth, validateCoupon);
 
 // Admin-only coupon management routes
 router.use(protect);

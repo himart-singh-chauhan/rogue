@@ -70,7 +70,7 @@ const Login = () => {
               letterSpacing: "0.2em",
               marginBottom: "12px"
             }}>
-              ROGUE WORLD RECORDS
+              AMPEX WORLD RECORDS
             </div>
             <h1 style={{
               fontSize: "clamp(40px, 6vw, 80px)",
@@ -197,7 +197,7 @@ const Login = () => {
 
               <div style={{ textAlign: "center", marginTop: "32px" }}>
                 <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>
-                  NEW TO ROGUE WORLD RECORDS?
+                  NEW TO AMPEX WORLD RECORDS?
                 </div>
                 <Link to="/signup" style={{
                   color: "white",

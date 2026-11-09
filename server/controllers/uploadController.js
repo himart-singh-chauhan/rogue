@@ -24,6 +24,8 @@ const KINDS = {
   avatar: { folder: 'avatars', types: IMAGE_TYPES, max: 5 * MB },
   'admin-video': { folder: 'videos', types: VIDEO_TYPES, max: MAX_VIDEO, adminOnly: true },
   'admin-image': { folder: 'images', types: IMAGE_TYPES, max: 10 * MB, adminOnly: true },
+  // Media Library: images, videos and PDF documents
+  'admin-media': { folder: 'media', types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...DOC_TYPES], max: MAX_VIDEO, adminOnly: true },
 };
 
 const EXT_BY_TYPE = {

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Play, Check, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Menu, X, Dumbbell, Zap, Timer, Gamepad2, Target, Infinity, Trophy, LayoutGrid, Activity, Waves, Settings, Brain, Gamepad, Search, Eye, Volume2, Maximize, Bike, Star, Palette, Baby, Globe } from "lucide-react";
+import { ArrowRight, Play, Check, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Menu, X, Zap, Target, Infinity, Trophy, LayoutGrid, Activity, Settings, Gamepad, Search, Eye, Volume2, Maximize, Globe } from "lucide-react";
 import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
+import { useCategories, categoryMeta } from "../utils/categoryMeta";
 import InfiniteSlider from "../components/InfiniteSlider";
 import FlowingMenu from "../components/FlowingMenu";
 import StackingSteps from "../components/StackingSteps";
@@ -265,6 +266,8 @@ const youtubeIdFrom = (url = "") => {
 const Home = () => {
   const navigate = useNavigate();
   const [showAllCats, setShowAllCats] = useState(false);
+  // Record categories from Admin → Categories (Talent, Funny Talent, ...)
+  const { tree: categoryTree } = useCategories();
   const [showCats, setShowCats] = useState(true);
   const [homeSearchQuery, setHomeSearchQuery] = useState("");
   const [featuredStream, setFeaturedStream] = useState(null);
@@ -548,19 +551,11 @@ const Home = () => {
                 zIndex: 10
               }}>
                 <nav style={{ display: "flex", flexDirection: "column" }}>
-                  {[
-                    { name: "Athletics", icon: <Activity style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Strength", icon: <Dumbbell style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Endurance", icon: <Timer style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Balance", icon: <Target style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Skills", icon: <Trophy style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Gaming", icon: <Gamepad2 style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Water Sports", icon: <Waves style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Reaction", icon: <Zap style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Mind & Memory", icon: <Brain style={{ width: 18, height: 18, color: "#FF6A00" }} /> },
-                    { name: "Action Sports", icon: <Bike style={{ width: 18, height: 18, color: "#FF6A00" }} /> }
-                  ].map((cat, i, arr) => (
-                    <div key={cat.name} onClick={() => navigate("/categories", { state: { activeTab: i } })} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 8px", cursor: "pointer", borderBottom: i === arr.length - 1 ? "none" : "1px solid #f0f0f0", fontSize: "14px", color: "#111", fontWeight: "600", transition: "background 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.background = "#fff8f5"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                  {categoryTree.slice(0, 10).map((c) => {
+                    const Icon = categoryMeta(c.name).Icon;
+                    return { name: c.name, icon: <Icon style={{ width: 18, height: 18, color: "#FF6A00" }} /> };
+                  }).map((cat, i, arr) => (
+                    <div key={cat.name} onClick={() => navigate("/categories", { state: { category: cat.name } })} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 8px", cursor: "pointer", borderBottom: i === arr.length - 1 ? "none" : "1px solid #f0f0f0", fontSize: "14px", color: "#111", fontWeight: "600", transition: "background 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.background = "#fff8f5"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         {cat.icon}
                         <span>{cat.name}</span>
@@ -957,34 +952,38 @@ const Home = () => {
 
         <div className="container cat-grid-wrap">
           <div className="cat-grid">
-            {[
-              { i: <Activity />, n: "Athletics", d: "Classic track and field events. Speed, agility, and pure athleticism." },
-              { i: <Dumbbell />, n: "Strength", d: "Lift more than anyone on the planet. Pure power, zero excuses." },
-              { i: <Timer />, n: "Endurance", d: "Go the distance. Push the absolute limits of human stamina." },
-              { i: <Target />, n: "Balance", d: "Steady hands and focus. Mastery of equilibrium in any situation." },
-              { i: <Trophy />, n: "Skills", d: "Precision, technique, mastery. Show the world what you can do." },
-              { i: <Gamepad2 />, n: "Gaming", d: "From speedruns to high scores. Digital dominance, verified." },
-              { i: <Waves />, n: "Water Sports", d: "Dominate the waves. Swimming, surfing, and aquatic achievements." },
-              { i: <Zap />, n: "Reaction", d: "Fastest on two feet or four wheels. Every millisecond counts." },
-              { i: <Brain />, n: "Mind & Memory", d: "Solve the impossible. Mental feats that defy logic and speed." },
-              { i: <Bike />, n: "Action Sports", d: "High-octane performance. Adrenaline-fueled records on the edge." },
-              { i: <Star />, n: "Entertainment", d: "Show-stopping performances. Magic, stunts, and stage records." },
-              { i: <Palette />, n: "Creative", d: "Art, design, and unique creations. Breaking boundaries through creativity." },
-              { i: <Baby />, n: "Youth", d: "Just for the next generation. Safe, fun, and highly competitive." }
-            ].slice(0, showAllCats ? 13 : 8).map((cat, i) => (
+            {categoryTree.map((c) => {
+              const meta = categoryMeta(c.name);
+              const Icon = meta.Icon;
+              return { i: <Icon />, n: c.name, d: c.description || meta.desc || `Official ${c.name} world records.`, subs: (c.children || []).map((ch) => ch.name) };
+            }).slice(0, showAllCats ? categoryTree.length : 8).map((cat, i) => (
               <div
                 key={i}
                 className="cat-cell"
                 role="button"
                 tabIndex={0}
-                onClick={() => navigate('/categories', { state: { activeTab: i } })}
+                onClick={() => navigate('/categories', { state: { category: cat.n } })}
+                onKeyDown={(e) => { if (e.key === "Enter") navigate('/categories', { state: { category: cat.n } }); }}
                 style={{ cursor: "pointer" }}
               >
                 <div className="cat-cell-top">
                   <div className="cat-cell-icon">{cat.i}</div>
                   <h3 className="cat-cell-name">{cat.n}</h3>
                 </div>
-                <p className="cat-cell-desc" style={{ marginBottom: "20px" }}>{cat.d}</p>
+                <p className="cat-cell-desc" style={{ marginBottom: cat.subs.length ? "10px" : "20px" }}>{cat.d}</p>
+                {cat.subs.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "16px" }}>
+                    {cat.subs.map((sub) => (
+                      <span
+                        key={sub}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/explore?category=${encodeURIComponent(sub)}`); }}
+                        style={{ fontSize: "11px", fontWeight: 700, color: "#FF6A00", border: "1px solid rgba(255,106,0,0.35)", borderRadius: "100px", padding: "3px 10px", cursor: "pointer" }}
+                      >
+                        {sub}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div style={{
                   color: "#FF6A00",
                   fontSize: "12px",

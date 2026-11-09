@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Play, Eye, Users, MessageSquare, Share2, Shield, Activity, Zap, Trash2, Ban } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import PageTransition from "../components/PageTransition";
@@ -8,6 +8,8 @@ import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
 
 import { apiCall } from "../utils/api";
+import SponsorBanner from "../components/SponsorBanner";
+import { addTicketToCart, isRealEventId } from "../utils/ticketCart";
 
 const CountdownBox = ({ value, label }) => (
   <div style={{ textAlign: "center" }}>
@@ -108,6 +110,7 @@ const eventsData = [
 const StreamDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [timeLeft, setTimeLeft] = React.useState({
     hours: "02",
     minutes: "45",
@@ -144,7 +147,7 @@ const StreamDetail = () => {
   // Dynamic Chat & Moderation hooks
   const [chatMessages, setChatMessages] = React.useState([
     { id: 1, user: "IronMike", msg: "This is insane! 500kg incoming?", userId: "user-iron-mike" },
-    { id: 2, user: "RogueMarshal", msg: "Welcome to the finals everyone.", color: "#FF6A00", userId: "user-rogue-marshal" },
+    { id: 2, user: "AmpexMarshal", msg: "Welcome to the finals everyone.", color: "#FF6A00", userId: "user-rogue-marshal" },
     { id: 3, user: "LiftLover", msg: "Thor looks ready today.", userId: "user-lift-lover" },
     { id: 4, user: "GymRat99", msg: "Let's goooooooo!", userId: "user-gym-rat-99" },
     { id: 5, user: "Sarah_Lift", msg: "The atmosphere in Tokyo is electric.", userId: "user-sarah-lift" },
@@ -179,7 +182,7 @@ const StreamDetail = () => {
 
       if (eventData) {
         setEventIsPaid(eventData.isPaid || false);
-        setTicketPrice(eventData.ticketPrice || 49);
+        setTicketPrice(Number(eventData.ticketPrice) || 0);
 
         if (user) {
           const ticketVerification = await apiCall(`/tickets/verify/${id}`, 'GET', null, user.token);
@@ -196,7 +199,7 @@ const StreamDetail = () => {
           imageUrl: eventData.imageUrl || eventData.image || "",
           streamUrl: eventData.streamUrl || "",
           isPaid: eventData.isPaid || false,
-          ticketPrice: eventData.ticketPrice ? eventData.ticketPrice.toString() : "49.00",
+          ticketPrice: eventData.ticketPrice ? Number(eventData.ticketPrice).toFixed(2) : "0.00",
           competitors: eventData.competitors || "",
           judges: eventData.judges || "",
           category: eventData.category || "WORLD RECORD",
@@ -243,25 +246,17 @@ const StreamDetail = () => {
 
   const purchaseTicket = async () => {
     if (!user) {
-      showToast("Please log in to purchase a ticket.");
-      window.location.href = '/login';
+      navigate("/login", { state: { message: "Please log in to buy a spectator pass. Tickets are linked to your account." } });
       return;
     }
-    try {
-      setLoading(true);
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Generate code instead of auto unlocking
-      const code = "ROGUEVIP";
-      setPurchaseCode(code);
-      showToast("✅ Payment Successful! Your access code is generated.");
-    } catch (error) {
-      showToast("Ticket purchase failed. Please try again.");
-      console.error("Ticket purchase error:", error);
-    } finally {
-      setLoading(false);
+    const ev = event ? { ...event, id: event.id || event._id || id } : { id, title: currentEvent?.title, ticketPrice, img: currentEvent?.img };
+    const res = addTicketToCart({ ...ev, ticketPrice: ev.ticketPrice || ticketPrice });
+    if (!res.ok) {
+      showToast(res.reason);
+      return;
     }
+    setShowModal(false);
+    navigate("/cart");
   };
 
   const handleSaveAdminChanges = async (e) => {
@@ -287,7 +282,7 @@ const StreamDetail = () => {
       const res = await apiCall(`/events/${id}`, 'PUT', payload, user.token);
       setEvent(res.event);
       setEventIsPaid(res.event.isPaid || false);
-      setTicketPrice(res.event.ticketPrice || 49);
+      setTicketPrice(Number(res.event.ticketPrice) || 0);
 
       const ticketVerification = await apiCall(`/tickets/verify/${id}`, 'GET', null, user.token);
       setCanWatch(ticketVerification.canWatch);
@@ -473,7 +468,12 @@ const StreamDetail = () => {
                     <span style={{ fontSize: "24px", fontWeight: "950", color: "#FF6A00" }}>${ticketPrice.toFixed(2)} USD</span>
                   </div>
 
-                  <div style={{ textAlign: "left", marginBottom: "24px" }}>
+                  <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", lineHeight: 1.6, marginBottom: "24px" }}>
+                    {isRealEventId(event?.id || event?._id || id)
+                      ? "Your pass is added to your cart. Pay at checkout and it is linked to your account, which unlocks this stream."
+                      : "Spectator passes for this event are not on sale yet."}
+                  </p>
+                  <div style={{ display: "none" }}>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>Card Details</label>
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                       <input type="text" placeholder="Cardholder Name" style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "12px 16px", color: "white", fontSize: "14px", outline: "none" }} />
@@ -508,7 +508,7 @@ const StreamDetail = () => {
                     onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = "#e55e00"; e.currentTarget.style.transform = "translateY(-2px)"; } }}
                     onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = "#FF6A00"; e.currentTarget.style.transform = "translateY(0)"; } }}
                   >
-                    {loading ? "PROCESSING..." : "PAY NOW"}
+                    {loading ? "LOADING..." : "ADD PASS TO CART"}
                   </button>
                 ) : (
                   <button
@@ -586,21 +586,31 @@ const StreamDetail = () => {
                 type="text"
                 value={redeemCodeInput}
                 onChange={e => setRedeemCodeInput(e.target.value.toUpperCase())}
-                placeholder="e.g. ROGUEVIP"
+                placeholder="e.g. TKT-XXXXXXXX"
                 style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "16px 20px", color: "white", fontSize: "18px", fontWeight: "900", letterSpacing: "0.1em", outline: "none", textAlign: "center", textTransform: "uppercase", marginBottom: "24px" }}
               />
 
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <button
-                  onClick={() => {
-                    if (redeemCodeInput.trim() === "ROGUEVIP" || redeemCodeInput.trim() === "VIPACCESS") {
-                      setHasTicket(true);
-                      setIsPlaying(true);
-                      setShowRedeemModal(false);
-                      setRedeemCodeInput("");
-                      showToast("✅ Access code redeemed successfully! Enjoy the livestream.");
-                    } else {
-                      showToast("❌ Invalid access code. Please try again.");
+                  onClick={async () => {
+                    // Tickets belong to the buyer's account: the server confirms access (no codes are stored in the page).
+                    if (!user?.token) {
+                      showToast("Please log in with the account that bought the ticket.");
+                      return;
+                    }
+                    try {
+                      const check = await apiCall(`/tickets/verify/${id}`, 'GET', null, user.token);
+                      if (check?.hasTicket) {
+                        setHasTicket(true);
+                        setIsPlaying(true);
+                        setShowRedeemModal(false);
+                        setRedeemCodeInput("");
+                        showToast("✅ Ticket confirmed! Enjoy the livestream.");
+                      } else {
+                        showToast("❌ No valid ticket for this event was found on your account.");
+                      }
+                    } catch {
+                      showToast("❌ Could not check your ticket right now. Please try again.");
                     }
                   }}
                   style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", transition: "all 0.2s" }}
@@ -626,6 +636,8 @@ const StreamDetail = () => {
 
             {/* VIDEO PLAYER */}
             <div style={{ position: "relative", height: "600px", background: "#000", borderRadius: "24px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
+              {/* Video sponsor overlay (Admin → Sponsorships → "Video Sponsor Overlay") */}
+              <SponsorBanner variant="overlay" placements={["video_overlay"]} />
               {isCurrentUserKicked ? (
                 /* RECTIVE EJECTION SCREEN FOR BANNED USERS */
                 <div style={{ position: "absolute", inset: 0, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.95)", padding: "20px" }}>
@@ -857,13 +869,13 @@ const StreamDetail = () => {
                 <div>
                   <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>VERIFIED ADJUDICATORS & JUDGES</div>
                   <div style={{ fontSize: "14px", fontWeight: "700", color: "white", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Shield size={16} color="#FF6A00" /> {currentEvent.judges || "ROGUE OFFICIAL ADJUDICATION TEAM"}
+                    <Shield size={16} color="#FF6A00" /> {currentEvent.judges || "AMPEX OFFICIAL ADJUDICATION TEAM"}
                   </div>
                 </div>
               </div>
 
               <p style={{ color: "rgba(255,255,255,0.5)", lineHeight: "1.6", fontSize: "15px", margin: 0 }}>
-                {currentEvent.desc || "The final stage of the Rogue World Series. Competitors battle live for the absolute title record, officially adjudicated."}
+                {currentEvent.desc || "The final stage of the AMPEX World Series. Competitors battle live for the absolute title record, officially adjudicated."}
               </p>
 
               {/* INLINE ADMIN EDITING SUITE */}
@@ -928,7 +940,7 @@ const StreamDetail = () => {
                             type="text"
                             value={adminFields.judges}
                             onChange={e => setAdminFields({...adminFields, judges: e.target.value})}
-                            placeholder="e.g. Adjudicated by Rogue Marshals"
+                            placeholder="e.g. Adjudicated by AMPEX Marshals"
                             style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 14px", color: "white", fontSize: "13px", outline: "none" }}
                           />
                         </div>
@@ -1024,6 +1036,11 @@ const StreamDetail = () => {
 
           </div>
         </section>
+
+        {/* Livestream sponsors (Admin → Sponsorships → "Livestream Banner") */}
+        <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "0 5%" }}>
+          <SponsorBanner placements={["livestream"]} style={{ padding: "8px 0 24px" }} />
+        </div>
 
         {/* PURCHASE TICKETS SECTION - Conditionally Rendered */}
         {currentEvent.status !== "PAST" && (

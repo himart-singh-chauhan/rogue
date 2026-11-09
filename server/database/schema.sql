@@ -824,3 +824,6 @@ on conflict (code) do nothing;
 --   2. Run (replace the email):
 --      update users set is_admin = true, role = 'system_admin' where lower(email) = lower('you@example.com');
 -- =====================================================================================
+
+-- After this file, run the migrations in database/migrations/ in date order
+-- (2026-11-09_client_corrections.sql adds plans, coupons limits, certificates, weight classes, belt approvals).

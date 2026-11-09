@@ -27,7 +27,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { useAuth } from "../context/AuthContext";
-import { apiCall } from "../utils/api";
+import { apiCall, formatProductImage } from "../utils/api";
+import SponsorBanner from "../components/SponsorBanner";
+import { addTicketToCart, isTicketOnSale, isRealEventId, ticketPriceOf } from "../utils/ticketCart";
 
 const Countdown = ({ targetDate, status }) => {
   const [timeLeft, setTimeLeft] = useState("");
@@ -102,10 +104,10 @@ const eventsData = [
     isFeatured: true,
     desc: "The pinnacle of raw powerlifting. The world's top heavyweight lifters battle for the absolute bench press record live.",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Rogue Fitness, Hanger 24, Thorne Nutrition",
     rules: "1. All lifters must use certified Rogue plates.\n2. Bench shirt is prohibited (raw lifting standards apply).\n3. Elbow lock must be fully held until marshal call.",
-    location: "Rogue Arena Main Stage",
+    location: "AMPEX Arena Main Stage",
     judges: "Marshal Team A",
     isPaid: true,
     ticketPrice: 49.00,
@@ -122,7 +124,7 @@ const eventsData = [
     img: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&w=800&q=80",
     desc: "The final game between two absolute block-stacking legends competing for the maxout 999,999 record.",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Nintendo Classic, Retro Gaming Hub, Hyperkin",
     rules: "1. Standard NES hardware must be used.\n2. Standard score capture system is active.\n3. Matches are played to a maxout of 999,999 or killscreen.",
     location: "Retro eSports Hub",
@@ -142,7 +144,7 @@ const eventsData = [
     isFeatured: true,
     desc: "Speed unleashed. A line-up of the fastest sprinters on earth competing for the sub-9.6s record live from Olympic Hub.",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Adidas Track, Seiko Timing, Gatorade",
     rules: "1. Zero tolerance for false starts.\n2. Competitors must wear certified track shoes.\n3. Automatic digital timing is final.",
     location: "Olympic Stadium Track",
@@ -160,7 +162,7 @@ const eventsData = [
     athletes: "24 ATHLETES",
     img: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=800&q=80",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Barstarzz, Calisthenics Club, Red Bull",
     rules: "1. Standard 2-minute freestyle rounds.\n2. Safety pads are voluntary but recommended.\n3. Judged based on dynamic skills, static holds, and flow.",
     location: "Shibuya Outdoor Bar Park",
@@ -178,7 +180,7 @@ const eventsData = [
     athletes: "18 ATHLETES",
     img: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&w=800&q=80",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Petzl, Black Diamond, The North Face",
     rules: "1. Vertical 15m climbing wall with standard holds.\n2. Automatic safety belay must be worn.\n3. Time captured automatically upon hitting touch plate.",
     location: "Vertical Arena Climb Zone",
@@ -198,7 +200,7 @@ const eventsData = [
     isFeatured: true,
     desc: "A freezing duel of raw human endurance. Competitors swim a full 50 meters in near-freezing sub-zero glacial waters.",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Speedo Ice, Glacial Swim Federation, Thorne Nutrition",
     rules: "1. Water temperature must be between 0-2 degrees Celsius.\n2. Standard textile swimwear only (no neoprene suits).\n3. Medical check required immediately after exit.",
     location: "Hokkaido Glacial Lake Hub",
@@ -216,7 +218,7 @@ const eventsData = [
     athletes: "10 ATHLETES",
     img: "https://images.unsplash.com/photo-1591123720164-de1348028a82?auto=format&fit=crop&w=800&q=80",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    ticketLink: "/shop?category=tickets",
+    ticketLink: "",
     sponsors: "Reaction Tech, Cyber Athletics League",
     rules: "1. Dynamic lighting targets must be hit within 0.5s active time.\n2. Hands must return to baseline bar after each hit.\n3. 60-second limit per match.",
     location: "Cyber Arena Hub",
@@ -296,6 +298,18 @@ const Events = () => {
     setTimeout(() => setToast(""), 4000);
   };
 
+  // Spectator tickets: added to the shop cart, paid at checkout, issued to the buyer's account
+  const [ticketsInCart, setTicketsInCart] = useState(0);
+  const handleAddTicket = (ev) => {
+    const res = addTicketToCart(ev);
+    if (!res.ok) {
+      showToast(res.reason);
+      return;
+    }
+    setTicketsInCart((n) => n + 1);
+    showToast(res.qty > 1 ? `🎫 ${res.qty} tickets for ${ev.title} in your cart` : `🎫 Ticket for ${ev.title} added to your cart`);
+  };
+
   const fetchAdminTickets = async () => {
     if (!user || !user.isAdmin || !user.token) return;
     setTicketsLoading(true);
@@ -313,8 +327,8 @@ const Events = () => {
       console.warn("Failed to load live tickets list. Using rich mock tickets list.", err);
       // Pre-seed high-fidelity mock tickets for simulation
       const mockTickets = [
-        { id: "tick-1", accessCode: "usr-1-evt-1-98247", ticketType: "vip", status: "active", user: { name: "John Doe", email: "john@rogue.com" }, event: { title: "THE SUMMIT LIFT: FINALS" } },
-        { id: "tick-2", accessCode: "usr-2-evt-1-84729", ticketType: "spectator", status: "active", user: { name: "Jane Smith", email: "jane@rogue.com" }, event: { title: "THE SUMMIT LIFT: FINALS" } },
+        { id: "tick-1", accessCode: "usr-1-evt-1-98247", ticketType: "vip", status: "active", user: { name: "John Doe", email: "john@example.com" }, event: { title: "THE SUMMIT LIFT: FINALS" } },
+        { id: "tick-2", accessCode: "usr-2-evt-1-84729", ticketType: "spectator", status: "active", user: { name: "Jane Smith", email: "jane@example.com" }, event: { title: "THE SUMMIT LIFT: FINALS" } },
         { id: "tick-3", accessCode: "usr-3-evt-2-72648", ticketType: "vip", status: "active", user: { name: "LeBron James", email: "lebron@lakers.com" }, event: { title: "RETRO TETRIS WORLD FINAL" } },
         { id: "tick-4", accessCode: "usr-4-evt-1-10294", ticketType: "spectator", status: "used", scan_count: 1, last_scanned_at: new Date(Date.now() - 3600000).toISOString(), user: { name: "Bob Miller", email: "bob@miller.com" }, event: { title: "THE SUMMIT LIFT: FINALS" } },
         { id: "tick-5", accessCode: "usr-5-evt-3-46294", ticketType: "spectator", status: "revoked", user: { name: "Spammy McSpam", email: "spam@bot.com" }, event: { title: "THE 100M DASH FINAL" } }
@@ -476,7 +490,7 @@ const Events = () => {
             category: item.category || "WORLD RECORD",
             time: status === "LIVE" ? "LIVE NOW" : new Date(item.date).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }).toUpperCase(),
             athletes: item.competitors || "CONTESTANTS SELECTED",
-            judges: item.judges || "Rogue Marshal Team",
+            judges: item.judges || "AMPEX Marshal Team",
             viewers: "24,850+",
             img: item.imageUrl || item.image || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1600&q=80",
             desc: item.description,
@@ -543,7 +557,7 @@ const Events = () => {
         isPaid: event.isPaid || false,
         ticketPrice: event.ticketPrice ? event.ticketPrice.toString() : "49.00",
         competitors: event.athletes === "CONTESTANTS SELECTED" ? "" : event.athletes,
-        judges: event.judges === "Rogue Marshal Team" ? "" : event.judges,
+        judges: event.judges === "AMPEX Marshal Team" ? "" : event.judges,
         category: event.category || "WORLD RECORD",
         isFeatured: event.isFeatured || false,
         videoUrl: event.videoUrl || "",
@@ -774,7 +788,7 @@ const Events = () => {
                       type="text"
                       value={formFields.judges}
                       onChange={e => setFormFields({...formFields, judges: e.target.value})}
-                      placeholder="e.g. Rogue Official Marshal Team"
+                      placeholder="e.g. AMPEX Official Marshal Team"
                       style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }}
                     />
                   </div>
@@ -1177,8 +1191,16 @@ const Events = () => {
                             WATCH LIVESTREAM <Play size={14} fill="white" />
                           </button>
                         </Link>
+                      ) : viewingEvent.isPaid && !viewingEvent.ticketLink ? (
+                        <button
+                          onClick={() => handleAddTicket(viewingEvent)}
+                          disabled={!isRealEventId(viewingEvent.id)}
+                          style={{ flex: 1, background: isRealEventId(viewingEvent.id) ? "#FF6A00" : "rgba(255,255,255,0.08)", color: "white", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase", cursor: isRealEventId(viewingEvent.id) ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+                        >
+                          {isRealEventId(viewingEvent.id) ? `ADD TICKET TO CART ($${ticketPriceOf(viewingEvent).toFixed(2)})` : "TICKETS ON SALE SOON"}
+                        </button>
                       ) : viewingEvent.isPaid ? (
-                        <a href={viewingEvent.ticketLink || "/shop?category=tickets"} target={viewingEvent.ticketLink ? "_blank" : "_self"} rel="noopener noreferrer" style={{ textDecoration: "none", flex: 1 }}>
+                        <a href={viewingEvent.ticketLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", flex: 1 }}>
                           <button style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: "0 10px 20px rgba(255,106,0,0.3)" }}>
                             SECURE ACCESS TICKET (${viewingEvent.ticketPrice || "49.00"}) <ExternalLink size={14} />
                           </button>
@@ -2045,6 +2067,11 @@ const Events = () => {
           </motion.div>
         </AnimatePresence>
 
+        {/* Live event sponsors (Admin → Sponsorships → "Live Event Sponsor") */}
+        <div style={{ maxWidth: "1200px", margin: "0 auto 24px", width: "100%" }}>
+          <SponsorBanner placements={["live_event"]} style={{ padding: "0" }} />
+        </div>
+
         {/* BOTTOM SECTION */}
         <div style={{ maxWidth: "1200px", margin: "0 auto", display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "24px", width: "100%" }}>
           {/* TREND CHART */}
@@ -2101,14 +2128,43 @@ const Events = () => {
               <Zap size={200} fill="white" />
             </div>
             <h4 style={{ fontSize: "40px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px", lineHeight: "1", position: "relative", zIndex: 2 }}>SPECTATOR <br /> PASS</h4>
-            <p style={{ fontSize: "15px", fontWeight: "600", color: "rgba(255,255,255,0.9)", lineHeight: "1.6", marginBottom: "40px", maxWidth: "320px", position: "relative", zIndex: 2 }}>
+            <p style={{ fontSize: "15px", fontWeight: "600", color: "rgba(255,255,255,0.9)", lineHeight: "1.6", marginBottom: "24px", maxWidth: "320px", position: "relative", zIndex: 2 }}>
               Live events are spectator and ticketed events between contestants already selected. Secure your seat to witness history.
             </p>
-            <Link to="/shop?category=tickets" style={{ textDecoration: "none", width: "fit-content", position: "relative", zIndex: 2 }}>
+            <div id="tickets" style={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", gap: "10px", marginBottom: "24px" }}>
+              {(() => {
+                const onSale = dbEvents.filter(isTicketOnSale).sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate)).slice(0, 4);
+                if (!onSale.length) {
+                  return (
+                    <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: "16px", padding: "16px 18px", fontSize: "13px", fontWeight: "700", lineHeight: 1.5 }}>
+                      No ticketed events are on sale right now. Tickets appear here as soon as the next live event opens for spectators.
+                    </div>
+                  );
+                }
+                return onSale.map((ev) => (
+                  <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: "12px", background: "rgba(0,0,0,0.28)", borderRadius: "16px", padding: "10px 12px", flexWrap: "wrap" }}>
+                    <img src={formatProductImage(ev.img)} alt="" loading="lazy" decoding="async" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover", flexShrink: 0 }} />
+                    <div style={{ flex: "1 1 140px", minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: "900", textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
+                      <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.8)" }}>{ev.time} · ${ticketPriceOf(ev).toFixed(2)}</div>
+                    </div>
+                    <button
+                      onClick={() => handleAddTicket(ev)}
+                      style={{ background: "#000", color: "white", border: "none", borderRadius: "100px", padding: "10px 16px", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}
+                    >
+                      Add ticket
+                    </button>
+                  </div>
+                ));
+              })()}
+            </div>
+            {ticketsInCart > 0 && (
+            <Link to="/cart" style={{ textDecoration: "none", width: "fit-content", position: "relative", zIndex: 2 }}>
               <button style={{ background: "#000", color: "white", border: "none", borderRadius: "100px", padding: "18px 40px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", transition: "transform 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.05)"} onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}>
-                Purchase Your Ticket Now <ArrowRight size={18} />
+                Go to cart & checkout <ArrowRight size={18} />
               </button>
             </Link>
+            )}
           </div>
         </div>
 

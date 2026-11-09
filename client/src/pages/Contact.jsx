@@ -120,7 +120,7 @@ const Contact = () => {
 
               <div style={{ marginTop: "20px", background: "#161616", padding: "24px 32px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.03)" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "900", textTransform: "uppercase", marginBottom: "16px", color: "white" }}>FOLLOW US</h3>
-                <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginBottom: "16px" }}>Stay connected with Rogue World Records for new world records, live competitions, featured athletes, and community highlights.</p>
+                <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginBottom: "16px" }}>Stay connected with AMPEX World Records for new world records, live competitions, featured athletes, and community highlights.</p>
                 <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                   {["Facebook", "Instagram", "TikTok", "YouTube", "X (Twitter)"].map((social, i) => (
                     <span key={i} style={{ padding: "6px 12px", background: "rgba(255,255,255,0.05)", borderRadius: "100px", fontSize: "12px", fontWeight: "bold", color: "white", cursor: "pointer" }}>{social}</span>
@@ -134,7 +134,7 @@ const Contact = () => {
               {success ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <div style={{ color: "#FF6A00", fontSize: "24px", fontWeight: "950", marginBottom: "16px" }}>MESSAGE SENT</div>
-                  <p style={{ color: "rgba(255,255,255,0.6)" }}>Thank you for reaching out to Rogue World Records. We will respond shortly.</p>
+                  <p style={{ color: "rgba(255,255,255,0.6)" }}>Thank you for reaching out to AMPEX World Records. We will respond shortly.</p>
                   <button onClick={() => setSuccess(false)} style={{ marginTop: "32px", background: "transparent", border: "1px solid #FF6A00", color: "#FF6A00", padding: "12px 24px", borderRadius: "100px", cursor: "pointer", fontWeight: "800" }}>SEND ANOTHER</button>
                 </div>
               ) : (

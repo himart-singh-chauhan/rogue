@@ -28,10 +28,10 @@ const VerificationProtocolLearnMore = () => {
             AUTHENTICATION PROTOCOL
           </div>
           <h1 style={{ fontSize: "clamp(36px, 6vw, 68px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.03em", marginBottom: "24px", lineHeight: "1.1", maxWidth: "1000px" }}>
-            Rogue World Records <span style={{ color: "#FF6A00" }}>Verification System</span>
+            AMPEX World Records <span style={{ color: "#FF6A00" }}>Verification System</span>
           </h1>
           <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "18px", maxWidth: "750px", lineHeight: "1.7", margin: "0 auto 32px" }}>
-            The VERIFICATION PROTOCOL is the official system used by Rogue World Records to review, analyze, and authenticate world record submissions. This process helps ensure that every approved achievement is legitimate, accurately documented, and completed according to official rules and standards.
+            The VERIFICATION PROTOCOL is the official system used by AMPEX World Records to review, analyze, and authenticate world record submissions. This process helps ensure that every approved achievement is legitimate, accurately documented, and completed according to official rules and standards.
           </p>
           <Link to="/verify" style={{ textDecoration: "none" }}>
             <button style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px 48px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", transition: "0.3s" }}
@@ -71,7 +71,7 @@ const VerificationProtocolLearnMore = () => {
                 <h3 style={{ fontSize: "24px", fontWeight: "900", textTransform: "uppercase" }}>What Is the Verification Protocol?</h3>
               </div>
               <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
-                The Verification Protocol is a multi-layer review process that combines human expertise and advanced technology to maintain fairness, integrity, and trust across the entire Rogue competitive ecosystem. It aggregates:
+                The Verification Protocol is a multi-layer review process that combines human expertise and advanced technology to maintain fairness, integrity, and trust across the entire AMPEX competitive ecosystem. It aggregates:
               </p>
               <ul style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", paddingLeft: "20px", color: "rgba(255,255,255,0.8)", fontSize: "14px", lineHeight: "1.6" }}>
                 <li style={{ listStyleType: "square" }}>Human adjudication</li>
@@ -124,7 +124,7 @@ const VerificationProtocolLearnMore = () => {
                           <span style={{ background: "rgba(255,106,0,0.2)", color: "#FF6A00", padding: "4px 10px", borderRadius: "100px", fontSize: "10px", fontWeight: "900" }}>ACTIVE ENGINE</span>
                         </div>
                         <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.8)", lineHeight: "1.6", marginBottom: "0" }}>
-                          Our advanced AI Motion Verification System analyzes over 420 unique body and movement points per second to help ensure every submission meets official Rogue World Records standards. Using real-time motion tracking, movement pattern analysis, timing validation, and video integrity scanning, the system compares each performance against verified benchmark data.
+                          Our advanced AI Motion Verification System analyzes over 420 unique body and movement points per second to help ensure every submission meets official AMPEX World Records standards. Using real-time motion tracking, movement pattern analysis, timing validation, and video integrity scanning, the system compares each performance against verified benchmark data.
                         </p>
                       </div>
                     )}
@@ -178,7 +178,7 @@ const VerificationProtocolLearnMore = () => {
                 The Verification Protocol actively works to detect edited footage, fake submissions, altered timing, false measurements, AI-generated manipulations, unauthorized assistance, or duplicate attempts.
               </p>
               <div style={{ background: "rgba(239,68,68,0.05)", borderLeft: "4px solid #ef4444", padding: "16px", borderRadius: "8px", fontSize: "13px", color: "rgba(255,255,255,0.8)", lineHeight: "1.5" }}>
-                <strong>Strict Penalty Policy:</strong> Fraudulent activity will result in immediate attempt denial, total record removal, account suspensions, and permanent banning from Rogue World Records.
+                <strong>Strict Penalty Policy:</strong> Fraudulent activity will result in immediate attempt denial, total record removal, account suspensions, and permanent banning from AMPEX World Records.
               </div>
             </div>
 
@@ -208,7 +208,7 @@ const VerificationProtocolLearnMore = () => {
           <div style={{ gridColumn: "1 / -1", background: "linear-gradient(135deg, rgba(255,106,0,0.1) 0%, rgba(255,255,255,0.02) 100%)", border: "1px solid #FF6A00", borderRadius: "32px", padding: "40px", textAlign: "center", marginTop: "40px" }}>
             <h3 style={{ fontSize: "28px", fontWeight: "950", textTransform: "uppercase", marginBottom: "12px", color: "#FF6A00" }}>Our Commitment</h3>
             <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "16px", maxWidth: "650px", margin: "0 auto 24px", lineHeight: "1.6" }}>
-              Rogue World Records is committed to fair verification, honest competition, accurate results, transparent review systems, and absolute respect for every competitor.
+              AMPEX World Records is committed to fair verification, honest competition, accurate results, transparent review systems, and absolute respect for every competitor.
             </p>
             <h4 style={{ fontSize: "20px", fontWeight: "900", letterSpacing: "0.05em", color: "white", textTransform: "uppercase", marginBottom: "32px" }}>
               Verification is what turns an attempt into an official achievement. Break Limits. Make History. Become Legendary.

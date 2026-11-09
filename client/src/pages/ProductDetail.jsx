@@ -6,14 +6,17 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall, formatProductImage } from "../utils/api";
+import { normalizeShopCategory } from "../utils/shopCategories";
+import { useAuth } from "../context/AuthContext";
+import "../styles/shop.css";
 
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   const [dbProduct, setDbProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     const fetchProduct = async () => {
       try {
@@ -52,7 +55,7 @@ const ProductDetail = () => {
       img: "/images/athlete-certificate.webp",
       badge: "AUTHENTICATED",
       category: "CERTIFICATES",
-      fullDesc: "Commemorate your historic achievement with our premium, high-quality Official Record Certificate. Crafted using heavy-stock archival linen parchment, this document features a high-density embossed authentication seal, customized calligraphic lettering, and official signatures of rogue network adjudicators. Perfect for framing and high-end showcases.",
+      fullDesc: "Commemorate your historic achievement with our premium, high-quality Official Record Certificate. Crafted using heavy-stock archival linen parchment, this document features a high-density embossed authentication seal, customized calligraphic lettering, and official signatures of AMPEX network adjudicators. Perfect for framing and high-end showcases.",
       sizes: ["8.5\" x 11\"", "11\" x 14\" (+ $15)"],
       colors: []
     },
@@ -76,9 +79,9 @@ const ProductDetail = () => {
       img: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=600&q=80",
       badge: "APPAREL",
       category: "APPAREL",
-      fullDesc: "Exclusively designed for Rogue athletes and elite supporters. Crafted from ultra-dense 500gsm French Terry cotton, the Arena Oversized Hoodie offers unparalleled comfort, warmth, and structure. Featuring a drop-shoulder cut, lined double-hood, and a sleek matte high-density silicone chest print, it is the ultimate streetwear-inspired athletic statement.",
+      fullDesc: "Exclusively designed for AMPEX athletes and elite supporters. Crafted from ultra-dense 500gsm French Terry cotton, the Arena Oversized Hoodie offers unparalleled comfort, warmth, and structure. Featuring a drop-shoulder cut, lined double-hood, and a sleek matte high-density silicone chest print, it is the ultimate streetwear-inspired athletic statement.",
       sizes: ["XS", "S", "M", "L", "XL", "XXL"],
-      colors: ["Matte Black", "Off-White", "Rogue Orange"]
+      colors: ["Matte Black", "Off-White", "AMPEX Orange"]
     },
     {
       id: 4,
@@ -88,7 +91,7 @@ const ProductDetail = () => {
       img: "https://images.unsplash.com/photo-1523293182086-7651a899d37f?auto=format&fit=crop&w=600&q=80",
       badge: "LEGENDARY",
       category: "LIMITED DROP",
-      fullDesc: "Handcrafted in limited batches, the Titan Record Medal represents the pinnacle of rogue prestige. Each medal features a solid brass core with a premium sandblasted finish, heavy-plated satin gunmetal framing, and custom engraved reverse-side detailing. Suspended from a premium heavyweight woven neck ribbon with high-strength clips.",
+      fullDesc: "Handcrafted in limited batches, the Titan Record Medal represents the pinnacle of AMPEX prestige. Each medal features a solid brass core with a premium sandblasted finish, heavy-plated satin gunmetal framing, and custom engraved reverse-side detailing. Suspended from a premium heavyweight woven neck ribbon with high-strength clips.",
       sizes: ["Standard Edition"],
       colors: []
     },
@@ -101,8 +104,9 @@ const ProductDetail = () => {
         price: dbProduct.price,
         desc: dbProduct.description,
         img: formatProductImage(dbProduct.image_url),
-        badge: dbProduct.category?.toUpperCase() || "GEAR",
-        category: dbProduct.category?.toUpperCase() || "APPAREL",
+        badge: normalizeShopCategory(dbProduct.category),
+        category: normalizeShopCategory(dbProduct.category),
+        requiresAuthorization: !!dbProduct.requires_authorization,
         fullDesc: dbProduct.description,
         sizes: Array.isArray(dbProduct.sizes) ? dbProduct.sizes.map(sz => sz.size) : [],
         dbSizes: dbProduct.sizes || [],
@@ -111,7 +115,7 @@ const ProductDetail = () => {
       }
     : (hardcodedProducts.find(p => String(p.id) === String(id)) || hardcodedProducts[0]);
 
-  
+
   const allImages = product ? [product.img, ...(product.imageUrls || [])].filter(Boolean).map(url => url.startsWith('http') ? url : formatProductImage(url)) : [];
 
   const nextImage = () => {
@@ -127,6 +131,29 @@ const ProductDetail = () => {
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [added, setAdded] = useState(false);
+
+  // Championship belts etc.: per-competitor approval
+  const { user } = useAuth();
+  const [authStatus, setAuthStatus] = useState("none");
+  const [authNote, setAuthNote] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  useEffect(() => {
+    if (!user?.token || !id || String(id).length < 30) return;
+    apiCall(`/shop/${id}/authorization`, "GET", null, user.token)
+      .then((a) => { setAuthStatus(a.status || "none"); setAuthNote(a.adminNote || ""); })
+      .catch(() => {});
+  }, [id, user?.token]);
+  const requestApproval = async () => {
+    setAuthBusy(true);
+    try {
+      const a = await apiCall(`/shop/${id}/authorization`, "POST", {}, user.token);
+      setAuthStatus(a.status || "pending");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
   const [sizeError, setSizeError] = useState("");
 
   useEffect(() => {
@@ -168,6 +195,10 @@ const ProductDetail = () => {
   };
 
   const handleAddToCart = () => {
+    if (product.requiresAuthorization && authStatus !== "approved") {
+      document.getElementById("authorization-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     // Required size guard — block if sizes exist but none selected
     if (product.sizes.length > 0 && !selectedSize) {
       setSizeError("Please select an award size before adding to cart.");
@@ -231,13 +262,13 @@ const ProductDetail = () => {
     <PageTransition>
 
       <div style={{ background: "#0A0A0A", color: "white", fontFamily: "'Inter', sans-serif", minHeight: "100vh", paddingTop: "80px", display: "flex", flexDirection: "column" }}>
-        
+
         {/* NAVBAR */}
         <Navbar />
 
         {/* DETAIL CONTAINER */}
         <div style={{ flex: 1, padding: "60px 5% 120px", maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
-          
+
           {/* BACK BREADCRUMBS */}
           <div style={{ marginBottom: "40px" }}>
             <Link to="/shop" style={{ display: "inline-flex", alignItems: "center", gap: "10px", color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: "12px", fontWeight: "900", letterSpacing: "0.15em", textTransform: "uppercase", transition: "all 0.2s" }}
@@ -249,16 +280,16 @@ const ProductDetail = () => {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "64px", alignItems: "start" }}>
-            
+
             {/* LEFT COLUMN: IMAGE DISPLAY */}
             {/* LEFT COLUMN: IMAGE DISPLAY (CAROUSEL) */}
             <div>
               <div style={{ background: "#161616", borderRadius: "32px", border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden", position: "relative", boxShadow: "0 40px 80px rgba(0,0,0,0.6)" }}>
-                <img loading="lazy" decoding="async" src={allImages[currentImageIndex] || product.img} alt={product.title} style={{ width: "100%", height: "550px", objectFit: "cover", transition: "opacity 0.3s ease-in-out" }} />
+                <img loading="lazy" decoding="async" src={allImages[currentImageIndex] || product.img} alt={product.title} style={{ width: "100%", height: "min(550px, 90vw)", objectFit: "contain", objectPosition: "center", background: "#0d0d0d", padding: "16px", boxSizing: "border-box", transition: "opacity 0.3s ease-in-out" }} />
                 <div style={{ position: "absolute", top: "24px", right: "24px", background: "#FF6A00", color: "white", padding: "6px 16px", borderRadius: "100px", fontSize: "10px", fontWeight: "900", letterSpacing: "0.05em", zIndex: 10 }}>
                   {product.badge}
                 </div>
-                
+
                 {allImages.length > 1 && (
                   <>
                     <button onClick={prevImage} style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "white", width: "40px", height: "40px", borderRadius: "50%", display: "flex", justifyContent: "center", alignItems: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10 }}>
@@ -275,13 +306,13 @@ const ProductDetail = () => {
                   </>
                 )}
               </div>
-              
+
               {/* Thumbnail Gallery Row */}
               {allImages.length > 1 && (
                 <div style={{ display: "flex", gap: "12px", marginTop: "16px", overflowX: "auto", paddingBottom: "8px" }} className="custom-scrollbar">
                   {allImages.map((imgUrl, idx) => (
                     <div key={idx} onClick={() => setCurrentImageIndex(idx)} style={{ width: "80px", height: "80px", borderRadius: "12px", border: currentImageIndex === idx ? "2px solid #FF6A00" : "2px solid transparent", overflow: "hidden", cursor: "pointer", flexShrink: 0, opacity: currentImageIndex === idx ? 1 : 0.6, transition: "all 0.2s" }}>
-                      <img loading="lazy" decoding="async" src={imgUrl} alt="thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img loading="lazy" decoding="async" src={imgUrl} alt="thumbnail" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#0d0d0d" }} />
                     </div>
                   ))}
                 </div>
@@ -294,8 +325,8 @@ const ProductDetail = () => {
                 <div style={{ background: "rgba(255,106,0,0.1)", color: "#FF6A00", display: "inline-block", padding: "6px 14px", borderRadius: "100px", fontSize: "10px", fontWeight: "900", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px" }}>
                   {product.category}
                 </div>
-                
-                <h1 style={{ fontSize: "clamp(32px, 4vw, 48px)", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.02em", marginBottom: "16px", lineHeight: "1.1" }}>
+
+                <h1 style={{ fontSize: "clamp(28px, 3.4vw, 44px)", fontWeight: "900", textTransform: "none", letterSpacing: "-0.01em", marginBottom: "16px", lineHeight: "1.15" }}>
                   {product.title}
                 </h1>
 
@@ -303,7 +334,7 @@ const ProductDetail = () => {
                   ${getCalculatedPrice().toFixed(2)}
                 </div>
 
-                <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "15px", lineHeight: "1.7", marginBottom: "32px" }}>
+                <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "15px", lineHeight: "1.7", marginBottom: "32px", textTransform: "none", whiteSpace: "pre-line" }}>
                   {product.fullDesc}
                 </p>
 
@@ -415,8 +446,8 @@ const ProductDetail = () => {
                     >
                       <Minus size={14} />
                     </button>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={quantity}
                       readOnly
                       style={{ background: "transparent", border: "none", color: "white", width: "48px", textAlign: "center", fontSize: "14px", fontWeight: "900", outline: "none" }}
@@ -439,6 +470,34 @@ const ProductDetail = () => {
                     <span style={{ fontSize: "11px", fontWeight: "800", color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected:</span>
                     <span style={{ fontSize: "12px", fontWeight: "900", color: "#FF6A00" }}>{selectedSize}</span>
                     <span style={{ marginLeft: "auto", fontSize: "13px", fontWeight: "950", color: "white" }}>${getCalculatedPrice().toFixed(2)}</span>
+                  </div>
+                )}
+
+                {product.requiresAuthorization && (
+                  <div id="authorization-panel" style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "16px", padding: "18px 20px", marginBottom: "20px" }}>
+                    <div style={{ color: "#fbbf24", fontWeight: 800, fontSize: "13px", marginBottom: "6px" }}>Approval required</div>
+                    <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px", lineHeight: 1.6, margin: "0 0 12px 0" }}>
+                      {product.title} can only be purchased by a competitor an administrator has approved for this item.
+                    </p>
+                    {!user ? (
+                      <Link to="/login" style={{ color: "#FF6A00", fontWeight: 800, fontSize: "13px" }}>Log in to request approval</Link>
+                    ) : authStatus === "approved" ? (
+                      <div style={{ color: "#22c55e", fontWeight: 800, fontSize: "13px" }}>✓ You are approved to purchase this item.</div>
+                    ) : authStatus === "pending" ? (
+                      <div style={{ color: "rgba(255,255,255,0.8)", fontWeight: 700, fontSize: "13px" }}>Your request is waiting for an administrator's decision.</div>
+                    ) : authStatus === "denied" || authStatus === "revoked" ? (
+                      <div style={{ color: "#ef4444", fontWeight: 700, fontSize: "13px" }}>Your request was not approved.{authNote ? ` Note: ${authNote}` : ""}</div>
+                    ) : authStatus === "fulfilled" ? (
+                      <div style={{ color: "rgba(255,255,255,0.8)", fontWeight: 700, fontSize: "13px" }}>You have already purchased this item.</div>
+                    ) : (
+                      <button
+                        onClick={requestApproval}
+                        disabled={authBusy}
+                        style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "10px 20px", fontWeight: 800, fontSize: "12px", cursor: "pointer" }}
+                      >
+                        {authBusy ? "Sending..." : "Request purchase approval"}
+                      </button>
+                    )}
                   </div>
                 )}
 

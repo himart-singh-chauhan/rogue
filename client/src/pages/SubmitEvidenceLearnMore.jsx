@@ -92,7 +92,7 @@ const SubmitEvidenceLearnMore = () => {
             How to Submit Evidence for <span style={{ color: "#FF6A00" }}>a World Record</span>
           </h1>
           <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "18px", maxWidth: "750px", lineHeight: "1.7", margin: "0 auto 32px" }}>
-            Submitting strong evidence is one of the most important steps in getting your record approved. Rogue World Records uses video, photo, witness, and document evidence to verify that every record attempt is fair, authentic, and completed according to the official rules.
+            Submitting strong evidence is one of the most important steps in getting your record approved. AMPEX World Records uses video, photo, witness, and document evidence to verify that every record attempt is fair, authentic, and completed according to the official rules.
           </p>
           <Link to="/verify" style={{ textDecoration: "none" }}>
             <button style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px 48px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", transition: "0.3s" }}
@@ -202,7 +202,7 @@ const SubmitEvidenceLearnMore = () => {
                 <h3 style={{ fontSize: "24px", fontWeight: "900", textTransform: "uppercase" }}>After You Submit Evidence</h3>
               </div>
               <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
-                Once your evidence is uploaded successfully, Rogue World Records will review your submission. The review team may:
+                Once your evidence is uploaded successfully, AMPEX World Records will review your submission. The review team may:
               </p>
               <ul style={{ display: "flex", flexDirection: "column", gap: "10px", paddingLeft: "20px", marginBottom: "32px", color: "rgba(255,255,255,0.8)", fontSize: "14px" }}>
                 <li>• Confirm the video is complete and unedited</li>
