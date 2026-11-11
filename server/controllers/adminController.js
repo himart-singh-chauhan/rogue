@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { syncRecordAward } = require('../utils/rankings');
+const { syncOrderRewards } = require('../utils/rewards');
 const { tierConfigFor, endDateFor } = require('./membershipController');
 const { thumbnailFor } = require('../utils/youtubeIntegration');
 
@@ -460,27 +461,14 @@ const deleteInquiry = async (req, res) => {
 // @access  Private/Admin
 const getAllOrdersByAdmin = async (req, res) => {
   try {
+    // one query: orders with their items (including the buyer's notes)
     const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select('*')
+      .select('*, items:order_items(*)')
       .order('created_at', { ascending: false });
 
-    if (ordersError) console.error('Ledger: orders source failed:', ordersError.message);
-
-    const ordersWithItems = [];
-    for (const order of (orders || [])) {
-      const { data: items, error: itemsError } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('order_id', order.id);
-
-      ordersWithItems.push({
-        ...order,
-        items: items || []
-      });
-    }
-
-    res.json(ordersWithItems);
+    if (ordersError) throw ordersError;
+    res.json((orders || []).map((o) => ({ ...o, items: o.items || [] })));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -504,6 +492,7 @@ const updateOrderShippingStatusByAdmin = async (req, res) => {
       .single();
 
     if (error) throw error;
+    await syncOrderRewards(updatedOrder.id); // refunded / cancelled orders lose their purchase points
     res.json(updatedOrder);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -515,6 +504,8 @@ const updateOrderShippingStatusByAdmin = async (req, res) => {
 // @access  Private/Admin
 const deleteOrderByAdmin = async (req, res) => {
   try {
+    await supabase.from('orders').update({ payment_status: 'refunded', updated_at: new Date() }).eq('id', req.params.id);
+    await syncOrderRewards(req.params.id);
     const { error } = await supabase
       .from('orders')
       .delete()
@@ -792,6 +783,7 @@ const updatePaymentStatus = async (req, res) => {
         .single();
 
       if (error) throw error;
+      await syncOrderRewards(data.id);
       return res.json({ success: true, data });
     }
 

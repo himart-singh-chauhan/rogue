@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowRight, Menu, X, User, LogOut, ChevronDown, BarChart3, Users, FileText, Settings, DollarSign, CreditCard, Layers, Target, Shield, ClipboardList, Sparkles, MessageSquare, ShieldAlert, Image, Layout, Lock, Server, TrendingUp, Megaphone, Crown, Home, Video, Tag } from "lucide-react";
+import { ArrowRight, Menu, X, User, LogOut, ChevronDown, BarChart3, Users, FileText, Settings, DollarSign, CreditCard, Layers, Target, Shield, ClipboardList, Sparkles, MessageSquare, ShieldAlert, Image, Layout, Lock, Server, TrendingUp, Megaphone, Crown, Home, Video, Tag, Gift } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const Navbar = () => {
@@ -51,6 +51,7 @@ const Navbar = () => {
     { label: "Challenges", icon: <Settings size={16} />, to: "/admin?tab=challenges" },
     { label: "Payments", icon: <DollarSign size={16} />, to: "/admin?tab=payments" },
     { label: "Coupons", icon: <Tag size={16} />, to: "/admin?tab=coupons" },
+    { label: "Rewards & Referrals", icon: <Gift size={16} />, to: "/admin?tab=rewards" },
     { label: "Memberships", icon: <CreditCard size={16} />, to: "/admin?tab=memberships" },
     { label: "Shop Catalog", icon: <Layers size={16} />, to: "/admin?tab=products" },
     { label: "Shop Orders", icon: <CreditCard size={16} />, to: "/admin?tab=orders" },
@@ -74,7 +75,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="navbar" style={{ 
+    <nav className="navbar" style={{
       background: location.pathname === "/" ? "rgba(255, 248, 245, 0.85)" : "#000",
       borderColor: location.pathname === "/" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)",
     }}>
@@ -82,8 +83,8 @@ const Navbar = () => {
         {/* Logo - Left aligned */}
         <div className="nav-logo-wrap">
           <Link to="/" className="nav-logo-link-main">
-            <img 
-              src={location.pathname === "/" ? "/images/logo-dark.webp" : "/images/logo-light.webp"} 
+            <img
+              src={location.pathname === "/" ? "/images/logo-dark.webp" : "/images/logo-light.webp"}
               alt="AMPEX Logo"
               width={450}
               height={300}
@@ -96,11 +97,11 @@ const Navbar = () => {
         {/* Desktop nav pill - Center aligned */}
         <div className="nav-pill" style={{ alignItems: "center", gap: "4px" }}>
           {navLinks.map((l) => (
-            <Link 
-              key={l.label} 
-              to={l.to} 
+            <Link
+              key={l.label}
+              to={l.to}
               className="nav-pill-item"
-              style={{ 
+              style={{
                 color: isActive(l.to) ? "white" : (location.pathname === "/" ? "#111" : "white"),
                 fontWeight: isActive(l.to) ? "900" : "600",
                 background: isActive(l.to) ? "#FF6A00" : "transparent",
@@ -115,9 +116,9 @@ const Navbar = () => {
           {/* Admin Dropdown */}
           {user && user.isAdmin && (
             <div style={{ position: "relative" }}>
-              <button 
+              <button
                 onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
-                style={{ 
+                style={{
                   color: location.pathname === "/" ? "#111" : "white",
                   fontWeight: isActive("/admin") ? "900" : "600",
                   background: isActive("/admin") ? "#FF6A00" : "transparent",
@@ -152,7 +153,7 @@ const Navbar = () => {
                   gridTemplateColumns: "1fr 1fr",
                 }}>
                   {adminMenuItems.map((item, idx) => (
-                    <Link 
+                    <Link
                       key={idx}
                       to={item.to}
                       onClick={() => setAdminDropdownOpen(false)}
@@ -217,8 +218,8 @@ const Navbar = () => {
               </Link>
             </>
           )}
-          <button 
-            onClick={() => setMobileOpen(!mobileOpen)} 
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
             className="hamburger-btn"
             style={{ color: location.pathname === "/" ? "#111" : "white" }}
           >
@@ -231,10 +232,10 @@ const Navbar = () => {
       {mobileOpen && (
         <div className="mobile-menu" data-lenis-prevent="true" style={{ background: location.pathname === "/" ? "#FFF8F5" : "#0A0A0A" }}>
           {navLinks.map(l => (
-            <Link 
-              key={l.label} 
-              to={l.to} 
-              onClick={() => setMobileOpen(false)} 
+            <Link
+              key={l.label}
+              to={l.to}
+              onClick={() => setMobileOpen(false)}
               className="mobile-nav-link"
               style={{ color: location.pathname === "/" ? "#111" : "white" }}
             >
@@ -250,7 +251,7 @@ const Navbar = () => {
                   Admin Panel
                 </div>
                 {adminMenuItems.map((item, idx) => (
-                  <Link 
+                  <Link
                     key={idx}
                     to={item.to}
                     onClick={() => setMobileOpen(false)}

@@ -3,7 +3,7 @@ const router = express.Router();
 const supabase = require('../config/supabase');
 
 const isUUID = (v) => /^[0-9a-f-]{36}$/i.test(String(v || ''));
-const PUBLIC_COLUMNS = 'id, company_name, logo_url, banner_url, link_url, placement, package_type, description, end_date, image_fit, image_position';
+const PUBLIC_COLUMNS = 'id, company_name, logo_url, banner_url, link_url, placement, package_type, description, end_date, image_fit, image_position, video_url';
 
 // @desc    Active sponsors for one or more placements (comma separated)
 // @route   GET /api/sponsors?placement=homepage_top_banner,homepage

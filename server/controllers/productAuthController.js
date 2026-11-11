@@ -1,4 +1,19 @@
 const supabase = require('../config/supabase');
+const { notifyMember, siteUrl } = require('../utils/notify');
+
+// Tell the competitor about an approval decision. Approval is for their account only.
+const MESSAGES = {
+  approved: (name, id) => ({ subject: `Approved: you can now buy ${name}`, body: `Good news! An administrator has approved your account to purchase ${name}. This approval is for your account only.\n\nYou can buy it here: ${siteUrl()}/product/${id}` }),
+  denied: (name) => ({ subject: `Update on your request for ${name}`, body: `Your request to purchase ${name} was not approved this time. Reply through Contact if you have questions.` }),
+  revoked: (name) => ({ subject: `Approval removed for ${name}`, body: `Your approval to purchase ${name} has been removed by an administrator.` }),
+};
+const notifyDecision = async (auth, adminId) => {
+  const make = MESSAGES[auth?.status];
+  if (!make) return;
+  const { data: product } = await supabase.from('products').select('id, name').eq('id', auth.product_id).maybeSingle();
+  if (!product) return;
+  await notifyMember({ userId: auth.user_id, senderId: adminId, ...make(product.name, product.id) });
+};
 
 // Products flagged "requires_authorization" (e.g. championship belts) can only be bought by
 // a competitor an administrator has approved for that specific product.
@@ -77,6 +92,7 @@ const grantAuthorization = async (req, res) => {
   const row = { product_id: productId, user_id: userId, status: 'approved', admin_note: adminNote || null, decided_by: req.user.id, decided_at: new Date(), updated_at: new Date() };
   const { data, error } = await supabase.from('product_authorizations').upsert([row], { onConflict: 'product_id,user_id' }).select().single();
   if (error) return res.status(500).json({ message: 'Could not grant approval', error: error.message });
+  await notifyDecision(data, req.user.id);
   res.status(201).json(format(data));
 };
 
@@ -94,6 +110,7 @@ const decideAuthorization = async (req, res) => {
     .maybeSingle();
   if (error) return res.status(500).json({ message: 'Could not update', error: error.message });
   if (!data) return res.status(404).json({ message: 'Authorization not found' });
+  await notifyDecision(data, req.user.id);
   res.json(format(data));
 };
 

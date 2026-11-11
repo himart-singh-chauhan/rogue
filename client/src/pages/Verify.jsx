@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useCategories } from "../utils/categoryMeta";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -36,6 +37,7 @@ import {
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import { Link, useNavigate } from "react-router-dom";
+import EvidencePreview, { videoThumbnailFor } from "../components/EvidencePreview";
 import ScrollReveal from "../components/ScrollReveal";
 import { API_URL, apiCall, uploadDirect } from "../utils/api";
 
@@ -147,6 +149,25 @@ const categoriesData = {
 
 const Verify = () => {
   const { user, loading: authLoading, updateProfile } = useAuth();
+
+  // Live categories (Admin → Categories). Known categories keep their detailed event lists;
+  // a subcategory becomes a group whose records are saved under the subcategory itself.
+  const { tree: categoryTree } = useCategories();
+  const { categoryOptions, subcategoryNames } = useMemo(() => {
+    const LEGACY_ALIAS = { Talent: "Skills" };
+    const options = {};
+    const subs = new Set();
+    (categoryTree || []).forEach((node) => {
+      const legacy = categoriesData[node.name] || categoriesData[LEGACY_ALIAS[node.name]] || null;
+      const groups = legacy ? { ...legacy } : {};
+      (node.children || []).forEach((child) => {
+        subs.add(child.name);
+        groups[child.name] = (legacy && legacy[child.name]) || [child.name, "Other"];
+      });
+      options[node.name] = Object.keys(groups).length ? groups : { General: [node.name, "Other"] };
+    });
+    return { categoryOptions: Object.keys(options).length ? options : categoriesData, subcategoryNames: subs };
+  }, [categoryTree]);
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -309,7 +330,8 @@ const Verify = () => {
 
       const submissionData = {
         title: formData.recordTitle,
-        category: formData.category,
+        // a chosen subcategory (e.g. Funny Talent) is the record's category, so it shows under that tab
+        category: subcategoryNames.has(formData.subCategoryGroup) ? formData.subCategoryGroup : formData.category,
         description: formData.explanation,
         athleteId: formData.username,
         athleteName: formData.fullName || user.name,
@@ -979,16 +1001,16 @@ const Verify = () => {
                                     padding: "8px",
                                     boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
                                   }}>
-                                    {Object.keys(categoriesData).map((cat) => (
+                                    {Object.keys(categoryOptions).map((cat) => (
                                       <DropdownMenuItem
                                         key={cat}
                                         onClick={() => {
-                                          const groups = Object.keys(categoriesData[cat]);
+                                          const groups = Object.keys(categoryOptions[cat]);
                                           setFormData({
                                             ...formData,
                                             category: cat,
                                             subCategoryGroup: groups[0],
-                                            subCategory: categoriesData[cat][groups[0]][0]
+                                            subCategory: categoryOptions[cat][groups[0]][0]
                                           });
                                         }}
                                         style={{
@@ -1041,14 +1063,14 @@ const Verify = () => {
                                     padding: "8px",
                                     boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
                                   }}>
-                                    {Object.keys(categoriesData[formData.category] || {}).map((group) => (
+                                    {Object.keys(categoryOptions[formData.category] || {}).map((group) => (
                                       <DropdownMenuItem
                                         key={group}
                                         onClick={() => {
                                           setFormData({
                                             ...formData,
                                             subCategoryGroup: group,
-                                            subCategory: categoriesData[formData.category][group][0]
+                                            subCategory: categoryOptions[formData.category][group][0]
                                           });
                                         }}
                                         style={{
@@ -1103,7 +1125,7 @@ const Verify = () => {
                                   padding: "8px",
                                   boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
                                 }}>
-                                  {(categoriesData[formData.category]?.[formData.subCategoryGroup] || []).map((item) => (
+                                  {(categoryOptions[formData.category]?.[formData.subCategoryGroup] || []).map((item) => (
                                     <DropdownMenuItem
                                       key={item}
                                       onClick={() => setFormData({...formData, subCategory: item})}
@@ -1746,7 +1768,7 @@ const Verify = () => {
                             accept="video/mp4,video/webm,video/quicktime"
                             onChange={handleVideoUpload}
                           />
-                          <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
+                          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}><EvidencePreview file={uploadedFiles.video || null} link={uploadedFiles.video ? null : (formData.youtubeLink || "").trim() || null} play={true} opacity={0.3} alt="Your attempt" /></div>
                           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px", textAlign: "center" }}>
                             <div style={{ width: "90px", height: "90px", background: "#FF6A00", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px", boxShadow: "0 15px 30px rgba(255,106,0,0.3)" }}>
                               <Video size={40} color="white" />
@@ -1877,7 +1899,7 @@ const Verify = () => {
                           auditOutcome === "failed" ? "rgba(255, 77, 77, 0.3)" :
                           auditOutcome === "incomplete" ? "rgba(255, 204, 0, 0.3)" : "rgba(255, 106, 0, 0.3)"
                         }`, background: "#000" }}>
-                          <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
+                          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}><EvidencePreview file={uploadedFiles.video || null} link={uploadedFiles.video ? null : (formData.youtubeLink || "").trim() || null} play={true} opacity={0.5} alt="Your attempt" /></div>
                           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.6))" }}></div>
 
                           {/* HUD TOP LEFT */}
@@ -2045,27 +2067,29 @@ const Verify = () => {
                              <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "24px" }}>
                                {auditOutcome === "incomplete"
                                  ? "Mandatory fields or uncut evidence file are missing. Please step back and complete all required inputs."
-                                 : "Biometric validation check complete. Reconcile diagnostic reports to proceed to final ledger submission."}
+                                 : auditOutcome === "failed"
+                                   ? "The automatic check flagged this attempt. You can still submit it: an AMPEX adjudicator will review your video by hand before anything is approved."
+                                   : "Automatic check complete. Continue to review and submit your attempt."}
                              </p>
                              <button
                                onClick={nextStep}
-                               disabled={auditState !== "complete" || auditOutcome !== "passed"}
+                               disabled={auditState !== "complete" || auditOutcome === "incomplete"}
                                style={{
                                  width: "100%",
-                                 background: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.1)" : "#FF6A00",
-                                 color: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.4)" : "white",
+                                 background: (auditState !== "complete" || auditOutcome === "incomplete") ? "rgba(255,255,255,0.1)" : "#FF6A00",
+                                 color: (auditState !== "complete" || auditOutcome === "incomplete") ? "rgba(255,255,255,0.4)" : "white",
                                  border: "none",
                                  borderRadius: "100px",
                                  padding: "20px",
                                  fontSize: "14px",
                                  fontWeight: "900",
                                  textTransform: "uppercase",
-                                 cursor: (auditState !== "complete" || auditOutcome !== "passed") ? "not-allowed" : "pointer",
+                                 cursor: (auditState !== "complete" || auditOutcome === "incomplete") ? "not-allowed" : "pointer",
                                  display: "flex",
                                  alignItems: "center",
                                  justifyContent: "center",
                                  gap: "12px",
-                                 boxShadow: (auditState !== "complete" || auditOutcome !== "passed") ? "none" : "0 20px 40px rgba(255,106,0,0.2)",
+                                 boxShadow: (auditState !== "complete" || auditOutcome === "incomplete") ? "none" : "0 20px 40px rgba(255,106,0,0.2)",
                                  transition: "all 0.3s"
                                }}
                              >
@@ -2145,7 +2169,7 @@ const Verify = () => {
 
                             <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "24px", padding: "24px", display: "flex", alignItems: "center", gap: "20px", border: "1px solid rgba(255,255,255,0.05)" }}>
                               <div style={{ width: "64px", height: "64px", borderRadius: "12px", background: "#111", overflow: "hidden" }}>
-                                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=200&q=80" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
+                                <EvidencePreview file={uploadedFiles.video || null} link={uploadedFiles.video ? null : (formData.youtubeLink || "").trim() || null} play={false} opacity={0.8} alt="Your attempt" />
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: "13px", fontWeight: "900", marginBottom: "4px" }}>
@@ -2193,7 +2217,7 @@ const Verify = () => {
                       <div style={{ textAlign: "center", marginBottom: "80px" }}>
                         <div style={{ color: "white", fontSize: "24px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "40px" }}>POST-SUBMISSION PREVIEW</div>
                         <div style={{
-                          backgroundImage: "linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80')",
+                          backgroundImage: videoThumbnailFor(formData.youtubeLink) ? `linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('${videoThumbnailFor(formData.youtubeLink)}')` : "linear-gradient(135deg, rgba(255,106,0,0.14), #0d0d0d)",
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                           borderRadius: "40px",

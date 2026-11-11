@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const supabase = require('../config/supabase');
 const { accountBlockReason } = require('../middleware/authMiddleware');
 const { tierFor } = require('../utils/rankings');
+const rewards = require('../utils/rewards');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -208,6 +209,13 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'Could not create the account. Please check your details.' });
     }
 
+    // Rewards program: every member gets a referral code; a ?ref=CODE sign-up is credited to the referrer
+    await rewards.ensureReferralCode(user.id).catch(() => null);
+    if (req.body.referralCode) {
+      const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip;
+      await rewards.recordReferralAtSignup({ newUserId: user.id, newUserEmail: email, code: req.body.referralCode, ip });
+    }
+
     return res.status(201).json(serializeUser(user, true));
   } catch (err) {
     console.error('Register error:', err);
@@ -367,6 +375,13 @@ const getPublicUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Private details are shown only to the member themselves and to admins
+    const canSeePrivate = !!req.user && (String(req.user.id) === String(user.id) || !!req.user.is_admin);
+    if (!canSeePrivate) {
+      ['email', 'phone', 'street_address', 'zip_code', 'dob'].forEach((k) => { delete user[k]; });
+    }
+    user.private_visible = canSeePrivate;
+
     // Fetch user's records (internal review fields and witness contacts stay private)
     const { data: userRecords } = await supabase
       .from('records')
@@ -444,6 +459,11 @@ const getPublicUserProfile = async (req, res) => {
     }
     const granted = vipRow?.vip_status && vipRow.vip_status !== 'none' ? vipRow.vip_status : null;
     ranking.vip = { status: granted || (planVip ? 'member' : null), verified: !!vipRow?.is_verified };
+    // Rewards level (AMPEX Ambassador badge at the top level)
+    try {
+      const r = await rewards.summaryFor(user.id);
+      ranking.rewards = r.enabled ? { level: r.level, isAmbassador: r.isAmbassador, points: r.points } : null;
+    } catch { ranking.rewards = null; }
 
     return res.json({ profile: user, ranking, records: userRecords || [] });
   } catch (err) {

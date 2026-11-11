@@ -125,18 +125,17 @@ const Cart = () => {
     return null;
   };
 
-  const removeItem = (id, size, color) => {
-    setItems(items.filter(item => !(item.id === id && item.size === size && item.color === color)));
+  const removeItem = (index) => {
+    setItems(items.filter((_, i) => i !== index));
   };
 
-  const updateQty = (id, size, color, newQty) => {
+  const updateQty = (index, newQty) => {
     if (newQty < 1) return;
-    setItems(items.map(item => {
-      if (item.id === id && item.size === size && item.color === color) {
-        return { ...item, qty: newQty };
-      }
-      return item;
-    }));
+    setItems(items.map((item, i) => (i === index ? { ...item, qty: newQty } : item)));
+  };
+
+  const updateNotes = (index, notes) => {
+    setItems(items.map((item, i) => (i === index ? { ...item, notes: notes.slice(0, 2000) } : item)));
   };
 
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.qty), 0);
@@ -196,7 +195,27 @@ const Cart = () => {
     }
   }, [items, appliedCoupon]);
 
-  const total = Math.max(0, subtotal - discount);
+  // Rewards program: the member's level discount (Bronze 5% … Ambassador 40%), checked again at checkout
+  const [rewardQuote, setRewardQuote] = React.useState(null);
+  const [paidBreakdown, setPaidBreakdown] = React.useState(null);
+  const quoteKey = items.map((i) => `${i.id}:${i.qty}:${i.type || ""}`).join("|");
+  React.useEffect(() => {
+    if (!user?.token || !items.length) { setRewardQuote(null); return undefined; }
+    let cancelled = false;
+    apiCall("/rewards/quote", "POST", { items: items.map((i) => ({ id: i.id, qty: i.qty, type: i.type || "product", eventId: i.eventId || null })) }, user.token)
+      .then((q) => { if (!cancelled) setRewardQuote(q && q.amount > 0 ? q : null); })
+      .catch(() => { if (!cancelled) setRewardQuote(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey, user?.token]);
+  const rewardAmount = rewardQuote ? Number(rewardQuote.amount) || 0 : 0;
+  const stacking = !!rewardQuote?.allowCouponStacking;
+  const useReward = rewardAmount > 0 && (stacking || discount === 0 || rewardAmount > discount);
+  const couponApplied = discount > 0 && (stacking || !useReward);
+  const couponPart = couponApplied ? discount : 0;
+  const rewardPart = useReward ? Math.min(rewardAmount, Math.max(0, subtotal - couponPart)) : 0;
+  const total = Math.max(0, subtotal - couponPart - rewardPart);
+  const savings = subtotal - total;
 
   return (
     <PageTransition>
@@ -216,8 +235,8 @@ const Cart = () => {
 
               {items.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                  {items.map(item => {
-                    const uniqueKey = `${item.id}-${item.size || ""}-${item.color || ""}`;
+                  {items.map((item, index) => {
+                    const uniqueKey = `${item.id}-${item.size || ""}-${item.color || ""}-${index}`;
                     return (
                       <div key={uniqueKey} style={{ background: "#161616", borderRadius: "24px", padding: "24px", display: "flex", gap: "24px", border: "1px solid rgba(255,255,255,0.05)", transition: "all 0.3s ease" }}>
                         <img loading="lazy" decoding="async" src={formatProductImage(item.img)} alt={item.title} style={{ width: "120px", height: "120px", borderRadius: "16px", objectFit: "contain", objectPosition: "center", background: "#0d0d0d", padding: "6px", boxSizing: "border-box", flexShrink: 0 }} />
@@ -235,6 +254,16 @@ const Cart = () => {
                                 {item.color && <span style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "4px 10px", borderRadius: "6px", fontSize: "10px", fontWeight: "800", color: "rgba(255,255,255,0.5)" }}>{item.color}</span>}
                               </div>
                             )}
+                            {!isTicket(item) && (
+                              <textarea
+                                aria-label={`Comments for ${item.title}`}
+                                value={item.notes || ""}
+                                onChange={(e) => updateNotes(index, e.target.value)}
+                                rows={2}
+                                placeholder="Comments for this item (e.g. the name and record to print on your certificate)"
+                                style={{ width: "100%", marginTop: "6px", background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px", padding: "10px 12px", color: "white", fontSize: "13px", fontFamily: "inherit", resize: "vertical", outline: "none" }}
+                              />
+                            )}
                           </div>
 
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
@@ -242,7 +271,7 @@ const Cart = () => {
                             <div style={{ display: "inline-flex", alignItems: "center", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "100px", padding: "4px" }}>
                               <button
                                 type="button"
-                                onClick={() => updateQty(item.id, item.size, item.color, item.qty - 1)}
+                                onClick={() => updateQty(index, item.qty - 1)}
                                 style={{ background: "transparent", border: "none", color: "white", width: "28px", height: "28px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "0.2s" }}
                                 onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
                                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -252,7 +281,7 @@ const Cart = () => {
                               <span style={{ color: "white", width: "32px", textAlign: "center", fontSize: "12px", fontWeight: "900" }}>{item.qty}</span>
                               <button
                                 type="button"
-                                onClick={() => updateQty(item.id, item.size, item.color, item.qty + 1)}
+                                onClick={() => updateQty(index, item.qty + 1)}
                                 style={{ background: "transparent", border: "none", color: "white", width: "28px", height: "28px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "0.2s" }}
                                 onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
                                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -263,7 +292,7 @@ const Cart = () => {
 
                             <button
                               type="button"
-                              onClick={() => removeItem(item.id, item.size, item.color)}
+                              onClick={() => removeItem(index)}
                               style={{
                                 background: "rgba(255,255,255,0.03)",
                                 border: "1px solid rgba(255,255,255,0.05)",
@@ -335,10 +364,27 @@ const Cart = () => {
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
-                {discount > 0 && (
+                {couponPart > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", color: "#22c55e", fontSize: "14px", fontWeight: "700" }}>
-                    <span>Discount {appliedCoupon ? `(${appliedCoupon.code})` : ''}</span>
-                    <span>-${discount.toFixed(2)}</span>
+                    <span>Coupon {appliedCoupon ? `(${appliedCoupon.code})` : ''}</span>
+                    <span>-${couponPart.toFixed(2)}</span>
+                  </div>
+                )}
+                {rewardPart > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "#22c55e", fontSize: "14px", fontWeight: "700" }}>
+                    <span>{rewardQuote.level} reward ({rewardQuote.percent}% off)</span>
+                    <span>-${rewardPart.toFixed(2)}</span>
+                  </div>
+                )}
+                {discount > 0 && rewardAmount > 0 && !stacking && (
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
+                    Coupons and reward discounts don't combine, so the bigger one is used.
+                  </div>
+                )}
+                {savings > 0.004 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.6)", fontSize: "13px" }}>
+                    <span>You save</span>
+                    <span>${savings.toFixed(2)}</span>
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.6)", fontSize: "14px" }}>
@@ -515,7 +561,7 @@ const Cart = () => {
                     </div>
                     <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: "12px", paddingTop: "10px", display: "flex", justifyContent: "space-between" }}>
                       <span style={{ fontSize: "12px", fontWeight: "900", color: "rgba(255,255,255,0.5)" }}>TOTAL PAID</span>
-                      <span style={{ fontSize: "16px", fontWeight: "950", color: "white" }}>${total.toFixed(2)}</span>
+                      <span style={{ fontSize: "16px", fontWeight: "950", color: "white" }}>${(paidBreakdown ? Number(paidBreakdown.total) : total).toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -559,7 +605,8 @@ const Cart = () => {
                           price: parseFloat(item.price),
                           qty: parseInt(item.qty),
                           size: item.size || null,
-                          color: item.color || null
+                          color: item.color || null,
+                          notes: item.notes || null
                         })),
                         subtotal: parseFloat(subtotal),
                         discount: parseFloat(discount),
@@ -568,7 +615,8 @@ const Cart = () => {
                         couponCode: appliedCoupon?.code || null
                       };
 
-                      await apiCall("/shop/checkout", "POST", payload, user?.token);
+                      const placed = await apiCall("/shop/checkout", "POST", payload, user?.token);
+                      setPaidBreakdown(placed?.breakdown || null);
                       setIsProcessing(false);
                       setIsSuccess(true);
                     } catch (err) {

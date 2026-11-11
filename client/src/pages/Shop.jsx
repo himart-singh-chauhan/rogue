@@ -114,7 +114,8 @@ const Shop = () => {
       }))
     : hardcodedProducts.map(p => ({ ...p, category: normalizeShopCategory(p.category), badge: normalizeShopCategory(p.category) }));
 
-  const presentCategories = SHOP_CATEGORIES.filter(c => products.some(p => p.category === c));
+  // Every shop section is always listed (an empty one shows a "coming soon" note), so admins can fill any of them
+  const presentCategories = SHOP_CATEGORIES.filter(c => c !== "Tickets" || products.some(p => p.category === c));
   const extraCategories = [...new Set(products.map(p => p.category))].filter(c => !SHOP_CATEGORIES.includes(c));
   const categories = ["ALL ITEMS", ...presentCategories, ...extraCategories];
 

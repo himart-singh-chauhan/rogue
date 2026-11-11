@@ -114,6 +114,8 @@ const syncRecordAward = async (record, { verified, points = 0, adminId = null } 
 
   if (verified && !held) {
     const pts = toInt(points) > 0 ? toInt(points) : await pointsForVerifiedRecord(record);
+    // Rewards program: a referred member's first verified record qualifies their referral
+    require('./rewards').onMemberVerified(record.user_id);
     return awardPoints({
       userId: record.user_id, points: pts, source: 'record_verified', referenceId: record.id,
       reason: `Record verified: ${record.title || ''}`.trim(), adminId, counters: VERIFIED_RECORD_COUNTERS,

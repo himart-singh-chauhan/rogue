@@ -5,10 +5,11 @@ import {
   CheckCircle2, Share2, User, Mail, LogOut, Plus, ShieldCheck,
   Flame, Loader2, AlertCircle, Eye, RefreshCw, BarChart2, Shield,
   Award, TrendingUp, Compass, ChevronRight, HardDrive, Bell, Settings,
-  Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search, Download, ExternalLink
+  Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search, Download, ExternalLink, Gift
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import MyRewards from "../components/MyRewards";
 import { useAuth } from "../context/AuthContext";
 import { apiCall, apiUpload, formatProductImage } from "../utils/api";
 import { downloadCertificatePdf, formatCertDate } from "../utils/certificatePdf";
@@ -705,6 +706,29 @@ const Profile = () => {
                 >
                   <Mail size={15} /> MESSAGES {unreadCount > 0 && <span style={{ background: activeTab === "messages" ? "white" : "#FF5500", color: activeTab === "messages" ? "#FF5500" : "white", borderRadius: "100px", fontSize: "10px", padding: "2px 7px", letterSpacing: 0 }}>{unreadCount}</span>}
                 </button>
+                <button
+                  onClick={() => setActiveTab("rewards")}
+                  style={{
+                    flex: "1 1 150px",
+                    background: activeTab === "rewards" ? "linear-gradient(135deg, #FF5500 0%, #ff7733 100%)" : "transparent",
+                    border: "none",
+                    color: activeTab === "rewards" ? "white" : "#888",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    fontSize: "13px",
+                    fontWeight: "900",
+                    letterSpacing: "1px",
+                    cursor: "pointer",
+                    transition: "all 0.25s",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "8px",
+                    boxShadow: activeTab === "rewards" ? "0 10px 25px rgba(255, 85, 0, 0.25)" : "none"
+                  }}
+                >
+                  <Gift size={15} /> MY REWARDS
+                </button>
               </div>
 
               {/* TAB 1: Real-time Record Submissions list */}
@@ -1021,6 +1045,7 @@ const Profile = () => {
 
               {/* TAB 4: Inbox */}
               {activeTab === "messages" && <Inbox state={inboxState} token={user?.token} onRead={markReadLocally} />}
+              {activeTab === "rewards" && <MyRewards token={user?.token} />}
             </div>
           ) : (
             /* ================== PUBLIC PRO ATHLETE VIEW ================== */

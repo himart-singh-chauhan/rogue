@@ -46,7 +46,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signup = async (signupData) => {
-    const data = await apiCall('/auth/register', 'POST', signupData);
+    // Rewards program: a referral link (?ref=CODE) seen earlier on this device credits the member who shared it
+    let referralCode = null;
+    try { referralCode = localStorage.getItem('ampex_ref'); } catch { /* storage blocked */ }
+    if (!referralCode && typeof window !== 'undefined') referralCode = new URLSearchParams(window.location.search).get('ref');
+    const data = await apiCall('/auth/register', 'POST', { ...signupData, referralCode: signupData.referralCode || referralCode || undefined });
+    try { localStorage.removeItem('ampex_ref'); } catch { /* ignore */ }
     setUser(data);
     localStorage.setItem('userInfo', JSON.stringify(data));
     return data;

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef } from "react";
+import EvidencePreview, { videoThumbnailFor } from "../components/EvidencePreview";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -141,33 +142,21 @@ const ChallengeVerify = () => {
     return () => { cancelled = true; };
   }, [searchParams, user?.token]);
 
-  // Local previews of what the athlete uploaded (shown instead of stock photos)
-  const uploadPreview = useMemo(() => ({
-    image: uploadedFiles.images[0] ? URL.createObjectURL(uploadedFiles.images[0]) : null,
-    video: uploadedFiles.video ? URL.createObjectURL(uploadedFiles.video) : null,
-  }), [uploadedFiles]);
-  useEffect(() => () => {
-    if (uploadPreview.image) URL.revokeObjectURL(uploadPreview.image);
-    if (uploadPreview.video) URL.revokeObjectURL(uploadPreview.video);
-  }, [uploadPreview]);
-
   const recordImage = challengedRecord?.thumbnail_url
     ? formatProductImage(challengedRecord.thumbnail_url)
     : (challengedRecord?.evidence_url && /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(challengedRecord.evidence_url) ? formatProductImage(challengedRecord.evidence_url) : null);
-  const heroImage = uploadPreview.image || recordImage;
   const challengedScore = challengedRecord
     ? (challengedRecord.value !== null && challengedRecord.value !== undefined && challengedRecord.value !== "" ? `${challengedRecord.value}${challengedRecord.unit ? ` ${challengedRecord.unit}` : ""}` : "Pending verification")
     : null;
 
-  // Image (or empty dark panel) used where stock gym photos used to be
+  // The athlete's own evidence (uploaded video, or the YouTube / Vimeo link) where stock photos used to be.
+  // preferVideo: play the video / link; otherwise show a still (their photo, the link's thumbnail, or the challenged record).
   const renderMedia = ({ opacity = 1, preferVideo = false } = {}) => {
-    if (preferVideo && uploadPreview.video) {
-      return <video src={uploadPreview.video} muted playsInline loop autoPlay style={{ width: "100%", height: "100%", objectFit: "cover", opacity }} />;
+    const link = formData.youtubeLink && formData.youtubeLink.trim() ? formData.youtubeLink.trim() : null;
+    if (preferVideo && (uploadedFiles.video || link)) {
+      return <EvidencePreview file={uploadedFiles.video} link={uploadedFiles.video ? null : link} fallbackImage={recordImage} opacity={opacity} alt={challengedRecord?.title || "Your attempt"} />;
     }
-    if (heroImage) {
-      return <img loading="lazy" decoding="async" src={heroImage} alt={challengedRecord?.title || "Your upload"} style={{ width: "100%", height: "100%", objectFit: "cover", opacity }} />;
-    }
-    return <div style={{ width: "100%", height: "100%", background: "radial-gradient(circle at 30% 30%, rgba(255,106,0,0.18), #0d0d0d 70%)" }} />;
+    return <EvidencePreview file={uploadedFiles.images[0] || null} link={link} play={false} fallbackImage={recordImage} opacity={opacity} alt={challengedRecord?.title || "Your upload"} />;
   };
 
   const handleVideoUpload = (e) => {
@@ -281,7 +270,8 @@ const ChallengeVerify = () => {
 
           // Evaluate outcome
           const hasVideo = uploadedFiles.video || (formData.youtubeLink && formData.youtubeLink.trim() !== "");
-          const isMissingFields = !formData.fullName || !formData.event || !formData.value || !formData.venueName || !hasVideo;
+          // The challenger's own score is entered on the next step (5), so it is not required for the scan
+          const isMissingFields = !formData.fullName || !formData.event || !formData.venueName || !hasVideo;
 
           if (isMissingFields) {
             setAuditOutcome("incomplete");
@@ -295,7 +285,8 @@ const ChallengeVerify = () => {
             ]);
           } else {
             const scoreVal = parseFloat(formData.value);
-            const isUnrealisticScore = scoreVal > 10000 || scoreVal <= 0 || isNaN(scoreVal);
+            // only judge the score once it has been entered
+            const isUnrealisticScore = String(formData.value || "").trim() !== "" && (scoreVal > 10000 || scoreVal <= 0 || isNaN(scoreVal));
             const hasEmptyWitness = formData.witnesses.length === 0 || formData.witnesses.some(w => !w.name || !w.name.trim());
             const suspiciousKeywords = ['fake', 'cheat', 'test', 'hack', 'bypass'];
             const hasSuspiciousText = suspiciousKeywords.some(kw =>
@@ -767,9 +758,16 @@ const ChallengeVerify = () => {
                                 required
                                 style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                               />
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                                <input type="date" max={new Date().toISOString().split('T')[0]} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", fontSize: "12px", colorScheme: "dark" }} />
-                                <input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} required style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", fontSize: "12px", colorScheme: "dark" }} />
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
+                                {/* Labelled, visible date & time pickers (they used to look like empty black boxes on tablets) */}
+                                <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "10px", fontWeight: 900, letterSpacing: "1px", color: "#FF8A3D", textTransform: "uppercase" }}>
+                                  Attempt date
+                                  <input type="date" max={new Date().toISOString().split('T')[0]} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required aria-label="Attempt date" style={{ width: "100%", minHeight: "48px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255, 106, 0, 0.35)", borderRadius: "12px", padding: "12px 14px", color: "white", outline: "none", fontSize: "14px", colorScheme: "dark" }} />
+                                </label>
+                                <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "10px", fontWeight: 900, letterSpacing: "1px", color: "#FF8A3D", textTransform: "uppercase" }}>
+                                  Attempt time
+                                  <input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} required aria-label="Attempt time" style={{ width: "100%", minHeight: "48px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255, 106, 0, 0.35)", borderRadius: "12px", padding: "12px 14px", color: "white", outline: "none", fontSize: "14px", colorScheme: "dark" }} />
+                                </label>
                               </div>
                             </div>
                           </div>
@@ -1373,27 +1371,29 @@ const ChallengeVerify = () => {
                              <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", lineHeight: "1.6", marginBottom: "24px" }}>
                                {auditOutcome === "incomplete"
                                  ? "Mandatory fields or uncut evidence file are missing. Please step back and complete all required inputs."
-                                 : "Biometric validation check complete. Reconcile diagnostic reports to proceed to final ledger submission."}
+                                 : auditOutcome === "failed"
+                                   ? "The automatic check flagged this attempt. You can still submit it: an AMPEX adjudicator will review your video by hand before anything is approved."
+                                   : "Automatic check complete. Continue to review and submit your attempt."}
                              </p>
                              <button
                                onClick={nextStep}
-                               disabled={auditState !== "complete" || auditOutcome !== "passed"}
+                               disabled={auditState !== "complete" || auditOutcome === "incomplete"}
                                style={{
                                  width: "100%",
-                                 background: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.1)" : "#FF6A00",
-                                 color: (auditState !== "complete" || auditOutcome !== "passed") ? "rgba(255,255,255,0.4)" : "white",
+                                 background: (auditState !== "complete" || auditOutcome === "incomplete") ? "rgba(255,255,255,0.1)" : "#FF6A00",
+                                 color: (auditState !== "complete" || auditOutcome === "incomplete") ? "rgba(255,255,255,0.4)" : "white",
                                  border: "none",
                                  borderRadius: "100px",
                                  padding: "20px",
                                  fontSize: "14px",
                                  fontWeight: "900",
                                  textTransform: "uppercase",
-                                 cursor: (auditState !== "complete" || auditOutcome !== "passed") ? "not-allowed" : "pointer",
+                                 cursor: (auditState !== "complete" || auditOutcome === "incomplete") ? "not-allowed" : "pointer",
                                  display: "flex",
                                  alignItems: "center",
                                  justifyContent: "center",
                                  gap: "12px",
-                                 boxShadow: (auditState !== "complete" || auditOutcome !== "passed") ? "none" : "0 20px 40px rgba(255,106,0,0.2)",
+                                 boxShadow: (auditState !== "complete" || auditOutcome === "incomplete") ? "none" : "0 20px 40px rgba(255,106,0,0.2)",
                                  transition: "all 0.3s"
                                }}
                              >
@@ -1528,7 +1528,7 @@ const ChallengeVerify = () => {
                       <div style={{ textAlign: "center", marginBottom: "80px" }}>
                         <div style={{ color: "white", fontSize: "24px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "40px" }}>POST-SUBMISSION PREVIEW</div>
                         <div style={{
-                          backgroundImage: heroImage ? `linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('${heroImage}')` : "linear-gradient(135deg, rgba(255,106,0,0.12), #0d0d0d)",
+                          backgroundImage: (videoThumbnailFor(formData.youtubeLink) || recordImage) ? `linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('${videoThumbnailFor(formData.youtubeLink) || recordImage}')` : "linear-gradient(135deg, rgba(255,106,0,0.12), #0d0d0d)",
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                           borderRadius: "40px",

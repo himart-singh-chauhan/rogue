@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { evaluateCoupon } = require('./couponController');
+const rewards = require('../utils/rewards');
 
 // @desc    Get all products
 // @route   GET /api/shop
@@ -113,8 +114,12 @@ const checkout = async (req, res) => {
       if (isUUID(item.id) && !product) {
         return res.status(400).json({ message: `Product no longer available: ${item.title || item.name || item.id}` });
       }
-      // Non-catalogue lines keep their client price (legacy passes only).
-      const unitPrice = product ? money(product.price) : money(Math.max(0, parseFloat(item.price) || 0));
+      // Catalogue price, or the price set for the chosen size. Non-catalogue lines keep their client price (legacy passes only).
+      const sizeRow = product && item.size && Array.isArray(product.sizes)
+        ? product.sizes.find((sz) => String(sz.size || '').toLowerCase() === String(item.size).toLowerCase())
+        : null;
+      const sizePrice = sizeRow && Number(sizeRow.price) > 0 ? Number(sizeRow.price) : null;
+      const unitPrice = product ? money(sizePrice ?? product.price) : money(Math.max(0, parseFloat(item.price) || 0));
       lines.push({ item, product, qty, unitPrice });
     }
 
@@ -142,7 +147,29 @@ const checkout = async (req, res) => {
       }
       discountAmount = money(Math.min(Math.max(verdict.data.discountAmount || 0, 0), subtotal));
     }
-    const total = money(subtotal - discountAmount);
+
+    // Rewards level discount (Bronze 5% … Ambassador 40%) for logged-in members, on eligible items.
+    // Without coupon stacking (the default) the member gets whichever discount is bigger.
+    let rewardDiscount = 0;
+    let rewardLevel = null;
+    let rewardNote = null;
+    if (req.user) {
+      const quoteLines = lines.map((l) => ({ productId: l.product?.id || null, category: l.product?.category || (l.event ? 'Tickets' : ''), isTicket: !!l.event, unitPrice: l.unitPrice, qty: l.qty }));
+      const rq = await rewards.quoteDiscount(req.user.id, quoteLines);
+      if (rq.amount > 0) {
+        if (rq.settings.allowCouponStacking || discountAmount === 0) {
+          rewardDiscount = money(Math.min(rq.amount, subtotal - discountAmount));
+        } else if (rq.amount > discountAmount) {
+          rewardDiscount = rq.amount;
+          rewardNote = `Your ${rq.level} discount is bigger than the coupon, so it was used instead.`;
+          discountAmount = 0; // coupon not used (and not counted)
+        } else {
+          rewardNote = `The coupon is bigger than your ${rq.level} discount, so the coupon was used.`;
+        }
+        if (rewardDiscount > 0) rewardLevel = rq.level;
+      }
+    }
+    const total = money(subtotal - discountAmount - rewardDiscount);
 
     // Claim belt approvals first, so two checkouts at the same moment can't both use one approval.
     const pendingAuths = Object.values(approvals).filter((a) => a.status === 'approved');
@@ -176,6 +203,8 @@ const checkout = async (req, res) => {
         discount: discountAmount,
         discount_amount: discountAmount,
         coupon_code: discountAmount > 0 ? code : null,
+        reward_discount: rewardDiscount,
+        reward_level: rewardLevel,
         total,
         shipping_status: 'pending',
         payment_status: 'paid',
@@ -195,6 +224,8 @@ const checkout = async (req, res) => {
         quantity: qty,
         size: item.size || null,
         color: item.color || null,
+        // what the buyer typed in the product's comment box (e.g. the details for their certificate)
+        notes: item.notes ? String(item.notes).trim().slice(0, 2000) || null : null,
       }))
     );
     const undoOrder = async () => {
@@ -271,10 +302,14 @@ const checkout = async (req, res) => {
       if (stockError) console.error(`Stock update failed for ${product.id}:`, stockError.message);
     }
 
+    // Purchase reward points (the order is marked paid above; with Stripe this moves to the payment webhook)
+    await rewards.syncOrderRewards(order.id);
+
     res.status(201).json({
       message: 'Order placed successfully!',
       orderId: order.id,
       order,
+      breakdown: { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, total, note: rewardNote },
     });
   } catch (error) {
     console.error('Checkout error:', error);

@@ -4,6 +4,7 @@ import { ReactLenis } from 'lenis/react'
 import Home from './pages/Home'
 import LoadingScreen from './components/LoadingScreen'
 import ScrollToTop from './components/ScrollToTop'
+import FloatingBack from './components/FloatingBack'
 import ProtectedRoute from './components/ProtectedRoute'
 import { API_URL } from './utils/api'
 import './App.css'
@@ -63,6 +64,14 @@ const applySeo = () => {
 }
 if (typeof window !== 'undefined') applySeo()
 
+// Rewards program: remember a referral link (?ref=CODE) until the visitor signs up on this device
+if (typeof window !== 'undefined') {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    if (ref && /^[A-Za-z0-9]{4,20}$/.test(ref)) localStorage.setItem('ampex_ref', ref.toUpperCase())
+  } catch { /* storage blocked: the link still works if they sign up straight away */ }
+}
+
 function App() {
   const [loading, setLoading] = useState(true)
 
@@ -76,6 +85,7 @@ function App() {
       <ReactLenis root>
         <BrowserRouter>
           <ScrollToTop />
+          <FloatingBack />
           <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000' }} />}>
           <Routes>
             <Route path="/" element={<Home />} />

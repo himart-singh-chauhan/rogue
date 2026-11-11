@@ -131,6 +131,7 @@ const ProductDetail = () => {
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [added, setAdded] = useState(false);
+  const [orderNotes, setOrderNotes] = useState("");
 
   // Championship belts etc.: per-competitor approval
   const { user } = useAuth();
@@ -215,7 +216,8 @@ const ProductDetail = () => {
       img: product.img,
       qty: quantity,
       size: selectedSize,
-      color: selectedColor
+      color: selectedColor,
+      notes: orderNotes.trim()
     };
 
     let currentCart = [];
@@ -229,7 +231,7 @@ const ProductDetail = () => {
     }
 
     const existingIndex = currentCart.findIndex(
-      item => item.id === product.id && item.size === selectedSize && item.color === selectedColor
+      item => item.id === product.id && item.size === selectedSize && item.color === selectedColor && (item.notes || "") === orderNotes.trim()
     );
 
     if (existingIndex > -1) {
@@ -283,8 +285,17 @@ const ProductDetail = () => {
 
             {/* LEFT COLUMN: IMAGE DISPLAY */}
             {/* LEFT COLUMN: IMAGE DISPLAY (CAROUSEL) */}
-            <div>
-              <div style={{ background: "#161616", borderRadius: "32px", border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden", position: "relative", boxShadow: "0 40px 80px rgba(0,0,0,0.6)" }}>
+            <div className={`pd-gallery${allImages.length > 1 ? " has-thumbs" : ""}`}>
+              <style>{`
+                .pd-gallery.has-thumbs { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; align-items: start; }
+                .pd-gallery .pd-thumbs { display: flex; flex-direction: column; gap: 12px; grid-row: 1; grid-column: 1; max-height: min(550px, 90vw); overflow-y: auto; }
+                .pd-gallery .pd-main { grid-row: 1; grid-column: 2; min-width: 0; }
+                @media (max-width: 900px) {
+                  .pd-gallery.has-thumbs { display: flex; flex-direction: column; }
+                  .pd-gallery .pd-thumbs { flex-direction: row; order: 2; overflow-x: auto; overflow-y: hidden; max-height: none; }
+                }
+              `}</style>
+              <div className="pd-main" style={{ background: "#161616", borderRadius: "32px", border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden", position: "relative", boxShadow: "0 40px 80px rgba(0,0,0,0.6)" }}>
                 <img loading="lazy" decoding="async" src={allImages[currentImageIndex] || product.img} alt={product.title} style={{ width: "100%", height: "min(550px, 90vw)", objectFit: "contain", objectPosition: "center", background: "#0d0d0d", padding: "16px", boxSizing: "border-box", transition: "opacity 0.3s ease-in-out" }} />
                 <div style={{ position: "absolute", top: "24px", right: "24px", background: "#FF6A00", color: "white", padding: "6px 16px", borderRadius: "100px", fontSize: "10px", fontWeight: "900", letterSpacing: "0.05em", zIndex: 10 }}>
                   {product.badge}
@@ -307,13 +318,14 @@ const ProductDetail = () => {
                 )}
               </div>
 
-              {/* Thumbnail Gallery Row */}
+              {/* Side pictures: a column beside the main picture (a row under it on phones) */}
               {allImages.length > 1 && (
-                <div style={{ display: "flex", gap: "12px", marginTop: "16px", overflowX: "auto", paddingBottom: "8px" }} className="custom-scrollbar">
+                <div className="pd-thumbs custom-scrollbar" role="tablist" aria-label="Product pictures">
                   {allImages.map((imgUrl, idx) => (
-                    <div key={idx} onClick={() => setCurrentImageIndex(idx)} style={{ width: "80px", height: "80px", borderRadius: "12px", border: currentImageIndex === idx ? "2px solid #FF6A00" : "2px solid transparent", overflow: "hidden", cursor: "pointer", flexShrink: 0, opacity: currentImageIndex === idx ? 1 : 0.6, transition: "all 0.2s" }}>
-                      <img loading="lazy" decoding="async" src={imgUrl} alt="thumbnail" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#0d0d0d" }} />
-                    </div>
+                    <button type="button" key={idx} onClick={() => setCurrentImageIndex(idx)} aria-label={`Picture ${idx + 1}`} aria-selected={currentImageIndex === idx}
+                      style={{ width: "88px", height: "88px", padding: 0, borderRadius: "12px", border: currentImageIndex === idx ? "2px solid #FF6A00" : "2px solid rgba(255,255,255,0.06)", overflow: "hidden", cursor: "pointer", flexShrink: 0, opacity: currentImageIndex === idx ? 1 : 0.65, transition: "all 0.2s", background: "#0d0d0d" }}>
+                      <img loading="lazy" decoding="async" src={imgUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#0d0d0d", display: "block" }} />
+                    </button>
                   ))}
                 </div>
               )}
@@ -500,6 +512,24 @@ const ProductDetail = () => {
                     )}
                   </div>
                 )}
+
+                {/* ORDER COMMENT BOX: e.g. the name, record and date to print on an ordered certificate */}
+                <div style={{ marginBottom: "24px" }}>
+                  <label htmlFor="order-notes" style={{ display: "block", fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px" }}>
+                    Comments for this item (optional)
+                  </label>
+                  <textarea
+                    id="order-notes"
+                    value={orderNotes}
+                    onChange={(e) => setOrderNotes(e.target.value.slice(0, 2000))}
+                    rows={4}
+                    placeholder={/certificate|plaque|award|medal|trophy|belt/i.test(`${product.title} ${product.category}`)
+                      ? "Tell us what to put on it: full name, record title, result, date achieved, certificate number…"
+                      : "Anything we should know about this item (size notes, personalisation, delivery)…"}
+                    style={{ width: "100%", background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "14px 16px", color: "white", fontSize: "14px", lineHeight: 1.5, fontFamily: "inherit", resize: "vertical", outline: "none" }}
+                  />
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)", marginTop: "6px", textAlign: "right" }}>{orderNotes.length}/2000</div>
+                </div>
 
                 {/* ADD TO CART ACTION BUTTON */}
                 <button

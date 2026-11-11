@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Share2, MapPin, Award, Medal, Shield, Activity, TrendingUp, HelpCircle, FileText, CheckCircle2, Search, X, UserX, AlertTriangle, Home, Trophy, Globe } from 'lucide-react';
 import { apiCall, formatProductImage } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
+import { downloadAwardCertificatePdf } from '../utils/certificatePdf';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
 
@@ -16,6 +18,9 @@ export default function MemberProfilePage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [copied, setCopied] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState(null);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState('');
+  const { user } = useAuth();
 
   const handleShare = async () => {
     try {
@@ -36,7 +41,7 @@ export default function MemberProfilePage() {
       try {
         setLoading(true);
 
-        const data = await apiCall(`/auth/profile/${username}`, 'GET');
+        const data = await apiCall(`/auth/profile/${username}`, 'GET', null, user?.token);
 
         if (data && data.profile) {
           const userObj = data.profile;
@@ -57,7 +62,8 @@ export default function MemberProfilePage() {
               top_10_placements: data.ranking.top_10_placements || 0,
               medals_earned: data.ranking.medals_earned || 0,
               certificates_earned: data.ranking.certificates_earned || 0,
-              vip: data.ranking.vip || null
+              vip: data.ranking.vip || null,
+              rewards: data.ranking.rewards || null
             });
           }
 
@@ -78,7 +84,7 @@ export default function MemberProfilePage() {
     };
 
     if (username) fetchProfile();
-  }, [username]);
+  }, [username, user?.token]);
 
   if (loading) {
     return (
@@ -161,6 +167,9 @@ export default function MemberProfilePage() {
                   <span style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', color: '#111', padding: '3px 10px', borderRadius: '100px', fontSize: '11px', letterSpacing: '0.5px' }}>
                     {ranking.vip.status === 'legend' ? 'VIP Legend' : ranking.vip.status === 'elite' ? 'VIP Elite' : 'VIP'}
                   </span>
+                )}
+                {ranking?.rewards?.isAmbassador && (
+                  <span style={{ background: 'linear-gradient(135deg, #FF6A00, #ff9a3c)', color: 'white', padding: '3px 10px', borderRadius: '100px', fontSize: '11px', letterSpacing: '0.5px' }}>🎖️ AMPEX Ambassador</span>
                 )}
                 {ranking?.vip?.verified && (
                   <span style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.4)', padding: '2px 10px', borderRadius: '100px', fontSize: '11px' }}>✓ Verified</span>
@@ -298,11 +307,11 @@ export default function MemberProfilePage() {
               </div>
               <div>
                 <div style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>EMAIL ADDRESS</div>
-                <div style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>{profile.email}</div>
+                <div style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>{profile.private_visible ? (profile.email || 'Not Specified') : 'Private'}</div>
               </div>
               <div>
                 <div style={{ color: '#555', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', marginBottom: '4px' }}>PHONE NUMBER</div>
-                <div style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>{profile.phone || 'Not Specified'}</div>
+                <div style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>{profile.private_visible ? (profile.phone || 'Not Specified') : 'Private'}</div>
               </div>
             </div>
 
@@ -348,11 +357,12 @@ export default function MemberProfilePage() {
         {activeTab === 'achievements' && (() => {
           const achievementsList = [
             { id: 'grand_champion', icon: '👑', label: 'Grand Champion', earned: ranking?.tier_badge === 'Grand Champion', desc: 'The highest echelon of athletic excellence in the AMPEX Network. Awarded only to elite athletes exceeding 5000 verified power points. True legends of the sport.', color: '#FF5500' },
-            { id: 'elite_master', icon: '⭐', label: 'Elite Master', earned: ['Grand Champion', 'Elite Master'].includes(ranking?.tier_badge), desc: 'A seasoned world record holder with exceptional athletic performance and over 2500 power points. Highly respected in the community.', color: '#a200ff' },
+            { id: 'elite_master', icon: '⭐', label: 'Elite Master', earned: ['Grand Champion', 'Elite Master'].includes(ranking?.tier_badge), desc: 'A seasoned world record holder with exceptional athletic performance and over 2,000 power points. Highly respected in the community.', color: '#a200ff' },
             { id: 'pro_competitor', icon: '🏆', label: 'Pro Competitor', earned: true, desc: 'An official AMPEX Network competitor who has successfully registered their athletic profile and is actively competing on the global stage.', color: '#3b82f6' },
             { id: 'first_place', icon: '🥇', label: 'First Place', earned: (ranking?.first_place_categories || 0) > 0, desc: `Currently holding First Place globally in ${ranking?.first_place_categories || 0} category(s). This athlete is an absolute pioneer pushing human limits!`, color: '#FFD700' },
             { id: 'top_10', icon: '🥈', label: 'Top 10 Rank', earned: (ranking?.top_10_placements || 0) > 0, desc: `Ranked in the Global Top 10 for ${ranking?.top_10_placements || 0} category(s). A testament to elite competitive capability.`, color: '#cbd5e1' },
-            { id: 'certified', icon: '📜', label: 'AMPEX Certified', earned: (ranking?.certificates_earned || 0) > 0, desc: `Successfully earned ${ranking?.certificates_earned || 0} Official AMPEX Certificates for verified, record-breaking performances.`, color: '#4ade80' }
+            { id: 'certified', icon: '📜', label: 'AMPEX Certified', earned: (ranking?.certificates_earned || 0) > 0, desc: `Successfully earned ${ranking?.certificates_earned || 0} Official AMPEX Certificates for verified, record-breaking performances.`, color: '#4ade80' },
+            { id: 'ambassador', icon: '🎖️', label: 'AMPEX Ambassador', earned: !!ranking?.rewards?.isAmbassador, desc: 'Reached the top level of the AMPEX Rewards program by inviting members and supporting AMPEX World Records.', color: '#FF6A00' }
           ];
 
           return (
@@ -606,6 +616,31 @@ export default function MemberProfilePage() {
             <div style={{ marginTop: '30px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', fontSize: '12px', color: '#666', border: '1px solid rgba(255,255,255,0.05)' }}>
               Acquired by <span style={{ color: '#fff', fontWeight: 'bold' }}>{profile.display_name}</span> • AMPEX Network
             </div>
+            {user && (String(user._id || user.id) === String(profile.id) || user.isAdmin || user.is_admin) && (
+              <>
+                <button
+                  type="button"
+                  disabled={printing}
+                  onClick={async () => {
+                    setPrinting(true); setPrintError('');
+                    try {
+                      await downloadAwardCertificatePdf({
+                        recipientName: profile.display_name,
+                        awardTitle: `${selectedAchievement.label} Award`,
+                        awardDetail: `${ranking?.tier_badge || 'AMPEX'} · ${ranking?.total_points || 0} points`,
+                        memberNumber: profile.member_number,
+                        badgeId: selectedAchievement.id,
+                      });
+                    } catch (err) { setPrintError(err.message || 'Could not create the certificate.'); }
+                    finally { setPrinting(false); }
+                  }}
+                  style={{ marginTop: '16px', width: '100%', background: '#FF6A00', color: 'white', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: 900, fontSize: '13px', letterSpacing: '0.5px', cursor: printing ? 'wait' : 'pointer' }}
+                >
+                  {printing ? 'Preparing…' : '🖨️ Print award certificate (PDF)'}
+                </button>
+                {printError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px' }}>{printError}</div>}
+              </>
+            )}
           </div>
         </div>
       )}

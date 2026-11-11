@@ -24,6 +24,8 @@ import AdminCommunications from "../components/admin/AdminCommunications";
 import AdminProductAuthorizations from "../components/admin/AdminProductAuthorizations";
 import AdminCertificates from "../components/admin/AdminCertificates";
 import ImageUploadField from "../components/admin/ImageUploadField";
+import AdminMemberProfile from "../components/admin/AdminMemberProfile";
+import AdminRewards from "../components/admin/AdminRewards";
 import { Modal as AdminModal } from "../components/admin/adminUi";
 import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
 
@@ -267,7 +269,7 @@ const Admin = () => {
   const [recordThumbFile, setRecordThumbFile] = useState(null);
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
   const [eventForm, setEventForm] = useState({ title: "", description: "", date: "", location: "", imageUrl: "", isPaid: false, ticketPrice: 0 });
-  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false, imageFile: null, imagePreview: "" });
+  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false, imageFile: null, imagePreview: "" });
   const [adminProductDragActive, setAdminProductDragActive] = useState(false);
   const adminProductFileInputRef = React.useRef(null);
 
@@ -1149,7 +1151,7 @@ const Admin = () => {
           requiresAuthorization: !!item.requires_authorization
         });
       } else {
-        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "Accessories", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false });
+        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false });
       }
     } else if (activeTab === "coupons") {
       if (type === "edit" && item) {
@@ -3740,6 +3742,9 @@ const Admin = () => {
                                           {item.size}
                                         </span>
                                       )}
+                                      {item.notes && (
+                                        <div style={{ color: "#fbbf24", fontSize: "12px", marginTop: "4px", whiteSpace: "pre-wrap", maxWidth: "520px" }}>💬 {item.notes}</div>
+                                      )}
                                       {item.color && (
                                         <span style={{ background: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "9px", fontWeight: "900", padding: "2px 6px", borderRadius: "4px", marginLeft: "4px" }}>
                                           {item.color}
@@ -3909,6 +3914,7 @@ const Admin = () => {
                                           {item.size && <span style={{ marginRight: "8px" }}>Size: {item.size}</span>}
                                           {item.color && <span>Color: {item.color}</span>}
                                           {item.product_id && <span style={{ display: "block", fontSize: "10px", marginTop: "2px" }}>ID: {item.product_id}</span>}
+                                          {item.notes && <span style={{ display: "block", color: "#fbbf24", fontSize: "12px", marginTop: "6px", whiteSpace: "pre-wrap" }}>💬 Customer comments: {item.notes}</span>}
                                         </div>
                                       </div>
                                     </td>
@@ -6706,7 +6712,7 @@ const Admin = () => {
               try {
                 const fd = new FormData();
                 Object.entries(sponsorForm).forEach(([k, v]) => {
-                  if (k === "_bannerFile" || k === "_logoFile") return;
+                  if (k === "_bannerFile" || k === "_logoFile" || k === "_videoUploading") return;
                   if (v !== null && v !== undefined) fd.append(
                     k === "company_name" ? "companyName" :
                     k === "link_url" ? "linkUrl" :
@@ -6715,7 +6721,8 @@ const Admin = () => {
                     k === "start_date" ? "startDate" :
                     k === "end_date" ? "endDate" :
                     k === "image_fit" ? "imageFit" :
-                    k === "image_position" ? "imagePosition" : k,
+                    k === "image_position" ? "imagePosition" :
+                    k === "video_url" ? "videoUrl" : k,
                     v
                   );
                 });
@@ -6853,6 +6860,7 @@ const Admin = () => {
                           return (
                             <div style={{ fontSize: "11px", color: "#888", marginTop: "6px", lineHeight: 1.5 }}>
                               Recommended: <strong style={{ color: "#FF5500" }}>{size.w} × {size.h} px</strong> ({(size.w / size.h).toFixed(1)}:1). {size.note}.
+                              {size.w === 1920 && <> On a computer the strip is about 1,200–1,400 px wide and up to 360 px tall; on phones it is the screen width. A banner with these proportions fills it exactly. A narrower banner is shown whole, with a blurred copy of it filling the sides. Adding a sponsor video puts the video beside the banner.</>}
                             </div>
                           );
                         })()}
@@ -6885,6 +6893,29 @@ const Admin = () => {
                           onChange={e => setSponsorForm(p => ({ ...p, _logoFile: e.target.files[0], logo_url: e.target.files[0] ? URL.createObjectURL(e.target.files[0]) : p.logo_url }))}
                           style={{ ...inputStyle, padding: "8px" }} />
                         {sponsorForm.logo_url && <img loading="lazy" decoding="async" src={sponsorForm.logo_url} alt="Logo Preview" style={{ marginTop: "8px", maxHeight: "50px", borderRadius: "6px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "6px" }} />}
+                      </div>
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <label style={labelStyle}>Sponsor video (optional)</label>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          <input type="url" value={sponsorForm.video_url || ""} onChange={e => setSponsorForm(p => ({ ...p, video_url: e.target.value }))} placeholder="Paste a YouTube / Vimeo link, or upload an MP4" style={{ ...inputStyle, flex: "1 1 260px" }} />
+                          <label style={{ ...inputStyle, flex: "0 0 auto", width: "auto", cursor: "pointer", textAlign: "center", fontWeight: 800 }}>
+                            {sponsorForm._videoUploading ? `Uploading ${sponsorForm._videoUploading}%` : "Upload MP4"}
+                            <input type="file" accept="video/mp4,video/webm,video/quicktime" style={{ display: "none" }} onChange={async (e) => {
+                              const file = e.target.files && e.target.files[0];
+                              if (!file) return;
+                              try {
+                                setSponsorForm(p => ({ ...p, _videoUploading: 0 }));
+                                const url = await uploadDirect(file, "admin-video", user.token, (pct) => setSponsorForm(p => ({ ...p, _videoUploading: pct })));
+                                setSponsorForm(p => ({ ...p, video_url: url, _videoUploading: null }));
+                              } catch (err) {
+                                setSponsorForm(p => ({ ...p, _videoUploading: null }));
+                                alert(err.message || "Video upload failed");
+                              } finally { e.target.value = ""; }
+                            }} />
+                          </label>
+                          {sponsorForm.video_url && <button type="button" onClick={() => setSponsorForm(p => ({ ...p, video_url: "" }))} style={{ ...inputStyle, width: "auto", color: "#ef4444", cursor: "pointer", fontWeight: 800 }}>Remove</button>}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#888", marginTop: "6px" }}>Plays muted on a loop beside the banner (below it on phones). MP4 up to 50 MB, or any YouTube / Vimeo link.</div>
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
                         <label style={labelStyle}>Description</label>
@@ -7084,6 +7115,8 @@ const Admin = () => {
 
 
           {/* ==================== 5M. VIP & RANKINGS (PHASE 4) ==================== */}
+          {activeTab === "rewards" && <AdminRewards />}
+
           {activeTab === "vip" && (
             <div>
               <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -8188,15 +8221,15 @@ const Admin = () => {
 
       {isModalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000, padding: "20px" }}>
-          <div style={{ background: "#0c0c0e", border: "1px solid rgba(255, 85, 0, 0.15)", width: "100%", maxWidth: "640px", maxHeight: "calc(100vh - 40px)", borderRadius: "28px", overflow: "hidden", display: "flex", flexDirection: "column", animation: "modalFadeIn 0.3s ease-out" }}>
+          <div style={{ background: "#0c0c0e", border: "1px solid rgba(255, 85, 0, 0.15)", width: "100%", maxWidth: modalType === "viewProfile" ? "1000px" : "640px", maxHeight: "calc(100vh - 40px)", borderRadius: "28px", overflow: "hidden", display: "flex", flexDirection: "column", animation: "modalFadeIn 0.3s ease-out" }}>
 
             {/* Modal Header */}
             <div style={{ padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <h3 style={{ fontSize: "18px", fontWeight: "950", margin: 0, textTransform: "uppercase", color: "white" }}>
-                  {modalType === "add" ? `ADD NEW ${activeTab.toUpperCase()}` : `EDIT ${activeTab.toUpperCase()} DETAILS`}
+                  {modalType === "viewProfile" ? "MEMBER PROFILE" : modalType === "add" ? `ADD NEW ${activeTab.toUpperCase()}` : `EDIT ${activeTab.toUpperCase()} DETAILS`}
                 </h3>
-                <span style={{ fontSize: "11px", color: "#555" }}>SECURE DIRECT DATABASE CRUD WRITER</span>
+                <span style={{ fontSize: "11px", color: "#555" }}>{modalType === "viewProfile" ? "Everything about this member, with message and email" : "Changes are saved to the live database"}</span>
               </div>
               <button onClick={() => setIsModalOpen(false)} style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer" }}><X size={20} /></button>
             </div>
@@ -8511,185 +8544,9 @@ const Admin = () => {
                   </>
                 )}
 
-                {/* 7. VIEW USER PROFILE */}
+                {/* 7. VIEW USER PROFILE: real data, message / email the member */}
                 {activeTab === "users" && modalType === "viewProfile" && modalTarget && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                    {/* Header: Profile Picture & Core Info */}
-                    <div style={{ display: "flex", gap: "20px", alignItems: "center", background: "rgba(255,255,255,0.02)", padding: "24px", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                      <img loading="lazy" decoding="async" src={modalTarget.profile_pic || `https://ui-avatars.com/api/?name=${modalTarget.name}&background=random&size=128`} alt={modalTarget.name} style={{ width: "96px", height: "96px", borderRadius: "50%", objectFit: "cover", border: "2px solid #FF5500" }} />
-                      <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: "24px", fontWeight: "950", margin: "0 0 4px 0", color: "white" }}>{modalTarget.name}</h2>
-                        <div style={{ color: "#888", fontSize: "14px", marginBottom: "8px" }}>{modalTarget.email} | {modalTarget.username || 'No Username'}</div>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          <span style={{ background: "rgba(255,85,0,0.1)", color: "#FF5500", padding: "4px 10px", borderRadius: "100px", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>
-                            {(modalTarget.role || 'athlete').replace('_', ' ')}
-                          </span>
-                          <span style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", padding: "4px 10px", borderRadius: "100px", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>
-                            {(modalTarget.membership_type || modalTarget.membershipType || 'free_athlete').replace('_', ' ')}
-                          </span>
-                          <span style={{ background: "rgba(255,255,255,0.05)", color: "#aaa", padding: "4px 10px", borderRadius: "100px", fontSize: "11px", fontWeight: "800", textTransform: "uppercase" }}>
-                            {(modalTarget.account_status || modalTarget.accountStatus || 'active').replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Navigation Tabs */}
-                    <div style={{ display: "flex", gap: "16px", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "12px", overflowX: "auto" }}>
-                      {['overview', 'activity', 'submissions', 'payments', 'ranking', 'challenges'].map(tab => (
-                        <button
-                          key={tab}
-                          onClick={(e) => { e.preventDefault(); setRecordsSubTab(tab); }}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: recordsSubTab === tab ? "#FF5500" : "#888",
-                            fontWeight: recordsSubTab === tab ? "900" : "700",
-                            fontSize: "13px",
-                            cursor: "pointer",
-                            textTransform: "uppercase",
-                            padding: "4px 8px",
-                            borderBottom: recordsSubTab === tab ? "2px solid #FF5500" : "2px solid transparent",
-                            whiteSpace: "nowrap"
-                          }}>
-                          {tab}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Tab Contents */}
-                    {recordsSubTab === "overview" && (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-                        <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px" }}>
-                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>MEMBER NUMBER</div>
-                          <div style={{ fontSize: "15px", color: "white", fontWeight: "600" }}>{modalTarget.member_number || modalTarget.memberNumber || "Pending"}</div>
-                        </div>
-                        <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px" }}>
-                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>PHONE NUMBER</div>
-                          <div style={{ fontSize: "15px", color: "white", fontWeight: "600" }}>{modalTarget.phone || "Not specified"}</div>
-                        </div>
-                        <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px" }}>
-                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>AGE GROUP / DOB</div>
-                          <div style={{ fontSize: "15px", color: "white", fontWeight: "600" }}>{modalTarget.dob ? new Date(modalTarget.dob).toLocaleDateString() : "Not specified"}</div>
-                        </div>
-                        <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px" }}>
-                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>GENDER</div>
-                          <div style={{ fontSize: "15px", color: "white", fontWeight: "600", textTransform: "capitalize" }}>{modalTarget.gender || "Not specified"}</div>
-                        </div>
-                        <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px" }}>
-                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>MEMBER SINCE</div>
-                          <div style={{ fontSize: "15px", color: "white", fontWeight: "600" }}>{new Date(modalTarget.created_at || new Date()).toLocaleDateString()}</div>
-                        </div>
-                        <div style={{ background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "12px", gridColumn: "span 3" }}>
-                          <div style={{ fontSize: "11px", color: "#666", fontWeight: "800", marginBottom: "4px" }}>FULL ADDRESS</div>
-                          <div style={{ fontSize: "15px", color: "white", fontWeight: "600" }}>
-                            {[modalTarget.street_address, modalTarget.apartment, modalTarget.city, modalTarget.state, modalTarget.country, modalTarget.zip_code].filter(Boolean).join(', ') || "Not specified"}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {recordsSubTab === "activity" && (
-                      <div style={{ background: "rgba(255,255,255,0.02)", padding: "20px", borderRadius: "12px" }}>
-                        <h4 style={{ fontSize: "14px", fontWeight: "800", color: "white", margin: "0 0 16px 0" }}>Recent Activity Log</h4>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "12px" }}>
-                            <div>
-                              <div style={{ color: "white", fontSize: "13px", fontWeight: "700" }}>Logged In</div>
-                              <div style={{ color: "#666", fontSize: "11px" }}>IP: 192.168.1.1</div>
-                            </div>
-                            <div style={{ color: "#888", fontSize: "12px" }}>Today, 10:42 AM</div>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "12px" }}>
-                            <div>
-                              <div style={{ color: "white", fontSize: "13px", fontWeight: "700" }}>Updated Profile Picture</div>
-                              <div style={{ color: "#666", fontSize: "11px" }}>Settings</div>
-                            </div>
-                            <div style={{ color: "#888", fontSize: "12px" }}>Yesterday, 4:15 PM</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {recordsSubTab === "submissions" && (
-                      <div style={{ background: "rgba(255,255,255,0.02)", padding: "20px", borderRadius: "12px" }}>
-                        <h4 style={{ fontSize: "14px", fontWeight: "800", color: "white", margin: "0 0 16px 0" }}>Record Submission History</h4>
-                        {(() => {
-                          const userRecords = records.filter(r => r.user_id === userActionModal.userId || r.userId === userActionModal.userId || (r.user && r.user.id === userActionModal.userId));
-                          if (userRecords.length === 0) {
-                            return (
-                              <div style={{ textAlign: "center", padding: "40px 0", color: "#666", fontSize: "13px" }}>
-                                No submissions found for this user.
-                              </div>
-                            );
-                          }
-                          return (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "300px", overflowY: "auto" }}>
-                              {userRecords.map(r => (
-                                <div key={r.id} style={{ background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                  <div>
-                                    <div style={{ color: "white", fontSize: "14px", fontWeight: "800", marginBottom: "4px" }}>{r.title || r.category || 'Untitled Record'}</div>
-                                    <div style={{ color: "#888", fontSize: "12px" }}>{r.category} • {r.value} {r.unit}</div>
-                                  </div>
-                                  <div>
-                                    <span style={{
-                                      background: r.status === 'verified' || r.status === 'approved' ? "rgba(34,197,94,0.1)" : r.status === 'rejected' || r.status === 'denied' ? "rgba(239,68,68,0.1)" : "rgba(255,204,0,0.1)",
-                                      color: r.status === 'verified' || r.status === 'approved' ? "#22c55e" : r.status === 'rejected' || r.status === 'denied' ? "#ef4444" : "#ffcc00",
-                                      padding: "4px 8px",
-                                      borderRadius: "100px",
-                                      fontSize: "10px",
-                                      fontWeight: "bold",
-                                      textTransform: "uppercase"
-                                    }}>
-                                      {r.status || 'pending'}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    {recordsSubTab === "payments" && (
-                      <div style={{ background: "rgba(255,255,255,0.02)", padding: "20px", borderRadius: "12px" }}>
-                        <h4 style={{ fontSize: "14px", fontWeight: "800", color: "white", margin: "0 0 16px 0" }}>Payment History</h4>
-                        <div style={{ textAlign: "center", padding: "40px 0", color: "#666", fontSize: "13px" }}>
-                          No payment transactions found for this user.
-                        </div>
-                      </div>
-                    )}
-
-                    {recordsSubTab === "ranking" && (
-                      <div style={{ background: "rgba(255,255,255,0.02)", padding: "20px", borderRadius: "12px" }}>
-                        <h4 style={{ fontSize: "14px", fontWeight: "800", color: "white", margin: "0 0 16px 0" }}>Ranking Information</h4>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "20px" }}>
-                          <div style={{ background: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(255,215,0,0.3)", textAlign: "center" }}>
-                            <div style={{ fontSize: "11px", color: "#FFD700", fontWeight: "900" }}>GLOBAL RANK</div>
-                            <div style={{ fontSize: "24px", color: "white", fontWeight: "950" }}>#---</div>
-                          </div>
-                          <div style={{ background: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", textAlign: "center" }}>
-                            <div style={{ fontSize: "11px", color: "#888", fontWeight: "900" }}>CATEGORY RANK</div>
-                            <div style={{ fontSize: "24px", color: "white", fontWeight: "950" }}>#---</div>
-                          </div>
-                          <div style={{ background: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", textAlign: "center" }}>
-                            <div style={{ fontSize: "11px", color: "#888", fontWeight: "900" }}>TOTAL POINTS</div>
-                            <div style={{ fontSize: "24px", color: "white", fontWeight: "950" }}>0</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {recordsSubTab === "challenges" && (
-                      <div style={{ background: "rgba(255,255,255,0.02)", padding: "20px", borderRadius: "12px" }}>
-                        <h4 style={{ fontSize: "14px", fontWeight: "800", color: "white", margin: "0 0 16px 0" }}>Challenge Participation</h4>
-                        <div style={{ textAlign: "center", padding: "40px 0", color: "#666", fontSize: "13px" }}>
-                          User hasn't participated in any challenges yet.
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <AdminMemberProfile userId={modalTarget.id || modalTarget._id} />
                 )}
 
                 {activeTab === "adjudicators" && modalType === "viewAdjudicatorProfile" && modalTarget && (
@@ -8934,7 +8791,8 @@ const Admin = () => {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>CATALOG CATEGORY</label>
-                        <select value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value, requiresAuthorization: AUTHORIZATION_CATEGORIES.includes(e.target.value) ? true : productForm.requiresAuthorization })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }}>
+                        <select required value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value, requiresAuthorization: AUTHORIZATION_CATEGORIES.includes(e.target.value) ? true : productForm.requiresAuthorization })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: productForm.category ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(255,106,0,0.6)", borderRadius: "8px", padding: "10px 14px", color: "white" }}>
+                          <option value="" disabled>Choose the shop section…</option>
                           {[...new Set([...SHOP_CATEGORIES, productForm.category].filter(Boolean))].map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", color: "#bbb", fontSize: "12px", cursor: "pointer" }}>
@@ -8944,7 +8802,7 @@ const Admin = () => {
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>STOCK INVENTORY COUNT</label>
-                        <input type="number" value={productForm.stockCount} onChange={(e) => setProductForm({ ...productForm, stockCount: e.target.value })} required style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                        <input type="number" min="0" inputMode="numeric" placeholder="0" value={productForm.stockCount} onChange={(e) => setProductForm({ ...productForm, stockCount: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
                       </div>
                     </div>
                     <div>
@@ -9090,14 +8948,11 @@ const Admin = () => {
                         <p style={{ fontSize: "11px", color: "#666", margin: 0, fontStyle: "italic" }}>No sizes configured. Default price and inventory count will be used.</p>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.2fr auto", gap: "6px", paddingBottom: "4px" }}>
-                            {["SIZE / OPTION", "PRICE ($)", "STOCK", "SKU (opt.)", ""].map((h, i) => (
-                              <span key={i} style={{ fontSize: "8px", fontWeight: "900", color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</span>
-                            ))}
-                          </div>
+                          <style>{`.size-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) auto; gap: 8px; align-items: end; } .size-row label { display: flex; flex-direction: column; gap: 4px; font-size: 9px; font-weight: 900; color: #777; text-transform: uppercase; letter-spacing: 0.05em; min-width: 0; } @media (max-width: 760px) { .size-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .size-row .size-remove { grid-column: 1 / -1; } }`}</style>
                           {productForm.sizes.map((sz, idx) => (
-                            <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.2fr auto", gap: "6px", alignItems: "center" }}>
-                              <input
+                            <div key={idx} className="size-row" style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "10px", padding: "10px" }}>
+                              <label>Size / option
+<input
                                 type="text"
                                 placeholder="Size (e.g. S, M, 11x14)"
                                 value={sz.size}
@@ -9107,9 +8962,11 @@ const Admin = () => {
                                   setProductForm({ ...productForm, sizes: updated });
                                 }}
                                 required
-                                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px 10px", color: "white", fontSize: "12px" }}
+                                style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "10px", color: "white", fontSize: "13px" }}
                               />
-                              <input
+                              </label>
+                              <label>Price ($)
+<input
                                 type="number"
                                 step="0.01"
                                 placeholder="Price ($)"
@@ -9120,21 +8977,26 @@ const Admin = () => {
                                   setProductForm({ ...productForm, sizes: updated });
                                 }}
                                 required
-                                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px 10px", color: "white", fontSize: "12px" }}
+                                style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "10px", color: "white", fontSize: "13px" }}
                               />
-                              <input
+                              </label>
+                              <label>Stock
+<input
                                 type="number"
-                                placeholder="Stock"
+                                placeholder="0"
+                                min="0"
+                                inputMode="numeric"
                                 value={sz.stock}
                                 onChange={(e) => {
                                   const updated = [...productForm.sizes];
                                   updated[idx].stock = e.target.value;
                                   setProductForm({ ...productForm, sizes: updated });
                                 }}
-                                required
-                                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "6px", padding: "8px 10px", color: "white", fontSize: "12px" }}
+                                style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "10px", color: "white", fontSize: "13px" }}
                               />
-                              <input
+                              </label>
+                              <label>SKU (optional)
+<input
                                 type="text"
                                 placeholder="SKU (optional)"
                                 value={sz.sku || ""}
@@ -9143,17 +9005,20 @@ const Admin = () => {
                                   updated[idx].sku = e.target.value;
                                   setProductForm({ ...productForm, sizes: updated });
                                 }}
-                                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "6px", padding: "8px 10px", color: "rgba(255,255,255,0.6)", fontSize: "11px" }}
+                                style={{ width: "100%", minWidth: 0, boxSizing: "border-box", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "10px", color: "white", fontSize: "13px" }}
                               />
+                              </label>
                               <button
                                 type="button"
                                 onClick={() => {
                                   const updated = (productForm.sizes || []).filter((_, i) => i !== idx);
                                   setProductForm({ ...productForm, sizes: updated });
                                 }}
-                                style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: "16px", cursor: "pointer", fontWeight: "bold", padding: "4px" }}
+                                className="size-remove"
+                              aria-label={`Remove size ${sz.size || idx + 1}`}
+                              style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)", color: "#ef4444", fontSize: "12px", cursor: "pointer", fontWeight: 900, padding: "10px 12px", borderRadius: "8px", whiteSpace: "nowrap" }}
                               >
-                                ✕
+                                🗑 Remove
                               </button>
                             </div>
                           ))}
@@ -9161,18 +9026,27 @@ const Admin = () => {
                       )}
                     </div>
 
-                    {/* Extra Images URL text area */}
+                    {/* Side pictures: up to 4 extra photos shown beside the main picture on the product page */}
                     <div style={{ marginTop: "12px" }}>
-                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>EXTRA IMAGES (one URL per line)</label>
-                      <textarea
-                        value={Array.isArray(productForm.imageUrls) ? productForm.imageUrls.filter(Boolean).join("\n") : ""}
-                        onChange={(e) => {
-                          const urls = e.target.value.split("\n");
-                          setProductForm({ ...productForm, imageUrls: urls });
-                        }}
-                        placeholder="https://example.com/image2.jpg&#13;https://example.com/image3.jpg"
-                        style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white", minHeight: "60px", fontSize: "12px", fontFamily: "inherit" }}
-                      />
+                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>SIDE PICTURES (UP TO 4)</label>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "10px" }}>
+                        {[0, 1, 2, 3].map((slot) => {
+                          const list = Array.isArray(productForm.imageUrls) ? productForm.imageUrls.filter(Boolean) : [];
+                          return (
+                            <ImageUploadField
+                              key={slot}
+                              label={`Side picture ${slot + 1}`}
+                              value={list[slot] || ""}
+                              previewHeight={90}
+                              onChange={(url) => {
+                                const next = [...list];
+                                if (url) next[slot] = url; else next.splice(slot, 1);
+                                setProductForm((p) => ({ ...p, imageUrls: next.filter(Boolean).slice(0, 4) }));
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div>
@@ -10369,7 +10243,7 @@ const Admin = () => {
       {/* ADJUDICATOR ACTION MODALS */}
       {activeAdjudicatorModal && adjudicatorActionTarget && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000, padding: "20px" }}>
-          <div style={{ background: "#0c0c0e", border: "1px solid rgba(255, 85, 0, 0.15)", width: "100%", maxWidth: "640px", maxHeight: "calc(100vh - 40px)", borderRadius: "28px", overflow: "hidden", display: "flex", flexDirection: "column", animation: "modalFadeIn 0.3s ease-out" }}>
+          <div style={{ background: "#0c0c0e", border: "1px solid rgba(255, 85, 0, 0.15)", width: "100%", maxWidth: modalType === "viewProfile" ? "1000px" : "640px", maxHeight: "calc(100vh - 40px)", borderRadius: "28px", overflow: "hidden", display: "flex", flexDirection: "column", animation: "modalFadeIn 0.3s ease-out" }}>
             <div style={{ padding: "24px 32px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <h3 style={{ fontSize: "18px", fontWeight: "950", margin: 0, textTransform: "uppercase", color: "white" }}>

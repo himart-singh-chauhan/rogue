@@ -1,4 +1,10 @@
 const supabase = require('../config/supabase');
+// Sponsor video: an uploaded MP4 link or a YouTube / Vimeo page (http/https only)
+const cleanVideoUrl = (v) => {
+  const s = String(v || '').trim();
+  return /^https?:\/\/\S+$/i.test(s) ? s.slice(0, 1000) : null;
+};
+
 
 // ==========================================
 // 💰 SPONSORS CRUD
@@ -68,6 +74,7 @@ const createSponsor = async (req, res) => {
         active_status: activeStatus !== undefined ? (activeStatus === 'true' || activeStatus === true) : true,
         image_fit: fit,
         image_position: position,
+        video_url: cleanVideoUrl(req.body.videoUrl),
         views_count: 0,
         clicks_count: 0,
         created_at: new Date(),
@@ -111,6 +118,7 @@ const updateSponsor = async (req, res) => {
     if (activeStatus !== undefined) updateData.active_status = activeStatus === 'true' || activeStatus === true;
     if (imageFit !== undefined)     updateData.image_fit = fit;
     if (imagePosition !== undefined) updateData.image_position = position;
+    if (req.body.videoUrl !== undefined) updateData.video_url = cleanVideoUrl(req.body.videoUrl);
 
     if (req.files) {
       if (req.files.bannerImage && req.files.bannerImage[0]) {

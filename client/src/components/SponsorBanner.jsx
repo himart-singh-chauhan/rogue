@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
 import { API_URL, apiCall, formatProductImage } from "../utils/api";
+import { embedUrlFor } from "./EvidencePreview";
+
+// Sponsor video: YouTube / Vimeo page (embedded, muted) or an uploaded MP4
+const SponsorVideo = ({ url, title }) => {
+  const embed = embedUrlFor(url);
+  const box = { width: "100%", height: "100%", display: "block", border: 0, objectFit: "cover" };
+  if (embed) return <iframe src={embed} title={title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" style={box} />;
+  return <video src={formatProductImage(url)} muted autoPlay loop playsInline preload="metadata" style={box} />;
+};
 
 /**
  * Shows active sponsors managed in Admin → Sponsorships.
@@ -46,7 +55,7 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
     let cancelled = false;
     apiCall(`/sponsors?placement=${encodeURIComponent(key)}`, "GET")
       .then((data) => {
-        if (!cancelled) setSponsors(Array.isArray(data) ? data.filter((s) => s.banner_url || s.logo_url) : []);
+        if (!cancelled) setSponsors(Array.isArray(data) ? data.filter((s) => s.banner_url || s.logo_url || s.video_url) : []);
       })
       .catch(() => {});
     return () => {
@@ -123,6 +132,8 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
 
   const fit = fitOf(s);
   const position = positionOf(s);
+  const bannerSrc = s.banner_url ? formatProductImage(s.banner_url) : null;
+  const video = s.video_url || null;
   return (
     <section style={{ padding: "32px 0", ...style }}>
       <div className="container">
@@ -131,16 +142,32 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
           {...linkProps(s)}
           style={{ display: "block", borderRadius: 16, overflow: "hidden", background: "#111", boxShadow: "0 10px 30px rgba(0,0,0,0.15)", textDecoration: "none" }}
         >
-          {s.banner_url ? (
-            <img
-              src={formatProductImage(s.banner_url)}
-              alt={s.company_name}
-              loading="lazy"
-              decoding="async"
-              style={fit === "cover"
-                ? { display: "block", width: "100%", height: "clamp(110px, 22vw, 260px)", objectFit: "cover", objectPosition: position }
-                : { display: "block", width: "100%", height: "auto", maxHeight: "min(360px, 70vw)", objectFit: "contain", objectPosition: position, margin: "0 auto" }}
-            />
+          {bannerSrc || video ? (
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "stretch" }}>
+              {bannerSrc && (
+                <div style={{ position: "relative", flex: video ? "1 1 58%" : "1 1 100%", minWidth: "min(100%, 320px)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {/* "Show the whole banner": the space beside a narrower banner is filled with a blurred copy of it, not black */}
+                  {fit === "contain" && (
+                    <img src={bannerSrc} alt="" aria-hidden="true" loading="lazy" decoding="async"
+                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(28px) brightness(0.55) saturate(1.2)", transform: "scale(1.2)" }} />
+                  )}
+                  <img
+                    src={bannerSrc}
+                    alt={s.company_name}
+                    loading="lazy"
+                    decoding="async"
+                    style={fit === "cover"
+                      ? { position: "relative", display: "block", width: "100%", height: "clamp(110px, 22vw, 260px)", objectFit: "cover", objectPosition: position }
+                      : { position: "relative", display: "block", width: "100%", height: "auto", maxHeight: "min(360px, 70vw)", objectFit: "contain", objectPosition: position, margin: "0 auto" }}
+                  />
+                </div>
+              )}
+              {video && (
+                <div style={{ flex: bannerSrc ? "1 1 38%" : "1 1 100%", minWidth: "min(100%, 280px)", aspectRatio: "16 / 9", maxHeight: bannerSrc ? "min(360px, 70vw)" : undefined, background: "#000" }}>
+                  <SponsorVideo url={video} title={`${s.company_name} video`} />
+                </div>
+              )}
+            </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "clamp(16px, 3vw, 24px) clamp(16px, 3vw, 28px)", flexWrap: "wrap" }}>
               <img src={formatProductImage(s.logo_url)} alt={s.company_name} loading="lazy" decoding="async" style={{ height: 56, width: "auto", maxWidth: "40%", objectFit: "contain", flexShrink: 0 }} />

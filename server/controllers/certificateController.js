@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
+const { notifyMember, siteUrl } = require('../utils/notify');
 
 // Certificates are never issued automatically: an administrator approves each one.
 // The PDF is drawn in the browser from the template image + these stored details.
@@ -179,6 +180,16 @@ const issueCertificate = async (req, res) => {
     return res.status(500).json({ message: 'Could not issue the certificate', error: error.message });
   }
   await supabase.from('audit_logs').insert({ actor_id: req.user.id, action_type: 'issue_certificate', metadata: { certificate: row.certificate_number, record: rec.id } });
+  // The award also lands in the member's inbox (Profile → Messages)
+  await notifyMember({
+    userId: rec.user_id,
+    senderId: req.user.id,
+    subject: `Your AMPEX certificate is ready: ${row.record_title || 'World Record'}`,
+    body: `Congratulations! Your official AMPEX World Records certificate has been issued.\n\n` +
+      `Record: ${row.record_title || ''}${row.record_value ? ` (${row.record_value})` : ''}\n` +
+      `Certificate number: ${row.certificate_number}\n\n` +
+      `Download it as a PDF from your profile under Certificates. Anyone can check it is genuine at ${siteUrl()}/certificate/${row.certificate_number}`,
+  });
   res.status(201).json(formatIssuance(data));
 };
 

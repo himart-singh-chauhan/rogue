@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Eye, Heart, Zap, Trophy, Play, User, AlertCircle } from 'lucide-react';
+import { Search, Eye, Heart, Zap, Trophy, Play, User, AlertCircle, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiCall, formatProductImage } from '../utils/api';
 import Navbar from '../components/Navbar';
-import PageNav from '../components/PageNav';
+import BackButton from '../components/BackButton';
 import Footer from '../components/Footer';
 import { useCategories, namesWithChildren } from '../utils/categoryMeta';
 
@@ -107,10 +107,25 @@ export default function ExploreRecords() {
     }
   };
 
+  const applySearch = (value) => {
+    const params = new URLSearchParams(location.search);
+    const v = String(value || '').trim();
+    if (v) params.set('q', v); else { params.delete('q'); params.delete('search'); }
+    const qs = params.toString();
+    navigate(`/explore${qs ? `?${qs}` : ''}`, { replace: true });
+  };
   const handleSearch = (e) => {
     e.preventDefault();
-    navigate(`/explore?q=${encodeURIComponent(searchQuery)}`);
+    applySearch(searchQuery);
   };
+  // Typing (or deleting) updates the results after a short pause, so an empty box shows every record again
+  useEffect(() => {
+    const current = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || '';
+    if (searchQuery.trim() === current.trim()) return undefined;
+    const t = setTimeout(() => applySearch(searchQuery), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   let filteredRecords = records.filter(r => {
     const matchesSearch = !searchQuery || (r.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || (r.user?.display_name || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -166,6 +181,7 @@ export default function ExploreRecords() {
 
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 40px 60px' }}>
         <div style={{ marginBottom: '40px', textAlign: 'left' }}>
+          <BackButton fallback="/" style={{ marginTop: 44, marginBottom: 20 }} />
           <p style={{ color: '#FF6A00', fontWeight: '700', fontSize: '14px', letterSpacing: '1px', marginBottom: '8px' }}>GLOBAL ARCHIVE</p>
           <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: '900', margin: 0, letterSpacing: '-2px' }}>EXPLORE RECORDS</h1>
         </div>
@@ -178,8 +194,13 @@ export default function ExploreRecords() {
               placeholder="Search by athlete, record or category..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '14px', outline: 'none', marginLeft: '10px', minWidth: '280px' }}
+              style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '14px', outline: 'none', marginLeft: '10px', minWidth: 'min(280px, 60vw)' }}
             />
+            {searchQuery && (
+              <button type="button" aria-label="Clear search" onClick={() => { setSearchQuery(''); applySearch(''); }} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#bbb', width: 26, height: 26, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: 6 }}>
+                <X size={14} />
+              </button>
+            )}
           </form>
 
         </div>
@@ -194,9 +215,9 @@ export default function ExploreRecords() {
                 onClick={() => handleCategoryClick(chip.name)}
                 title={chip.isSub ? `${chip.parent} › ${chip.name}` : chip.name}
                 style={{
-                  background: isActive ? '#FF6A00' : chip.isSub ? 'transparent' : '#1a1a1a',
-                  color: isActive ? 'white' : chip.isSub ? '#FF8A3D' : 'white',
-                  border: isActive ? '1px solid #FF6A00' : chip.isSub ? '1px dashed rgba(255,106,0,0.45)' : '1px solid #333',
+                  background: isActive ? '#FF6A00' : '#1a1a1a',
+                  color: 'white',
+                  border: isActive ? '1px solid #FF6A00' : '1px solid #333',
                   borderRadius: '99px',
                   padding: '8px 16px',
                   fontSize: '13px',
@@ -204,7 +225,7 @@ export default function ExploreRecords() {
                   cursor: 'pointer'
                 }}
               >
-                {chip.isSub ? `› ${chip.name}` : chip.name}
+                {chip.name}
               </button>
             );
           })}

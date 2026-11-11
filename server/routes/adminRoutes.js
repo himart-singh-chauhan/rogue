@@ -202,6 +202,22 @@ router.post('/product-authorizations', productAuth.grantAuthorization);
 router.put('/product-authorizations/:id', productAuth.decideAuthorization);
 router.post('/monetization/rankings/recalculate', recalculateRankings);
 
+// A member's full profile (Users → click a name) and emailing them
+const members = require('../controllers/adminMemberController');
+router.get('/members/:id/overview', members.getMemberOverview);
+router.post('/members/:id/email', members.emailMember);
+
+// Referral, Points & Rewards program
+const rewards = require('../controllers/rewardsController');
+router.get('/rewards/settings', rewards.getSettings);
+router.put('/rewards/settings', rewards.updateSettings);
+router.get('/rewards/members', rewards.listMembers);
+router.post('/rewards/adjust', rewards.adjust);
+router.get('/rewards/transactions', rewards.listTransactions);
+router.get('/rewards/referrals', rewards.listReferrals);
+router.put('/rewards/referrals/:id', rewards.decideReferral);
+router.get('/rewards/report', rewards.report);
+
 // 🏆 Challenges Management
 const { getChallenges, createChallenge, updateChallenge, deleteChallenge, toggleFeatureChallenge } = require('../controllers/adminChallengesController');
 const { challengeUpload } = require('../config/upload');

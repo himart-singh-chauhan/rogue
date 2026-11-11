@@ -88,10 +88,15 @@ export const formatCertDate = (value) => {
   return d.toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
-const siteOrigin = () => (typeof window !== 'undefined' && window.location?.origin) || 'https://rogue-client.vercel.app';
+// The public site address. VITE_SITE_URL (e.g. https://ampexworldrecords.com) wins once a domain is connected.
+const siteOrigin = () => String(import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' && window.location?.origin) || '').replace(/\/+$/, '');
+// Temporary hosting addresses (vercel.app, localhost) are never printed on certificates.
+const isTemporaryHost = (origin) => !origin || /vercel\.app|localhost|127\.0\.0\.1|rogue/i.test(origin);
 
 export const verifyUrlFor = (number) => `${siteOrigin()}/certificate/${encodeURIComponent(number || '')}`;
-const verifyLabelFor = (number) => verifyUrlFor(number).replace(/^https?:\/\//, '');
+const verifyLabelFor = (number) => (isTemporaryHost(siteOrigin())
+  ? 'the AMPEX World Records website'
+  : verifyUrlFor(number).replace(/^https?:\/\//, ''));
 
 const resolveSrc = (url) => {
   if (!url) return '';
@@ -215,7 +220,8 @@ export const drawCertificate = (canvas, img, cert, template, width) => {
     drawField(ctx, f.dateVerified, formatCertDate(cert.dateVerified), W, H);
   }
   drawField(ctx, f.certificateNumber, number, W, H);
-  drawField(ctx, f.verifyUrl, verifyLabelFor(number), W, H);
+  // award certificates (profile badges) are printed by the member and have no online record to verify
+  if (!cert.noVerify) drawField(ctx, f.verifyUrl, verifyLabelFor(number), W, H);
   return canvas;
 };
 
@@ -246,4 +252,22 @@ export const downloadCertificatePdf = async (cert, template) => {
     author: 'AMPEX World Records',
   });
   pdf.save(`${cert.certificateNumber || 'ampex-certificate'}.pdf`);
+};
+
+// Printable award certificate for a profile badge (Grand Champion, Top 10 Rank…), on the AMPEX design.
+export const AWARD_TEMPLATE = { imageUrl: '/certificates/ampex-certificate-portrait.jpg', layout: { preset: 'ampex-portrait' }, orientation: 'portrait' };
+export const downloadAwardCertificatePdf = ({ recipientName, awardTitle, awardDetail, date, memberNumber, badgeId }) => {
+  const day = (date || new Date().toISOString()).slice(0, 10);
+  const member = String(memberNumber || 'AMPEX').replace(/[^A-Z0-9-]/gi, '').toUpperCase();
+  const badge = String(badgeId || 'BADGE').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const number = `AWARD-${member}-${badge}`;
+  return downloadCertificatePdf({
+    recipientName,
+    recordTitle: awardTitle,
+    recordValue: awardDetail,
+    dateAchieved: day,
+    dateVerified: day,
+    certificateNumber: number,
+    noVerify: true,
+  }, AWARD_TEMPLATE);
 };

@@ -96,6 +96,7 @@ app.use('/api/membership-plans', require('./routes/planRoutes'));
 app.use('/api/weight-classes', require('./routes/weightClassRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/rewards', require('./routes/rewardRoutes'));
 app.get('/api/settings/public', require('./controllers/adminExtrasController').getPublicSettings);
 app.use('/api/social', require('./routes/socialRoutes'));
 
