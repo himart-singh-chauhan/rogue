@@ -182,6 +182,7 @@ router.get('/security/audit-logs', getAuditLogs);
 router.post('/security/backup', triggerBackup);
 router.get('/security/api-keys', getApiKeys);
 router.put('/security/seo', extras.updateSeoSettings); // persisted in system_settings
+router.put('/settings/fees', extras.updateFees); // record submission / challenge fees
 
 // 💰 Monetization, Sponsorships, Rankings & VIP (Phase 4)
 const { getSponsors, createSponsor, updateSponsor, deleteSponsor, trackSponsorClick, trackSponsorView, updateVipStatus, getRevenueMetrics, recalculateRankings } = require('../controllers/adminMonetizationController');

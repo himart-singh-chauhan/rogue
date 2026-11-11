@@ -14,7 +14,10 @@ export default function ExploreRecords() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('new');
+  const [filterType, setFilterType] = useState(() => {
+    try { const t = sessionStorage.getItem('explore_tab'); if (t) { sessionStorage.removeItem('explore_tab'); return t; } } catch { /* ignore */ }
+    return new URLSearchParams(window.location.search).get('tab') === 'beaten' ? 'beaten' : 'new';
+  });
   const [authMessage, setAuthMessage] = useState('');
 
   const showAuthMessage = (msg) => {
@@ -66,7 +69,8 @@ export default function ExploreRecords() {
   const tabs = [
     { id: 'new', label: '🆕 New Records' },
     { id: 'featured', label: '⭐ Featured' },
-    { id: 'viewed', label: '👁️ Most Viewed' }
+    { id: 'viewed', label: '👁️ Most Viewed' },
+    { id: 'beaten', label: '🏁 Beaten Records' }
   ];
 
   useEffect(() => {
@@ -324,9 +328,15 @@ export default function ExploreRecords() {
                     {(record.category || record.category_name || 'Category').toString().toUpperCase()}
                   </div>
 
-                  <div style={{ position: 'absolute', top: 12, right: 12, background: '#4ade80', color: 'black', padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 900 }}>
-                    ✓ Verified
-                  </div>
+                  {record.beaten_by_record_id ? (
+                    <div style={{ position: 'absolute', top: 12, right: 12, background: '#EF4444', color: 'white', padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 900, letterSpacing: '0.5px' }}>
+                      BEATEN
+                    </div>
+                  ) : (
+                    <div style={{ position: 'absolute', top: 12, right: 12, background: '#4ade80', color: 'black', padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 900 }}>
+                      ✓ Verified
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ padding: 16 }}>

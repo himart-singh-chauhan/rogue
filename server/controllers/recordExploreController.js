@@ -310,6 +310,8 @@ exports.getAllRecords = async (req, res) => {
     const { limit, offset } = pageParams(req.query, 60);
 
     let query = withCategory(withSearch(verifiedQuery(), search), category);
+    // Beaten Records: records that a winning challenge has replaced (newest first)
+    if (req.query.filter === 'beaten') query = query.not('beaten_by_record_id', 'is', null).order('beaten_at', { ascending: false });
 
     const sortMap = {
       newest: [['created_at', false]],

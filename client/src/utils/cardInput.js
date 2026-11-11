@@ -14,9 +14,9 @@ export const cardBrand = (digits) => {
 };
 
 // Longest number each brand allows
-const MAX_LENGTH = { amex: 15, diners: 14, visa: 19, mastercard: 16, discover: 19, jcb: 19, unionpay: 19, other: 19 };
+const MAX_LENGTH = { amex: 15, diners: 14, visa: 16, mastercard: 16, discover: 16, jcb: 16, unionpay: 16, other: 16 };
 // Valid lengths each brand allows
-const VALID_LENGTHS = { amex: [15], diners: [14], visa: [13, 16, 19], mastercard: [16], discover: [16, 17, 18, 19], jcb: [16, 17, 18, 19], unionpay: [16, 17, 18, 19], other: [12, 13, 14, 15, 16, 17, 18, 19] };
+const VALID_LENGTHS = { amex: [15], diners: [14], visa: [13, 16], mastercard: [16], discover: [16], jcb: [16], unionpay: [16], other: [13, 14, 15, 16] };
 
 export const formatCardNumber = (value) => {
   const raw = String(value || '').replace(/\D/g, '');
@@ -83,6 +83,6 @@ export const validateCard = ({ number, expiry, cvv }) => {
 };
 
 // Input props that bring up the number keypad on phones and let browsers autofill
-export const CARD_INPUT_PROPS = { inputMode: 'numeric', autoComplete: 'cc-number', maxLength: 23 };
+export const CARD_INPUT_PROPS = { inputMode: 'numeric', autoComplete: 'cc-number', maxLength: 19 };
 export const EXPIRY_INPUT_PROPS = { inputMode: 'numeric', autoComplete: 'cc-exp', maxLength: 5 };
 export const CVV_INPUT_PROPS = { inputMode: 'numeric', autoComplete: 'cc-csc', maxLength: 4 };

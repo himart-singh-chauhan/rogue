@@ -108,7 +108,23 @@ const recordAwardState = async (recordId) => {
  * Call it after every status change from any admin screen. It awards once on verification and
  * takes the points back (and revokes the certificate) if the record stops being verified.
  */
+// A challenge that is approved beats the record it challenged; un-approving it restores that record.
+const syncBeatenRecord = async (recordId, verified) => {
+  try {
+    const { data: rec } = await supabase.from('records').select('id, challenged_record_id').eq('id', recordId).maybeSingle();
+    if (!rec?.challenged_record_id) return;
+    if (verified) {
+      await supabase.from('records').update({ beaten_by_record_id: rec.id, beaten_at: new Date(), updated_at: new Date() }).eq('id', rec.challenged_record_id);
+    } else {
+      await supabase.from('records').update({ beaten_by_record_id: null, beaten_at: null, updated_at: new Date() }).eq('id', rec.challenged_record_id).eq('beaten_by_record_id', rec.id);
+    }
+  } catch (e) {
+    console.warn('[Records] beaten status not updated:', e.message);
+  }
+};
+
 const syncRecordAward = async (record, { verified, points = 0, adminId = null } = {}) => {
+  if (record?.id) await syncBeatenRecord(record.id, verified);
   if (!record?.id || !record.user_id) return null;
   const { held, net } = await recordAwardState(record.id);
 

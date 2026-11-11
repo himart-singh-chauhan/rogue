@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { toInt, syncRecordAward } = require('../utils/rankings');
 const { evaluateCoupon } = require('./couponController');
+const { feeForRecordType } = require('../utils/fees');
 const { thumbnailFor } = require('../utils/youtubeIntegration');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
@@ -8,7 +9,7 @@ const str = (v) => (v === undefined || v === null ? '' : String(v));
 
 // Columns safe to show on public pages (no witness contacts, judge/admin notes or AI scan internals).
 const PUBLIC_RECORD_COLUMNS =
-  'id, slug, user_id, athlete_id, title, category, category_id, description, value, unit, status, record_type, evidence_url, thumbnail_url, video_url, video_type, venue_name, city, state, country, is_featured, views, likes_count, comments_count, date_set, verified_at, created_at, updated_at';
+  'id, slug, user_id, athlete_id, title, category, category_id, description, value, unit, status, record_type, evidence_url, thumbnail_url, video_url, video_type, venue_name, city, state, country, is_featured, views, likes_count, comments_count, date_set, verified_at, created_at, updated_at, challenged_record_id, beaten_by_record_id, beaten_at';
 const PUBLIC_USER_EMBED = 'user:users!records_user_id_fkey(id, name, username, profile_image, country)';
 
 // record_meta has UNIQUE(record_id), so PostgREST embeds it as an object; the admin UI expects an array.
@@ -155,7 +156,7 @@ const createRecord = async (req, res) => {
   const {
     title, category, description, value, unit,
     evidenceUrl, thumbnailUrl, athleteId, venueName,
-    city, state, country, witnesses, recordType,
+    city, state, country, witnesses, recordType, challengedRecordId,
   } = req.body;
 
   try {
@@ -168,6 +169,13 @@ const createRecord = async (req, res) => {
 
     // Users may only submit standard records or challenges; "world_record" is set by adjudication.
     const safeRecordType = recordType === 'challenge' ? 'challenge' : 'standard';
+
+    // A challenge is linked to the verified record it challenges (not the athlete's own record)
+    let challengedId = null;
+    if (safeRecordType === 'challenge' && isUUID(challengedRecordId)) {
+      const { data: target } = await supabase.from('records').select('id, user_id, status').eq('id', challengedRecordId).maybeSingle();
+      if (target && target.status === 'verified' && String(target.user_id) !== String(req.user.id)) challengedId = target.id;
+    }
 
     // Link to the categories table when the name matches, so category rankings work.
     let { data: categoryRow } = await supabase
@@ -206,6 +214,7 @@ const createRecord = async (req, res) => {
         witnesses: Array.isArray(witnesses) ? witnesses : [],
         status: 'pending',
         record_type: safeRecordType,
+        challenged_record_id: challengedId,
       }])
       .select()
       .single();
@@ -245,7 +254,7 @@ const processCheckout = async (req, res) => {
 
     const { data: record, error: recordError } = await supabase
       .from('records')
-      .select('id, user_id')
+      .select('id, user_id, record_type')
       .eq('id', req.params.id)
       .maybeSingle();
     if (recordError) throw recordError;
@@ -256,7 +265,7 @@ const processCheckout = async (req, res) => {
 
     const trackingNumber = `AWR-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
     // The fee and any coupon discount are worked out here; amounts sent by the browser are ignored.
-    const BASE_FEE = 3.5;
+    const BASE_FEE = await feeForRecordType(record.record_type); // Admin → System Settings → Fees
     const couponCode = req.body.couponCode ? String(req.body.couponCode).trim().toUpperCase() : null;
     let discount = 0;
     if (couponCode) {

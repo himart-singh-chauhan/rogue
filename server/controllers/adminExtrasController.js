@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { getFees, toFee } = require('../utils/fees');
 
 // ===================================================================================
 // MEDIA LIBRARY — files are uploaded straight to storage (signed URL), then saved here
@@ -115,7 +116,10 @@ const SEO_KEYS = { title: 'seo_title', meta_description: 'seo_description', keyw
 const getPublicSettings = async (req, res) => {
   const { data } = await supabase.from('system_settings').select('key, value').in('key', Object.values(SEO_KEYS));
   const map = Object.fromEntries((data || []).map((r) => [r.key, r.value]));
+  const fees = await getFees();
   res.json({
+    submissionFee: fees.submissionFee,
+    challengeFee: fees.challengeFee,
     seoTitle: map.seo_title || 'AMPEX World Records Elite Athlete Database',
     seoDescription: map.seo_description || '',
     seoKeywords: map.seo_keywords || '',
@@ -123,6 +127,22 @@ const getPublicSettings = async (req, res) => {
 };
 
 // PUT /api/admin/security/seo  { title, meta_description, keywords }
+// PUT /api/admin/settings/fees { submissionFee, challengeFee }
+const updateFees = async (req, res) => {
+  const rows = [];
+  for (const [field, key] of [['submissionFee', 'submission_fee'], ['challengeFee', 'challenge_fee']]) {
+    if (req.body[field] === undefined) continue;
+    const fee = toFee(req.body[field], null);
+    if (fee === null) return res.status(400).json({ message: 'Fees must be a number between 0 and 10,000' });
+    rows.push({ key, value: fee.toFixed(2), updated_at: new Date() });
+  }
+  if (!rows.length) return res.status(400).json({ message: 'Nothing to save' });
+  const { error } = await supabase.from('system_settings').upsert(rows, { onConflict: 'key' });
+  if (error) return res.status(500).json({ message: 'Could not save fees', error: error.message });
+  await supabase.from('audit_logs').insert({ actor_id: req.user.id, action_type: 'update_fees', metadata: req.body });
+  res.json({ message: 'Fees saved.', ...(await getFees()) });
+};
+
 const updateSeoSettings = async (req, res) => {
   const rows = Object.entries(SEO_KEYS)
     .filter(([field]) => req.body[field] !== undefined)
@@ -266,6 +286,6 @@ const getMonetizationBreakdown = async (req, res) => {
 module.exports = {
   createMediaAsset, updateMediaAsset, deleteMediaAsset,
   sendAdminMessage, getMyMessages, markMessageRead,
-  getPublicSettings, updateSeoSettings,
+  getPublicSettings, updateSeoSettings, updateFees,
   getMonetizationBreakdown,
 };

@@ -51,6 +51,7 @@ const Navbar = () => {
     { label: "Challenges", icon: <Settings size={16} />, to: "/admin?tab=challenges" },
     { label: "Payments", icon: <DollarSign size={16} />, to: "/admin?tab=payments" },
     { label: "Coupons", icon: <Tag size={16} />, to: "/admin?tab=coupons" },
+    { label: "Fees", icon: <DollarSign size={16} />, to: "/admin?tab=systemSettings#fees" },
     { label: "Rewards & Referrals", icon: <Gift size={16} />, to: "/admin?tab=rewards" },
     { label: "Memberships", icon: <CreditCard size={16} />, to: "/admin?tab=memberships" },
     { label: "Shop Catalog", icon: <Layers size={16} />, to: "/admin?tab=products" },

@@ -67,6 +67,16 @@ const RecordDetail = () => {
     }
   }, [id]);
 
+  // Beaten records: the record that beat this one, or the one this record beat
+  const [linkedRecords, setLinkedRecords] = useState({ beatenBy: null, beat: null });
+  useEffect(() => {
+    let cancelled = false;
+    const ids = { beatenBy: recordData?.beaten_by_record_id, beat: recordData?.status === "verified" ? recordData?.challenged_record_id : null };
+    Promise.all(Object.entries(ids).map(([k, v]) => (v ? apiCall(`/records/${v}`).then((r) => [k, r]).catch(() => [k, null]) : Promise.resolve([k, null]))))
+      .then((pairs) => { if (!cancelled) setLinkedRecords(Object.fromEntries(pairs)); });
+    return () => { cancelled = true; };
+  }, [recordData?.id, recordData?.beaten_by_record_id, recordData?.challenged_record_id, recordData?.status]);
+
   if (loading) {
     return (
       <PageTransition>
@@ -145,9 +155,9 @@ const RecordDetail = () => {
         <section style={{ position: "relative", height: "70vh", minHeight: "500px", overflow: "hidden" }}>
           <img loading="lazy" decoding="async" src={record.img} alt={record.title} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", top: 0, left: 0 }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(10,10,10,0.4) 0%, #0A0A0A 100%)" }} />
-          
+
           <div style={{ position: "absolute", bottom: "60px", left: "5%", right: "5%", maxWidth: "1400px", margin: "0 auto" }}>
-            
+
             <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
               <span style={{ background: "#FF6A00", color: "white", padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "900", textTransform: "uppercase" }}>{record.cat}</span>
               <span style={{ background: "rgba(255,255,255,0.1)", backdropFilter: "blur(4px)", color: "white", padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "900", textTransform: "uppercase" }}>OFFICIALLY VERIFIED</span>
@@ -171,7 +181,7 @@ const RecordDetail = () => {
                         <div style={{ display: "inline-flex", background: "rgba(34, 197, 94, 0.15)", borderRadius: "50%", padding: "1.5px", border: "1px solid rgba(34, 197, 94, 0.3)" }} title="Verified Member">
                           <svg viewBox="0 0 24 24" width="8" height="8" stroke="#22c55e" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                         </div>
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
                             navigator.clipboard.writeText(record.memberNumber);
@@ -197,7 +207,7 @@ const RecordDetail = () => {
 
         {/* CONTENT GRID */}
         <section style={{ padding: "120px 5% 80px 5%", maxWidth: "1400px", margin: "0 auto", display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "60px" }}>
-          
+
           {/* LEFT: DETAILS & VIDEO */}
           <div style={{ minWidth: 0 }}>
             <div style={{ background: "#161616", borderRadius: "32px", border: "1px solid rgba(255,255,255,0.05)", padding: "48px", marginBottom: "40px" }}>
@@ -205,7 +215,7 @@ const RecordDetail = () => {
               <p style={{ fontSize: "18px", color: "rgba(255,255,255,0.6)", lineHeight: "1.8", marginBottom: "40px" }}>
                 {record.desc}
               </p>
-              
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
                   <Calendar size={24} color="#FF6A00" />
@@ -230,7 +240,7 @@ const RecordDetail = () => {
                 <>
                   <img loading="lazy" decoding="async" src={record.img} alt="Video Thumbnail" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <div 
+                    <div
                       onClick={() => setIsPlayingMain(true)}
                       style={{ width: "80px", height: "80px", borderRadius: "50%", background: "#FF6A00", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 0 40px rgba(255,106,0,0.4)" }}>
                       <Play fill="white" size={32} />
@@ -269,7 +279,7 @@ const RecordDetail = () => {
                         <div style={{ fontSize: '14px', opacity: 0.7 }}>This record is pending video verification</div>
                       </div>;
                     }
-                    
+
                     const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/);
                     if (ytMatch) {
                       return (
@@ -285,20 +295,20 @@ const RecordDetail = () => {
                         ></iframe>
                       );
                     }
-                    
+
                     // Handle local uploaded videos
                     let videoUrl = url;
                     if (!url.startsWith('http')) {
                       const backendUrl = API_URL.replace('/api', '');
                       videoUrl = `${backendUrl}${url.startsWith('/') ? '' : '/'}${url}`;
                     }
-                    
+
                     return (
-                      <video 
-                        src={videoUrl} 
-                        controls 
-                        autoPlay 
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }} 
+                      <video
+                        src={videoUrl}
+                        controls
+                        autoPlay
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
                         onError={(e) => {
                           console.error('Video failed to load:', videoUrl);
                           e.target.parentElement.innerHTML = '<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); flex-direction: column; gap: 20px; padding: 40px;"><div style="font-size: 18px; font-weight: 700;">Video Failed to Load</div><div style="font-size: 12px; opacity: 0.7; word-break: break-all;">' + videoUrl + '</div></div>';
@@ -310,6 +320,38 @@ const RecordDetail = () => {
               )}
             </div>
 
+            {/* BEATEN: this record was replaced by a winning challenge */}
+            {recordData.beaten_by_record_id && (
+              <div style={{ marginTop: "20px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: "20px", padding: "18px", display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ background: "#EF4444", color: "white", fontWeight: 950, fontSize: "14px", letterSpacing: "0.15em", padding: "8px 16px", borderRadius: "100px" }}>BEATEN</span>
+                <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                  <div style={{ color: "white", fontWeight: 800 }}>This record no longer holds the world record.</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", marginTop: "4px" }}>
+                    Beaten{recordData.beaten_at ? ` on ${new Date(recordData.beaten_at).toLocaleDateString()}` : ""}{linkedRecords.beatenBy ? ` by ${linkedRecords.beatenBy.user?.name || "an AMPEX athlete"} with ${[linkedRecords.beatenBy.value, linkedRecords.beatenBy.unit].filter(Boolean).join(" ")}` : ""}.
+                  </div>
+                </div>
+                {linkedRecords.beatenBy && (
+                  <Link to={`/record/${linkedRecords.beatenBy.id}`} style={{ display: "flex", gap: "12px", alignItems: "center", textDecoration: "none", background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "14px", padding: "8px 14px 8px 8px", maxWidth: "100%" }}>
+                    <div style={{ position: "relative", width: "96px", height: "54px", borderRadius: "10px", overflow: "hidden", background: "#111", flexShrink: 0 }}>
+                      {linkedRecords.beatenBy.thumbnail_url && linkedRecords.beatenBy.thumbnail_url !== "pending_upload" && <img src={formatProductImage(linkedRecords.beatenBy.thumbnail_url)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                      <Play size={18} color="white" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)" }} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ color: "#FF6A00", fontSize: "10px", fontWeight: 900, letterSpacing: "1px" }}>CURRENT RECORD HOLDER</div>
+                      <div style={{ color: "white", fontWeight: 800, fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "220px" }}>{linkedRecords.beatenBy.title}</div>
+                      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "12px" }}>Watch the new record →</div>
+                    </div>
+                  </Link>
+                )}
+              </div>
+            )}
+            {!recordData.beaten_by_record_id && linkedRecords.beat && (
+              <div style={{ marginTop: "20px", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "20px", padding: "14px 18px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ background: "#22c55e", color: "#06260f", fontWeight: 950, fontSize: "12px", letterSpacing: "0.1em", padding: "6px 12px", borderRadius: "100px" }}>NEW RECORD</span>
+                <span style={{ color: "rgba(255,255,255,0.8)", fontSize: "13px" }}>Beat the previous record: <Link to={`/record/${linkedRecords.beat.id}`} style={{ color: "#FF6A00", fontWeight: 800 }}>{linkedRecords.beat.title} ({[linkedRecords.beat.value, linkedRecords.beat.unit].filter(Boolean).join(" ")}) by {linkedRecords.beat.user?.name || "an AMPEX athlete"}</Link></span>
+              </div>
+            )}
+
             {/* ATTEMPT HISTORY SECTION */}
             <div style={{ marginTop: "40px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "20px" }}>
@@ -317,7 +359,7 @@ const RecordDetail = () => {
                   <h3 style={{ fontSize: "16px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>ATTEMPT HISTORY</h3>
                   <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)" }}>See how other members have attempted to break this record.</p>
                 </div>
-                <button 
+                <button
                   type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAllAttempts(true); }}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "#FF6A00", fontSize: "12px", fontWeight: "800", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.1em", flexShrink: 0 }}>
@@ -393,7 +435,7 @@ const RecordDetail = () => {
                 `}</style>
 
                 {/* Left Navigation Arrow */}
-                <button 
+                <button
                   type="button"
                   onClick={() => scrollAttempts('left')}
                   className="attempt-nav-btn left"
@@ -403,7 +445,7 @@ const RecordDetail = () => {
                 </button>
 
                 {/* Right Navigation Arrow */}
-                <button 
+                <button
                   type="button"
                   onClick={() => scrollAttempts('right')}
                   className="attempt-nav-btn right"
@@ -413,29 +455,29 @@ const RecordDetail = () => {
                 </button>
 
                 {/* Attempt horizontal scroll list */}
-                <div 
+                <div
                   ref={scrollRef}
-                  className="attempt-history-scroll" 
-                  style={{ 
-                    display: "flex", 
-                    gap: "16px", 
-                    overflowX: "auto", 
+                  className="attempt-history-scroll"
+                  style={{
+                    display: "flex",
+                    gap: "16px",
+                    overflowX: "auto",
                     paddingBottom: "20px",
                     scrollBehavior: "smooth",
                     WebkitOverflowScrolling: "touch"
                   }}
                 >
-                
+
                 {attempts.map(attempt => {
                   const isSelected = selectedAttempt?.id === attempt.id;
                   return (
-                    <div key={attempt.id} 
+                    <div key={attempt.id}
                       onClick={(e) => { e.stopPropagation(); setSelectedAttempt(attempt); }}
-                      style={{ 
-                        flex: "0 0 240px", 
-                        background: "#161616", 
-                        borderRadius: "16px", 
-                        overflow: "hidden", 
+                      style={{
+                        flex: "0 0 240px",
+                        background: "#161616",
+                        borderRadius: "16px",
+                        overflow: "hidden",
                         border: isSelected ? "2px solid #FF6A00" : (attempt.status === "CURRENT RECORD" ? "1px solid #10B981" : "1px solid rgba(255,255,255,0.05)"),
                         boxShadow: isSelected ? "0 0 15px rgba(255,106,0,0.3)" : "none",
                         transform: isSelected ? "translateY(-2px)" : "translateY(0)",
@@ -469,12 +511,12 @@ const RecordDetail = () => {
                           0:00
                         </div>
                       </div>
-                      
+
                       {/* Info */}
                       <div style={{ padding: "16px" }}>
                         <div style={{ fontSize: "14px", fontWeight: "800", marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{attempt.name}</div>
                         <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginBottom: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{attempt.value}</div>
-                        
+
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                           <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", fontWeight: "600" }}>{attempt.date}</div>
                           <div style={{ fontSize: "9px", fontWeight: "900", padding: "4px 8px", borderRadius: "4px", background: attempt.bg, color: attempt.color, textTransform: "uppercase" }}>
@@ -492,7 +534,7 @@ const RecordDetail = () => {
 
           {/* RIGHT: VERIFICATION & STATS */}
           <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
-            
+
             {/* VERIFICATION CARD */}
             <div style={{ background: "linear-gradient(135deg, #FF6A00, #FF3D00)", borderRadius: "32px", padding: "40px", color: "white" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
@@ -526,11 +568,11 @@ const RecordDetail = () => {
             </div>
 
             {/* CHALLENGE CARD */}
-            <div style={{ 
-              background: "rgba(255, 106, 0, 0.03)", 
-              border: "2px dashed rgba(255, 106, 0, 0.3)", 
-              borderRadius: "32px", 
-              padding: "40px", 
+            <div style={{
+              background: "rgba(255, 106, 0, 0.03)",
+              border: "2px dashed rgba(255, 106, 0, 0.3)",
+              borderRadius: "32px",
+              padding: "40px",
               textAlign: "center",
               display: "flex",
               flexDirection: "column",
@@ -542,16 +584,16 @@ const RecordDetail = () => {
                 Think you have what it takes to break this world record? Submit your attempt and enter the global hall of fame.
               </p>
               <Link to={`/challenge-verify?recordId=${encodeURIComponent(record.id)}&record=${encodeURIComponent(record.title)}`} style={{ textDecoration: "none", width: "100%" }}>
-                <button style={{ 
-                  background: "#FF6A00", 
-                  color: "white", 
+                <button style={{
+                  background: "#FF6A00",
+                  color: "white",
                   width: "100%",
-                  padding: "18px 32px", 
-                  borderRadius: "100px", 
-                  border: "none", 
-                  fontSize: "14px", 
-                  fontWeight: "900", 
-                  textTransform: "uppercase", 
+                  padding: "18px 32px",
+                  borderRadius: "100px",
+                  border: "none",
+                  fontSize: "14px",
+                  fontWeight: "900",
+                  textTransform: "uppercase",
                   cursor: "pointer",
                   transition: "all 0.3s",
                   boxShadow: "0 10px 20px rgba(255,106,0,0.2)"
@@ -586,9 +628,9 @@ const RecordDetail = () => {
             padding: "80px 5%"
           }}>
             <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
-              <button 
+              <button
                 type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAllAttempts(false); }} 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAllAttempts(false); }}
                 style={{ display: "flex", alignItems: "center", gap: "8px", color: "#FF6A00", background: "none", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: "800", textTransform: "uppercase", marginBottom: "40px" }}>
                 <ArrowLeft size={16} /> BACK TO RECORD DETAIL
               </button>
@@ -600,12 +642,12 @@ const RecordDetail = () => {
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "32px" }}>
                 {attempts.map(attempt => (
-                  <div key={attempt.id} 
+                  <div key={attempt.id}
                     onClick={(e) => { e.stopPropagation(); setSelectedAttempt(attempt); }}
-                    style={{ 
-                      background: "#161616", 
-                      borderRadius: "16px", 
-                      overflow: "hidden", 
+                    style={{
+                      background: "#161616",
+                      borderRadius: "16px",
+                      overflow: "hidden",
                       border: attempt.status === "CURRENT RECORD" ? "1px solid #10B981" : "1px solid rgba(255,255,255,0.05)",
                       cursor: "pointer",
                       transition: "transform 0.2s, box-shadow 0.2s"
@@ -631,12 +673,12 @@ const RecordDetail = () => {
                         0:00
                       </div>
                     </div>
-                    
+
                     {/* Info */}
                     <div style={{ padding: "24px" }}>
                       <div style={{ fontSize: "18px", fontWeight: "900", marginBottom: "8px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textTransform: "uppercase", color: "white" }}>{attempt.name}</div>
                       <div style={{ fontSize: "16px", color: "#FF6A00", fontWeight: "800", marginBottom: "16px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{attempt.value}</div>
-                      
+
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                         <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)", fontWeight: "700" }}>{attempt.date}</div>
                         <div style={{ fontSize: "10px", fontWeight: "900", padding: "6px 10px", borderRadius: "4px", background: attempt.bg, color: attempt.color, textTransform: "uppercase" }}>
@@ -677,7 +719,7 @@ const RecordDetail = () => {
               position: "relative",
               boxShadow: "0 50px 100px rgba(0,0,0,0.8)"
             }}>
-              <button 
+              <button
                 onClick={() => setSelectedAttempt(null)}
                 style={{
                   position: "absolute",
@@ -713,7 +755,7 @@ const RecordDetail = () => {
                     <div>
                       <span style={{ background: selectedAttempt.bg, color: selectedAttempt.color, fontSize: "12px", fontWeight: "900", padding: "6px 16px", borderRadius: "100px", textTransform: "uppercase" }}>{selectedAttempt.status}</span>
                       <h2 style={{ fontSize: "32px", fontWeight: "950", textTransform: "uppercase", color: "white", lineHeight: "1.1", marginTop: "24px", marginBottom: "8px" }}>{selectedAttempt.name}</h2>
-                      
+
                       {selectedAttempt.memberNumber && (
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.03)", padding: "4px 12px", borderRadius: "100px", border: "1px solid rgba(255,255,255,0.05)", marginBottom: "12px" }}>
                           <span style={{ fontSize: "9px", color: "#FF5500", fontWeight: "900", letterSpacing: "0.5px", textTransform: "uppercase" }}>MID:</span>
@@ -721,7 +763,7 @@ const RecordDetail = () => {
                           <div style={{ display: "inline-flex", background: "rgba(34, 197, 94, 0.15)", borderRadius: "50%", padding: "2px", border: "1px solid rgba(34, 197, 94, 0.3)" }} title="Verified Member">
                             <svg viewBox="0 0 24 24" width="10" height="10" stroke="#22c55e" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                           </div>
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               navigator.clipboard.writeText(selectedAttempt.memberNumber);

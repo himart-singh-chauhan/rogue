@@ -229,6 +229,7 @@ const ChallengeVerify = () => {
         city: formData.city,
         witnesses: formData.witnesses,
         recordType: 'challenge',
+        challengedRecordId: challengedRecord?.id || searchParams.get('recordId') || null,
         value: formData.value,
         unit: formData.unit,
         evidenceUrl: formData.youtubeLink || uploadedVideoUrl,
@@ -568,7 +569,7 @@ const ChallengeVerify = () => {
                   </p>
                   <Link to="/" style={{ textDecoration: "none" }}>
                     <button style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px 48px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: "12px", margin: "0 auto", boxShadow: "0 20px 40px rgba(255,106,0,0.2)" }}>
-                      <Globe size={18} /> RETURN TO HOME BASE
+                      <Globe size={18} /> BACK TO HOMEPAGE
                     </button>
                   </Link>
                 </motion.div>

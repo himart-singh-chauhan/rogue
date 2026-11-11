@@ -274,6 +274,20 @@ const Home = () => {
 
   // Live homepage data from admin controls
   const [newestRecords, setNewestRecords] = useState(STATIC_NEWEST);
+  const [beatenRecords, setBeatenRecords] = useState([]);
+  useEffect(() => {
+    apiCall("/records/explore/all?filter=beaten&limit=12", "GET")
+      .then((d) => setBeatenRecords((d?.records || []).map((r) => ({
+        img: r.thumbnail_url && r.thumbnail_url !== "pending_upload" ? formatProductImage(r.thumbnail_url) : "/images/logo-mascot.webp",
+        cat: "BEATEN",
+        title: r.title,
+        avatar: r.user?.profile_image ? (r.user.profile_image.includes("http") ? r.user.profile_image : formatProductImage(`/uploads/${r.user.profile_image}`)) : "https://ui-avatars.com/api/?name=" + encodeURIComponent(r.user?.name || "Athlete") + "&background=444&color=fff",
+        name: r.user?.display_name || r.user?.name || "Athlete",
+        value: `${r.value} ${r.unit}`,
+        slug: r.id,
+      }))))
+      .catch(() => {});
+  }, []);
   const [featuredHolders, setFeaturedHolders] = useState(STATIC_FEATURED);
   // Sidebar: admin "Featured videos" win; otherwise featured records. Kept apart so the two
   // requests can't overwrite each other (the list used to switch depending on which finished last).
@@ -920,6 +934,31 @@ const Home = () => {
           </InfiniteSlider>
         </div>
       </section>
+
+      {/* ══════════════════ BEATEN RECORDS ══════════════════ */}
+      {beatenRecords.length > 0 && (
+        <section className="newest-section beaten-section" style={{ paddingBottom: "60px" }}>
+          <div className="container">
+            <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24, gap: 12, flexWrap: "wrap" }}>
+              <div className="section-header-left">
+                <h2 style={{ fontSize: "36px", fontWeight: "800", color: "#111", letterSpacing: "-0.5px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  Beaten Records
+                  <span style={{ background: "#EF4444", color: "white", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: "bold" }}>BEATEN</span>
+                </h2>
+                <p className="section-subtitle" style={{ marginTop: 8, color: "#555", fontSize: "16px" }}>Records that were broken by a winning challenge. Open one to watch the new record that beat it.</p>
+              </div>
+              <Link to="/explore" onClick={() => { try { sessionStorage.setItem("explore_tab", "beaten"); } catch { /* ignore */ } }} style={{ color: "#FF6A00", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, fontSize: "15px" }}>
+                View all <ChevronRight style={{ width: 16, height: 16 }} />
+              </Link>
+            </div>
+          </div>
+          <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
+            <InfiniteSlider speed={36} gap={24} cardWidth="300px" reverse>
+              {beatenRecords.map((rec, idx) => <NewestCard key={idx} {...rec} />)}
+            </InfiniteSlider>
+          </div>
+        </section>
+      )}
 
       {/* ══════════════════ CATEGORIES ══════════════════ */}
       <section className="cat-section" style={{ paddingBottom: "80px" }}>

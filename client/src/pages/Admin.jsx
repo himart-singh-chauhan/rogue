@@ -26,6 +26,7 @@ import AdminCertificates from "../components/admin/AdminCertificates";
 import ImageUploadField from "../components/admin/ImageUploadField";
 import AdminMemberProfile from "../components/admin/AdminMemberProfile";
 import AdminRewards from "../components/admin/AdminRewards";
+import AdminFeesCard from "../components/admin/AdminFeesCard";
 import { Modal as AdminModal } from "../components/admin/adminUi";
 import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
 
@@ -6648,6 +6649,7 @@ const Admin = () => {
                 }} style={{ background: "white", color: "black", padding: "8px 24px", borderRadius: "100px", border: "none", fontSize: "12px", fontWeight: "bold", cursor: "pointer", marginTop: "16px" }}>SAVE SEO</button>
                 {seoStatus && <span style={{ marginLeft: "12px", fontSize: "12px", color: seoStatus.startsWith("Saved") ? "#22c55e" : seoStatus === "Saving..." ? "#aaa" : "#ef4444" }}>{seoStatus}</span>}
               </div>
+              <AdminFeesCard />
             </div>
           )}
 

@@ -122,6 +122,8 @@ const SECTIONS = [
       "Shop orders: what the buyer typed in a product's comment box (for example the name and record to print on a certificate) shows under that item in Shop Orders.",
       "Products: choose the shop section for every product (Apparel for clothing). Add up to 4 side pictures next to the main picture. Each size can have its own price and stock; remove a size with its Remove button.",
       "System Settings → Global SEO: the site title and description used in browser tabs and search results.",
+      "System Settings → Fees (also in the Admin menu): the record submission fee and the challenge fee. Checkout shows and charges the new amount straight away.",
+      "Beaten records: when you approve a challenge, the record it challenged is marked BEATEN. It moves to Beaten Records (homepage and Explore Records), and its page links to the new record. Approve a challenge only when it beats the record. If you un-approve the challenge later, the old record is restored.",
     ],
   },
 ];
