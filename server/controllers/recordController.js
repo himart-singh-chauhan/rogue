@@ -3,6 +3,8 @@ const { toInt, syncRecordAward } = require('../utils/rankings');
 const { evaluateCoupon } = require('./couponController');
 const { feeForRecordType } = require('../utils/fees');
 const { thumbnailFor } = require('../utils/youtubeIntegration');
+const stripe = require('../utils/stripe');
+const { notifyMember } = require('../utils/notify');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 const str = (v) => (v === undefined || v === null ? '' : String(v));
@@ -243,18 +245,26 @@ const createRecord = async (req, res) => {
   }
 };
 
-// @desc    Process checkout payment for a record
+// @desc    Pay the submission / challenge fee for a record
 // @route   POST /api/records/:id/checkout
 // @access  Private (record owner)
-// NOTE: there is no payment gateway yet; this marks the submission fee as paid.
-// It must be replaced by a Razorpay / Stripe webhook before going live.
+// The fee (Admin → System Settings → Fees) and any coupon are worked out here; amounts sent by the
+// browser are ignored. The member pays on Stripe's page and the fee is marked paid when Stripe confirms it.
+const COUPON_REASONS = {
+  not_found: 'That coupon code is not valid.',
+  inactive: 'That coupon is no longer active.',
+  limit_total: 'That coupon has reached its maximum number of uses.',
+  limit_user: 'You have already used this coupon the maximum number of times.',
+};
+const newTrackingNumber = () => `AWR-${require('crypto').randomBytes(5).toString('hex').toUpperCase().slice(0, 9)}`;
+
 const processCheckout = async (req, res) => {
   try {
     if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Record not found' });
 
     const { data: record, error: recordError } = await supabase
       .from('records')
-      .select('id, user_id, record_type')
+      .select('id, user_id, title, record_type')
       .eq('id', req.params.id)
       .maybeSingle();
     if (recordError) throw recordError;
@@ -262,10 +272,12 @@ const processCheckout = async (req, res) => {
     if (String(record.user_id) !== String(req.user.id) && !req.user.is_admin) {
       return res.status(403).json({ message: 'You can only pay for your own submission' });
     }
+    const { data: existingMeta } = await supabase.from('record_meta').select('payment_status, tracking_number').eq('record_id', record.id).maybeSingle();
+    if (existingMeta?.payment_status === 'paid') {
+      return res.status(400).json({ message: 'This submission is already paid.', trackingNumber: existingMeta.tracking_number });
+    }
 
-    const trackingNumber = `AWR-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
-    // The fee and any coupon discount are worked out here; amounts sent by the browser are ignored.
-    const BASE_FEE = await feeForRecordType(record.record_type); // Admin → System Settings → Fees
+    const BASE_FEE = await feeForRecordType(record.record_type);
     const couponCode = req.body.couponCode ? String(req.body.couponCode).trim().toUpperCase() : null;
     let discount = 0;
     if (couponCode) {
@@ -274,48 +286,104 @@ const processCheckout = async (req, res) => {
       discount = Math.min(BASE_FEE, Math.max(0, Number(verdict.data.discountAmount) || 0));
     }
     const fee = Math.round((BASE_FEE - discount) * 100) / 100;
+    const isChallenge = record.record_type === 'challenge';
 
-    // Coupon limits (total + per account) are enforced here too, not only in the shop
-    if (couponCode && discount > 0) {
-      const { data: result, error: redeemError } = await supabase.rpc('redeem_coupon_v2', {
-        p_code: couponCode,
-        p_user: req.user.id,
-        p_email: req.user.email || null,
-        p_context: 'submission',
-        p_reference: req.params.id,
-        p_discount: discount,
-      });
-      if (redeemError) throw redeemError;
-      if (result !== 'ok') {
-        const reasons = {
-          not_found: 'That coupon code is not valid.',
-          inactive: 'That coupon is no longer active.',
-          limit_total: 'That coupon has reached its maximum number of uses.',
-          limit_user: 'You have already used this coupon the maximum number of times.',
-        };
-        return res.status(400).json({ message: reasons[result] || 'Coupon could not be applied.' });
+    if (fee > 0) {
+      if (!stripe.stripeEnabled()) return res.status(503).json({ message: 'Online card payments are not available right now. Please try again later.' });
+      const { error: metaError } = await supabase.from('record_meta').upsert([{
+        record_id: record.id,
+        payment_status: 'pending_payment',
+        submission_fee: fee,
+        coupon_code: discount > 0 ? couponCode : null,
+        updated_at: new Date(),
+      }], { onConflict: 'record_id' });
+      if (metaError) throw metaError;
+      try {
+        const checkout = await stripe.createCheckout({
+          req,
+          kind: 'submission',
+          referenceId: record.id,
+          userId: req.user.id,
+          email: req.user.email || null,
+          description: isChallenge ? 'AMPEX challenge fee' : 'AMPEX record submission fee',
+          lines: [{ name: isChallenge ? 'AMPEX challenge fee' : 'AMPEX record submission fee', description: record.title || undefined, amount: BASE_FEE, qty: 1 }],
+          discountAmount: discount,
+          discountName: discount > 0 ? couponCode : null,
+          successPath: '/submission-checkout',
+          cancelPath: `/submission-checkout?record=${record.id}`,
+          metadata: { record_id: record.id, coupon_code: discount > 0 ? couponCode : null, coupon_discount: discount || null },
+        });
+        return res.status(200).json({ checkoutUrl: checkout.url, paymentId: checkout.paymentId, fee });
+      } catch (e) {
+        console.error('Stripe checkout could not start:', e.message);
+        return res.status(e.status && e.status < 500 ? e.status : 502).json({ message: e.status && e.status < 500 ? e.message : 'Could not open the secure payment page. Please try again.' });
       }
     }
 
-    const { error: metaError } = await supabase
-      .from('record_meta')
-      .upsert([{
-        record_id: req.params.id,
-        payment_status: 'paid',
-        submission_fee: fee,
-        coupon_code: discount > 0 ? couponCode : null,
-        tracking_number: trackingNumber,
-        updated_at: new Date(),
-      }], { onConflict: 'record_id' });
-
+    // Nothing to pay (a 100% coupon, or the fee is set to $0)
+    if (couponCode && discount > 0) {
+      const { data: result, error: redeemError } = await supabase.rpc('redeem_coupon_v2', {
+        p_code: couponCode, p_user: req.user.id, p_email: req.user.email || null,
+        p_context: 'submission', p_reference: req.params.id, p_discount: discount,
+      });
+      if (redeemError) throw redeemError;
+      if (result !== 'ok') return res.status(400).json({ message: COUPON_REASONS[result] || 'Coupon could not be applied.' });
+    }
+    const trackingNumber = newTrackingNumber();
+    const { error: metaError } = await supabase.from('record_meta').upsert([{
+      record_id: req.params.id,
+      payment_status: 'paid',
+      submission_fee: 0,
+      coupon_code: discount > 0 ? couponCode : null,
+      tracking_number: trackingNumber,
+      updated_at: new Date(),
+    }], { onConflict: 'record_id' });
     if (metaError) throw metaError;
-
-    console.log(`[Email System] Payment receipt for record ${req.params.id}. Tracking Number: ${trackingNumber}`);
     res.status(200).json({ success: true, trackingNumber });
   } catch (error) {
     console.error('processCheckout error:', error);
     res.status(500).json({ message: 'Could not complete checkout' });
   }
+};
+
+// Stripe → submission / challenge fees (see utils/stripe.js)
+const paymentHooks = {
+  onPaid: async (payment) => {
+    const trackingNumber = newTrackingNumber();
+    const { data: meta } = await supabase
+      .from('record_meta')
+      .update({ payment_status: 'paid', submission_fee: Number(payment.amount), tracking_number: trackingNumber, updated_at: new Date() })
+      .eq('record_id', payment.reference_id)
+      .neq('payment_status', 'paid')
+      .select('coupon_code')
+      .maybeSingle();
+    if (!meta) return; // already marked paid
+    const code = payment.metadata?.coupon_code;
+    const discount = Number(payment.metadata?.coupon_discount) || 0;
+    if (code && discount > 0) {
+      const { data: result } = await supabase.rpc('redeem_coupon_v2', {
+        p_code: code, p_user: payment.user_id, p_email: null, p_context: 'submission', p_reference: payment.reference_id, p_discount: discount,
+      });
+      if (result !== 'ok') console.warn(`[Submission] fee paid but coupon ${code} could not be counted (${result}).`);
+    }
+    const { data: rec } = await supabase.from('records').select('title, record_type').eq('id', payment.reference_id).maybeSingle();
+    await notifyMember({
+      userId: payment.user_id,
+      subject: `${rec?.record_type === 'challenge' ? 'Challenge' : 'Submission'} fee received`,
+      body: `Thank you! We received $${Number(payment.amount).toFixed(2)} for "${rec?.title || 'your record'}".\n\nYour tracking number is ${trackingNumber}. Our adjudication team will review your evidence and message you with the result.`,
+    });
+  },
+  onFailed: async () => {
+    // The fee simply stays unpaid; the member can pay again from their submission.
+  },
+  onRefund: async (payment, { full, refunded }) => {
+    if (full) await supabase.from('record_meta').update({ payment_status: 'refunded', updated_at: new Date() }).eq('record_id', payment.reference_id);
+    await notifyMember({
+      userId: payment.user_id,
+      subject: 'Submission fee refunded',
+      body: `We refunded $${Number(refunded).toFixed(2)} of your submission fee to your card. It usually shows within 5–10 business days.`,
+    });
+  },
 };
 
 // @desc    Get leaderboard
@@ -477,6 +545,7 @@ module.exports = {
   getAllSubmissionsForAdmin,
   adjudicateRecord,
   processCheckout,
+  paymentHooks,
   toggleRecordFeatured,
   PUBLIC_RECORD_COLUMNS,
   PUBLIC_USER_EMBED,

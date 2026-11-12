@@ -53,6 +53,9 @@ const getEvents = async (req, res) => {
       rules: e.rules || '',
       status: e.status || 'upcoming',
       category: e.category || 'WORLD RECORD',
+      hasMuxStream: !!e.mux_playback_id,
+      muxStatus: e.mux_status || null,
+      hasRecording: !!e.mux_recording_playback_id,
       createdAt: e.created_at,
       updatedAt: e.updated_at
     }, e, req.user, tickets));
@@ -104,6 +107,9 @@ const getEventById = async (req, res) => {
       rules: event.rules || '',
       status: event.status || 'upcoming',
       category: event.category || 'WORLD RECORD',
+      hasMuxStream: !!event.mux_playback_id,
+      muxStatus: event.mux_status || null,
+      hasRecording: !!event.mux_recording_playback_id,
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
@@ -178,6 +184,9 @@ const createEvent = async (req, res) => {
       rules: event.rules || '',
       status: event.status || 'upcoming',
       category: event.category || 'WORLD RECORD',
+      hasMuxStream: !!event.mux_playback_id,
+      muxStatus: event.mux_status || null,
+      hasRecording: !!event.mux_recording_playback_id,
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
@@ -263,6 +272,9 @@ const updateEvent = async (req, res) => {
       rules: event.rules || '',
       status: event.status || 'upcoming',
       category: event.category || 'WORLD RECORD',
+      hasMuxStream: !!event.mux_playback_id,
+      muxStatus: event.mux_status || null,
+      hasRecording: !!event.mux_recording_playback_id,
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
@@ -362,11 +374,179 @@ const toggleEventPaid = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Mux live streams (Admin) and playback (viewers with access)
+// ---------------------------------------------------------------------------
+const mux = require('../utils/mux');
+
+const adminStreamView = (e) => ({
+  enabled: mux.muxEnabled(),
+  signedPlayback: mux.signingEnabled(),
+  liveStreamId: e.mux_live_stream_id || null,
+  playbackId: e.mux_playback_id || null,
+  recordingPlaybackId: e.mux_recording_playback_id || null,
+  status: e.mux_status || null,
+  isLive: !!e.is_live,
+  rtmpUrl: mux.RTMP_URL,
+  streamKey: e.mux_stream_key || null,
+});
+
+const loadEvent = async (id) => {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return null;
+  const { data } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
+  return data || null;
+};
+
+// @route GET /api/events/:id/mux   (admin) — stream key and current status
+const getMuxStream = async (req, res) => {
+  try {
+    const event = await loadEvent(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (event.mux_live_stream_id && mux.muxEnabled()) {
+      try {
+        const ls = await mux.getLiveStream(event.mux_live_stream_id);
+        if (ls && ls.status !== event.mux_status) {
+          await supabase.from('events').update({ mux_status: ls.status, is_live: ls.status === 'active', updated_at: new Date() }).eq('id', event.id);
+          Object.assign(event, { mux_status: ls.status, is_live: ls.status === 'active' });
+        }
+      } catch (e) {
+        if (e.status === 404) {
+          await supabase.from('events').update({ mux_live_stream_id: null, mux_playback_id: null, mux_stream_key: null, mux_status: null, updated_at: new Date() }).eq('id', event.id);
+          Object.assign(event, { mux_live_stream_id: null, mux_playback_id: null, mux_stream_key: null, mux_status: null });
+        }
+      }
+    }
+    res.json(adminStreamView(event));
+  } catch (error) {
+    res.status(500).json({ message: 'Could not load the live stream', error: error.message });
+  }
+};
+
+// @route POST /api/events/:id/mux   (admin) — create the event's live stream
+const createMuxStream = async (req, res) => {
+  try {
+    const event = await loadEvent(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (event.mux_live_stream_id) return res.json(adminStreamView(event));
+    const ls = await mux.createLiveStream(event.id);
+    const playbackId = (ls.playback_ids || [])[0]?.id || null;
+    const { data: updated, error } = await supabase
+      .from('events')
+      .update({ mux_live_stream_id: ls.id, mux_playback_id: playbackId, mux_stream_key: ls.stream_key, mux_status: ls.status || 'idle', updated_at: new Date() })
+      .eq('id', event.id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.status(201).json(adminStreamView(updated));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || 'Could not create the live stream' });
+  }
+};
+
+// @route POST /api/events/:id/mux/reset-key   (admin) — new stream key (the old one stops working)
+const resetMuxKey = async (req, res) => {
+  try {
+    const event = await loadEvent(req.params.id);
+    if (!event?.mux_live_stream_id) return res.status(404).json({ message: 'This event has no live stream yet' });
+    const ls = await mux.resetStreamKey(event.mux_live_stream_id);
+    const { data: updated } = await supabase.from('events').update({ mux_stream_key: ls.stream_key, updated_at: new Date() }).eq('id', event.id).select().single();
+    res.json(adminStreamView(updated));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || 'Could not reset the stream key' });
+  }
+};
+
+// @route DELETE /api/events/:id/mux   (admin) — remove the live stream (its recording stays in Mux)
+const deleteMuxStream = async (req, res) => {
+  try {
+    const event = await loadEvent(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (event.mux_live_stream_id) {
+      try {
+        await mux.deleteLiveStream(event.mux_live_stream_id);
+      } catch (e) {
+        if (e.status !== 404) throw e;
+      }
+    }
+    const { data: updated } = await supabase
+      .from('events')
+      .update({ mux_live_stream_id: null, mux_playback_id: null, mux_stream_key: null, mux_status: null, is_live: false, updated_at: new Date() })
+      .eq('id', event.id)
+      .select()
+      .single();
+    res.json(adminStreamView(updated));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || 'Could not delete the live stream' });
+  }
+};
+
+// @route GET /api/events/:id/playback   (optionalAuth) — what the player needs, only for viewers with access
+const getPlayback = async (req, res) => {
+  try {
+    const event = await loadEvent(req.params.id);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    const tickets = await ticketedEventIds(req.user);
+    const allowed = !event.is_paid || (req.user && req.user.is_admin) || tickets.has(event.id);
+    if (!allowed) return res.status(403).json({ message: 'A spectator pass is needed to watch this event.', locked: true });
+
+    // Live while the stream is on; afterwards the recording (if Mux has finished it), else the live id.
+    const live = !!event.mux_playback_id && (event.mux_status === 'active' || (event.is_live && !event.mux_status));
+    const playbackId = live ? event.mux_playback_id : event.mux_recording_playback_id;
+    if (!playbackId && event.mux_playback_id) {
+      // A Mux stream is set up but not broadcasting yet (and there is no replay): the player waits.
+      return res.json({ source: 'mux', waiting: true, isLive: false, status: event.mux_status || 'idle' });
+    }
+    if (!playbackId) {
+      return res.json({ source: 'external', streamUrl: event.stream_url || '', videoUrl: event.video_url || '', isLive: !!event.is_live });
+    }
+    const tokens = mux.playbackTokens(playbackId);
+    res.json({ source: 'mux', playbackId, tokens, isLive: live, status: event.mux_status || null, title: event.title });
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || 'Could not load the stream' });
+  }
+};
+
+// @route POST /api/streams/mux/webhook   (Mux only: checked with the webhook signing secret)
+const muxWebhook = async (req, res) => {
+  if (!String(process.env.MUX_WEBHOOK_SECRET || '').trim()) return res.status(503).json({ message: 'Mux webhook is not configured' });
+  if (!mux.verifyWebhook(req.rawBody, req.get('mux-signature'))) return res.status(400).json({ message: 'Webhook signature check failed' });
+  try {
+    const { type, data = {} } = req.body || {};
+    const now = new Date();
+    if (type && type.startsWith('video.live_stream.')) {
+      const status = type.split('.').pop(); // active | idle | connected | disconnected | recording | deleted …
+      const updates = { updated_at: now };
+      if (status === 'deleted') Object.assign(updates, { mux_live_stream_id: null, mux_playback_id: null, mux_stream_key: null, mux_status: null, is_live: false });
+      else if (['active', 'idle', 'disconnected', 'connected', 'recording'].includes(status)) {
+        updates.mux_status = status;
+        if (status === 'active') updates.is_live = true;
+        if (status === 'idle') updates.is_live = false;
+      }
+      if (Object.keys(updates).length > 1) await supabase.from('events').update(updates).eq('mux_live_stream_id', data.id);
+    } else if ((type === 'video.asset.ready' || type === 'video.asset.live_stream_completed') && data.live_stream_id) {
+      const playbackId = (data.playback_ids || [])[0]?.id;
+      if (playbackId) {
+        await supabase.from('events').update({ mux_recording_playback_id: playbackId, updated_at: now }).eq('mux_live_stream_id', data.live_stream_id);
+      }
+    }
+    res.json({ received: true });
+  } catch (error) {
+    console.error('[Mux] webhook failed:', error.message);
+    res.status(500).json({ message: 'Webhook handling failed' });
+  }
+};
+
 module.exports = {
   getEvents,
   getEventById,
   createEvent,
   updateEvent,
   deleteEvent,
-  toggleEventPaid
+  toggleEventPaid,
+  getMuxStream,
+  createMuxStream,
+  resetMuxKey,
+  deleteMuxStream,
+  getPlayback,
+  muxWebhook
 };

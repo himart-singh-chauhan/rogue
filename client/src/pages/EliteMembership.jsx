@@ -27,7 +27,7 @@ import ScrollReveal from "../components/ScrollReveal";
 import { motion } from "motion/react";
 import { apiCall } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { formatCardNumber, formatExpiry, formatCvv, validateCard, CARD_INPUT_PROPS, EXPIRY_INPUT_PROPS, CVV_INPUT_PROPS } from "../utils/cardInput";
+import { goToCheckout, readPaymentReturn, clearPaymentReturn, checkPayment, cancelPayment, openBillingPortal } from "../utils/payments";
 
 const PLAN_ICONS = { free: User, bronze: Award, silver: Gem, gold: Crown, diamond: Star, vip_package: Rocket };
 const periodLabel = (interval) => (interval === "year" ? "/year" : interval === "one_time" ? " one-time" : "/month");
@@ -71,11 +71,6 @@ const EliteMembership = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const [cardholderName, setCardholderName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [billingZip, setBillingZip] = useState("");
   const [formError, setFormError] = useState("");
   const [fullName, setFullName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
@@ -105,48 +100,55 @@ const EliteMembership = () => {
     setFormError("");
   }
 
-  const handleCardNumberChange = (e) => {
-    setCardNumber(formatCardNumber(e.target.value));
-  };
+  // The member's current plan (shown above the plans, with "Manage billing" for card-paid plans)
+  const [myMembership, setMyMembership] = useState(null);
+  const [billingError, setBillingError] = useState("");
+  const [openingBilling, setOpeningBilling] = useState(false);
+  const loadMyMembership = React.useCallback(() => {
+    if (!user?.id || !user?.token) return;
+    apiCall(`/memberships/user/${user.id}`, "GET", null, user.token).then(setMyMembership).catch(() => setMyMembership(null));
+  }, [user?.id, user?.token]);
+  React.useEffect(() => { loadMyMembership(); }, [loadMyMembership]);
 
-  const handleExpiryDateChange = (e) => {
-    setExpiryDate(formatExpiry(e.target.value));
-  };
-
-  const handleCvvChange = (e) => {
-    setCvv(formatCvv(e.target.value, cardNumber));
-  };
-
-  const handleBillingZipChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, 6);
-    setBillingZip(limited);
-  };
-
-  const validateCardDetails = () => {
-    if (!cardholderName.trim()) {
-      return "Name on card is required.";
+  // Back from Stripe: confirm the payment and show the result
+  React.useEffect(() => {
+    const back = readPaymentReturn();
+    if (!back.status) return;
+    clearPaymentReturn();
+    if (back.status === "cancelled") {
+      cancelPayment(back.ref, user?.token);
+      setCheckoutItem({ name: "MEMBERSHIP", price: "$0", kind: "plan" });
+      setSuccessMessage("Payment cancelled. Nothing was charged. You can choose a plan whenever you are ready.");
+      setIsSuccess(true);
+      setShowCheckout(true);
+      return;
     }
-    if (/[^a-zA-Z\s.-]/.test(cardholderName)) {
-      return "Name on card can only contain letters, spaces, hyphens, and periods.";
-    }
-
-    const cardError = validateCard({ number: cardNumber, expiry: expiryDate, cvv });
-    if (cardError) return cardError;
-
-    const rawZip = billingZip.replace(/\s/g, "");
-    if (!rawZip) {
-      return "Billing zip code is required.";
-    }
-    if (/[^\d]/.test(rawZip)) {
-      return "Billing zip code must contain numbers only.";
-    }
-    if (rawZip.length < 5 || rawZip.length > 6) {
-      return "Billing zip code must be 5 or 6 digits.";
-    }
-
-    return null;
-  };
+    if (!back.sessionId) return;
+    setCheckoutItem({ name: "MEMBERSHIP", price: "$0", kind: "plan" });
+    setIsProcessing(true);
+    setShowCheckout(true);
+    checkPayment(back.sessionId, user?.token)
+      .then((r) => {
+        const m = r?.membership;
+        setCheckoutItem({ name: `${(m?.planName || "MEMBERSHIP").toUpperCase()} MEMBERSHIP`, price: `$${Number(r?.payment?.amount || 0).toFixed(2)}`, kind: "plan", paid: r?.payment?.status === "paid" });
+        if (r?.payment?.status === "paid") {
+          setSuccessMessage(`Payment received. Your ${m?.planName || ""} membership is now active${m?.autoRenew && m?.endDate ? ` and renews on ${new Date(m.endDate).toLocaleDateString()}` : ""}. A confirmation is in Profile → Messages.`);
+        } else if (r?.payment?.status === "pending") {
+          setSuccessMessage("Your payment is still being confirmed by the bank. Your plan switches on as soon as it goes through, and we will message you.");
+        } else {
+          setSuccessMessage("The payment did not go through. Nothing was charged.");
+        }
+        setIsProcessing(false);
+        setIsSuccess(true);
+        loadMyMembership();
+      })
+      .catch((e) => {
+        setSuccessMessage(e.message || "We could not confirm the payment. Please check Profile → Messages.");
+        setIsProcessing(false);
+        setIsSuccess(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const applyCoupon = async () => {
     if (!coupon.trim() || !checkoutItem) return;
@@ -305,6 +307,36 @@ const EliteMembership = () => {
           </div>
         </section>
 
+        {/* YOUR CURRENT PLAN */}
+        {user && myMembership && myMembership.tier && myMembership.tier !== "free" && myMembership.status === "active" && (
+          <section style={{ padding: "0 5% 40px" }}>
+            <div style={{ maxWidth: "1200px", margin: "0 auto", background: "linear-gradient(135deg, rgba(255,106,0,0.1), rgba(255,255,255,0.02))", border: "1px solid rgba(255,106,0,0.3)", borderRadius: "24px", padding: "24px 28px", display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "11px", fontWeight: 900, color: "#FF6A00", letterSpacing: "0.15em" }}>YOUR MEMBERSHIP</div>
+                <div style={{ fontSize: "24px", fontWeight: 950, textTransform: "uppercase", marginTop: "4px" }}>{(tiers.find((t) => t.id === myMembership.tier) || {}).name || myMembership.tier}</div>
+                <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", marginTop: "4px" }}>
+                  {myMembership.endDate ? `${myMembership.autoRenew ? "Renews" : "Active until"} ${new Date(myMembership.endDate).toLocaleDateString()}` : "Active"}
+                </div>
+                {billingError && <div style={{ fontSize: "12px", color: "#ef4444", marginTop: "6px", fontWeight: 700 }}>{billingError}</div>}
+              </div>
+              {myMembership.paidByCard && (
+                <button
+                  type="button"
+                  disabled={openingBilling}
+                  onClick={async () => {
+                    setBillingError("");
+                    setOpeningBilling(true);
+                    try { await openBillingPortal(user.token); } catch (e) { setBillingError(e.message || "Could not open the billing page."); setOpeningBilling(false); }
+                  }}
+                  style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "14px 28px", fontSize: "13px", fontWeight: 900, textTransform: "uppercase", cursor: openingBilling ? "wait" : "pointer" }}
+                >
+                  {openingBilling ? "Opening…" : "Manage billing"}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* PRICING CARDS */}
         <section style={{ padding: "0 5% 120px" }}>
           <div style={{
@@ -408,10 +440,6 @@ const EliteMembership = () => {
                           period: tier.period,
                           kind: "plan"
                         });
-                        setCardholderName("");
-                        setCardNumber("");
-                        setExpiryDate("");
-                        setCvv("");
                         setCoupon("");
                         setCouponMessage("");
                         setAppliedCoupon(null);
@@ -533,10 +561,6 @@ const EliteMembership = () => {
                             price: pack.price,
                             kind: "pack"
                           });
-                          setCardholderName("");
-                          setCardNumber("");
-                          setExpiryDate("");
-                          setCvv("");
                           setCoupon("");
                           setCouponMessage("");
                           setAppliedCoupon(null);
@@ -720,7 +744,7 @@ const EliteMembership = () => {
                   }}>
                     <CheckCircle2 size={48} color="#FF6A00" />
                   </div>
-                  <h3 style={{ fontSize: "24px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>{checkoutItem.price === "$0" ? "You're all set" : "Request received"}</h3>
+                  <h3 style={{ fontSize: "24px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>{checkoutItem.paid ? "Welcome aboard" : checkoutItem.price === "$0" ? "You're all set" : "Request received"}</h3>
                   <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "15px", lineHeight: "1.6", marginBottom: "32px" }}>
                     {successMessage || <>Thank you! Your request for <strong style={{ color: "#FF6A00" }}>{checkoutItem.name}</strong> has been saved.</>}
                   </p>
@@ -755,8 +779,8 @@ const EliteMembership = () => {
                     margin: "0 auto 24px",
                     animation: "spin 1s linear infinite"
                   }} />
-                  <h3 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px" }}>Sending your request...</h3>
-                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Saving your upgrade request securely.</p>
+                  <h3 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px" }}>Secure payment</h3>
+                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>One moment… connecting to Stripe, our secure payment partner.</p>
                 </div>
               ) : (
                 /* CHECKOUT CARD FORM FLOW */
@@ -770,12 +794,6 @@ const EliteMembership = () => {
                       return;
                     }
 
-                    const validationErr = validateCardDetails();
-                    if (validationErr) {
-                      setFormError(validationErr);
-                      return;
-                    }
-
                     setIsProcessing(true);
 
                     try {
@@ -783,8 +801,7 @@ const EliteMembership = () => {
                       const finalPrice = Math.max(0, originalPrice - discount);
 
                       if (checkoutItem.kind === "pack") {
-                        // Extra submission packs are sold through Stripe Checkout once it is connected.
-                        setSuccessMessage("Extra submission packs can be bought as soon as online card payments go live. Nothing has been charged. Please check back soon.");
+                        setSuccessMessage("Extra submission packs are coming soon. Nothing has been charged.");
                         setIsProcessing(false);
                         setIsSuccess(true);
                         return;
@@ -797,6 +814,10 @@ const EliteMembership = () => {
                         applicationData: { fullName, email, phone, address }
                       }, user?.token);
 
+                      if (res?.checkoutUrl) {
+                        goToCheckout(res.checkoutUrl); // pay on Stripe; Stripe sends the member back here
+                        return;
+                      }
                       setSuccessMessage(res?.message || "");
                       setIsProcessing(false);
                       setIsSuccess(true);
@@ -915,31 +936,6 @@ const EliteMembership = () => {
                     </div>
                   </div>
 
-                  {/* CARD DETAILS FORM */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    <div style={{ textAlign: "left" }}>
-                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARDHOLDER NAME</label>
-                      <input type="text" placeholder="John Doe" value={cardholderName} onChange={(e) => setCardholderName(e.target.value.replace(/[^a-zA-Z\s.-]/g, ""))} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                    </div>
-                    <div style={{ textAlign: "left" }}>
-                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARD NUMBER</label>
-                      <input type="text" {...CARD_INPUT_PROPS} placeholder="•••• •••• •••• ••••" value={cardNumber} onChange={handleCardNumberChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: windowWidth > 420 ? "1fr 1fr 1fr" : "1fr 1fr", gap: "16px", textAlign: "left" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>EXPIRY DATE</label>
-                        <input type="text" {...EXPIRY_INPUT_PROPS} placeholder="MM/YY" value={expiryDate} onChange={handleExpiryDateChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CVV</label>
-                        <input type="text" {...CVV_INPUT_PROPS} placeholder="•••" value={cvv} onChange={handleCvvChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>ZIP CODE</label>
-                        <input type="text" inputMode="numeric" autoComplete="postal-code" placeholder="10001" value={billingZip} onChange={handleBillingZipChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                      </div>
-                    </div>
-                  </div>
 
                   <button
                     type="submit"
@@ -961,13 +957,13 @@ const EliteMembership = () => {
                       marginTop: "8px"
                     }}
                   >
-                    <span>{checkoutItem.kind === "pack" ? "CONTINUE" : "REQUEST UPGRADE"} · ${(() => {
+                    <span>{checkoutItem.kind === "pack" ? "CONTINUE" : "CONTINUE TO SECURE PAYMENT"} · ${(() => {
                       const originalPrice = parseFloat(checkoutItem.price.replace("$", "")) || 0;
                       return Math.max(0, originalPrice - discount).toFixed(2);
                     })()}</span> <Shield size={16} />
                   </button>
                   <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", textAlign: "center", lineHeight: 1.5, margin: "-8px 0 0" }}>
-                    Your card is not charged yet. Online payments open soon; our team confirms your upgrade by email.
+                    You'll pay on Stripe's secure page (card, Apple Pay or Google Pay). Monthly and yearly plans renew automatically and can be cancelled any time under Manage billing.
                   </p>
                   <button type="button" onClick={closeCheckout} style={{ background: "none", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", borderRadius: "100px", padding: "14px", fontSize: "13px", fontWeight: 800, cursor: "pointer" }}>
                     Cancel

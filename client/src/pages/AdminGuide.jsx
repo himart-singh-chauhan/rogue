@@ -44,8 +44,27 @@ const SECTIONS = [
     body: [
       "Memberships → Plans holds every plan: price, monthly / yearly / one-time billing, submissions per month (empty = unlimited), the benefit list, priority review and VIP profile. Changes show on the Membership page immediately.",
       "Current plans: Free (3 submissions), Bronze $10.99 / month (10), Silver $20 / month (15), Gold $50 / month (unlimited), Diamond $200 / month (unlimited, priority review and VIP profile), VIP Package $250 one-time (lifetime, unlimited, priority review and VIP profile).",
-      "Until Stripe is connected, nothing is charged online. A member who chooses a paid plan creates an upgrade request, which appears under Memberships → Plans → Upgrade requests. Confirm their payment, then press Activate: their plan and submission limit change straight away.",
+      "Members pay on Stripe's secure page. Monthly and yearly plans are Stripe subscriptions that renew automatically; one-time plans are a single payment. The plan switches on by itself as soon as Stripe confirms the payment, and a member who upgrades stops paying for the old plan. Members update their card or cancel under Membership → Manage billing.",
+      "Cancelling a member's plan here also stops their Stripe subscription. Upgrade requests (Memberships → Plans → Upgrade requests) are only needed for payments made outside the website: confirm the payment, then press Activate.",
       "Subscribers lists every membership with its plan, status and renewal date. You can change a member's plan or cancel it there. Payments lists every recorded membership payment.",
+    ],
+  },
+  {
+    id: "payments",
+    title: "Payments (Stripe) and refunds",
+    body: [
+      "Every card payment (shop orders, spectator passes, record and challenge fees, memberships) goes through Stripe. Card details never touch the website. An order shows as Paid only after Stripe confirms the money; unpaid checkouts close after an hour and their orders show as Failed / Cancelled.",
+      "Refunds: open the payment in your Stripe dashboard (Payments) and press Refund. The website updates by itself: the order is marked Refunded, spectator passes from it stop working, reward points from it are taken back, and the member gets a message.",
+      "Money from Stripe is paid out to the bank account set in your Stripe account. Receipts are emailed by Stripe.",
+    ],
+  },
+  {
+    id: "livestreams",
+    title: "Live streams (Mux)",
+    body: [
+      "Open the event page, press the admin edit button and use the MUX LIVE STREAM box: Create live stream gives you a server URL and a stream key.",
+      "In OBS (or Streamlabs / your camera app): Settings → Stream → Service Custom…, paste the server URL and stream key, then Start Streaming. The event page shows LIVE within seconds. When you stop, the recording becomes the replay a few minutes later.",
+      "Paid events can only be watched by admins and members with a spectator pass. Keep the stream key private; New stream key makes the old one stop working.",
     ],
   },
   {

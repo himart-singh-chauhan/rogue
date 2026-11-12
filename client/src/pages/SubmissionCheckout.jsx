@@ -6,13 +6,22 @@ import Footer from "../components/Footer";
 import PageTransition from "../components/PageTransition";
 import { useAuth } from "../context/AuthContext";
 import { apiCall } from "../utils/api";
-import { formatCardNumber, formatExpiry, formatCvv, validateCard, CARD_INPUT_PROPS, EXPIRY_INPUT_PROPS, CVV_INPUT_PROPS } from "../utils/cardInput";
+import { goToCheckout, readPaymentReturn, clearPaymentReturn, checkPayment, cancelPayment } from "../utils/payments";
+
+// The submission being paid for is kept for the trip to Stripe and back (the page state is lost on the way).
+const STORE_KEY = "ampex_submission_checkout";
+const loadStored = () => { try { return JSON.parse(sessionStorage.getItem(STORE_KEY) || "null"); } catch { return null; } };
 
 const SubmissionCheckout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { submissionData } = location.state || {};
   const { user } = useAuth();
+  const [paymentReturn] = useState(() => readPaymentReturn());
+  const [submissionData, setSubmissionData] = useState(() => (location.state && location.state.submissionData) || (paymentReturn.status ? loadStored() : null));
+  const [confirming, setConfirming] = useState(paymentReturn.status === "success" && !!paymentReturn.sessionId);
+  useEffect(() => {
+    if (submissionData) { try { sessionStorage.setItem(STORE_KEY, JSON.stringify(submissionData)); } catch { /* ignore */ } }
+  }, [submissionData]);
 
   const [coupon, setCoupon] = useState("");
   const [couponMessage, setCouponMessage] = useState("");
@@ -22,49 +31,6 @@ const SubmissionCheckout = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const [cardholderName, setCardholderName] = useState(
-    submissionData ? (submissionData.athleteName || submissionData.athleteId || (user ? user.name : "")) : ""
-  );
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [billingZip, setBillingZip] = useState("");
-
-  // Shared card helpers: digits only, the right length for the card type (16 for most cards)
-  const handleCardNumberChange = (e) => setCardNumber(formatCardNumber(e.target.value));
-  const handleExpiryDateChange = (e) => setExpiryDate(formatExpiry(e.target.value));
-  const handleCvvChange = (e) => setCvv(formatCvv(e.target.value, cardNumber));
-
-  const handleBillingZipChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, 6);
-    setBillingZip(limited);
-  };
-
-  const validateCardDetails = () => {
-    if (!cardholderName.trim()) {
-      return "Name on card is required.";
-    }
-    if (/[^a-zA-Z\s.-]/.test(cardholderName)) {
-      return "Name on card can only contain letters, spaces, hyphens, and periods.";
-    }
-
-    const cardError = validateCard({ number: cardNumber, expiry: expiryDate, cvv });
-    if (cardError) return cardError;
-
-    const rawZip = billingZip.replace(/\s/g, "");
-    if (!rawZip) {
-      return "Billing zip code is required.";
-    }
-    if (/[^\d]/.test(rawZip)) {
-      return "Billing zip code must contain numbers only.";
-    }
-    if (rawZip.length < 5 || rawZip.length > 6) {
-      return "Billing zip code must be 5 or 6 digits.";
-    }
-
-    return null;
-  };
 
 
   const [successMessages, setSuccessMessages] = useState({
@@ -90,6 +56,32 @@ const SubmissionCheckout = () => {
   }, []);
 
   const [trackingNumber, setTrackingNumber] = useState("");
+
+  // Back from Stripe
+  useEffect(() => {
+    if (!paymentReturn.status) return;
+    clearPaymentReturn();
+    if (paymentReturn.status === "cancelled") {
+      cancelPayment(paymentReturn.ref, user?.token);
+      setError("Payment cancelled. Nothing was charged. You can pay whenever you are ready.");
+      return;
+    }
+    if (!paymentReturn.sessionId) return;
+    checkPayment(paymentReturn.sessionId, user?.token)
+      .then((r) => {
+        if (r?.record) setSubmissionData((d) => ({ ...(d || {}), id: r.record.id, title: d?.title || r.record.title, recordType: r.record.recordType }));
+        if (r?.payment?.status === "paid") {
+          setTrackingNumber(r.trackingNumber || "");
+          setSuccess(true);
+          try { sessionStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
+        } else {
+          setError(r?.payment?.status === "pending" ? "Your payment is still being confirmed. We will message you with your tracking number." : "The payment did not go through. Nothing was charged.");
+        }
+      })
+      .catch((e) => setError(e.message || "We could not confirm the payment. Please check Profile → Messages."))
+      .finally(() => setConfirming(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fee set in Admin → System Settings → Fees (record submission or challenge); the server charges the same amount
   const [fees, setFees] = useState(null);
@@ -129,13 +121,6 @@ const SubmissionCheckout = () => {
 
   const handlePayment = async () => {
     setError("");
-    const validationError = validateCardDetails();
-    if (validationError) {
-      setError(validationError);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-
     setLoading(true);
     try {
       if (!submissionData.id || submissionData.id === 'TEMP') {
@@ -148,17 +133,30 @@ const SubmissionCheckout = () => {
         finalAmount: finalFee
       }, user?.token);
 
-      setTrackingNumber(response.trackingNumber || `RWR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`);
+      if (response.checkoutUrl) {
+        goToCheckout(response.checkoutUrl); // pay on Stripe; Stripe sends the member back here
+        return;
+      }
+      setTrackingNumber(response.trackingNumber || "");
       setSuccess(true);
+      try { sessionStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
     } catch (e) {
       console.error("Checkout failed:", e);
       setError(e.message || "Payment processing failed. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
 
-  if (!submissionData) {
+  if (confirming) {
+    return (
+      <div style={{ padding: "200px 20px", textAlign: "center", color: "white", background: "#0A0A0A", minHeight: "100vh" }}>
+        <Loader2 size={40} className="animate-spin" color="#FF6A00" style={{ margin: "0 auto 20px" }} />
+        <h2 style={{ textTransform: "uppercase" }}>Confirming your payment…</h2>
+      </div>
+    );
+  }
+
+  if (!submissionData && !success) {
     return (
       <div style={{ padding: "200px 20px", textAlign: "center", color: "white", background: "#0A0A0A", minHeight: "100vh" }}>
         <h2>NO SUBMISSION DATA FOUND</h2>
@@ -179,7 +177,7 @@ const SubmissionCheckout = () => {
               </div>
               <h1 style={{ fontSize: "40px", fontWeight: "950", textTransform: "uppercase", marginBottom: "20px" }}>PAYMENT <span style={{ color: "#FF6A00" }}>SUCCESSFUL</span></h1>
               <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "16px", marginBottom: "40px", lineHeight: "1.6" }}>
-                {submissionData.recordType === 'challenge'
+                {submissionData?.recordType === 'challenge'
                   ? successMessages.msg_challenge
                   : successMessages.msg_record}
               </p>
@@ -227,55 +225,16 @@ const SubmissionCheckout = () => {
                     </div>
                   )}
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px" }}>
-                    <input
-                      type="text"
-                      placeholder="CARDHOLDER NAME"
-                      value={cardholderName}
-                      onChange={(e) => setCardholderName(e.target.value.replace(/[^a-zA-Z\s.-]/g, ""))}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "16px", color: "white", outline: "none" }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="CARD NUMBER"
-                      {...CARD_INPUT_PROPS}
-                      value={cardNumber}
-                      onChange={handleCardNumberChange}
-                      style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "16px", color: "white", outline: "none" }}
-                    />
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        {...EXPIRY_INPUT_PROPS}
-                        value={expiryDate}
-                        onChange={handleExpiryDateChange}
-                        style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "16px", color: "white", outline: "none" }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="CVV/CVC"
-                        {...CVV_INPUT_PROPS}
-                        value={cvv}
-                        onChange={handleCvvChange}
-                        style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "16px", color: "white", outline: "none" }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="ZIP CODE"
-                        value={billingZip}
-                        onChange={handleBillingZipChange}
-                        style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "16px", color: "white", outline: "none" }}
-                      />
-                    </div>
-                  </div>
+                  <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "14px", lineHeight: 1.6, margin: "0 0 28px 0" }}>
+                    You'll pay on Stripe's secure payment page (card, Apple Pay or Google Pay) and come straight back here for your tracking number. Your card details are never stored on our site.
+                  </p>
 
                   <button
                     onClick={handlePayment}
                     disabled={loading}
                     style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", boxShadow: "0 10px 20px rgba(255,106,0,0.2)", opacity: loading ? 0.7 : 1 }}
                   >
-                    {loading ? <><Loader2 size={18} className="animate-spin" /> PROCESSING...</> : `PAY $${finalFee.toFixed(2)} & SUBMIT`}
+                    {loading ? <><Loader2 size={18} className="animate-spin" /> PROCESSING...</> : finalFee > 0 ? `CONTINUE TO SECURE PAYMENT · $${finalFee.toFixed(2)}` : "SUBMIT"}
                   </button>
                 </div>
 

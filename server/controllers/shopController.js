@@ -1,6 +1,8 @@
 const supabase = require('../config/supabase');
 const { evaluateCoupon } = require('./couponController');
 const rewards = require('../utils/rewards');
+const stripe = require('../utils/stripe');
+const { notifyMember } = require('../utils/notify');
 
 // @desc    Get all products
 // @route   GET /api/shop
@@ -37,10 +39,37 @@ const getProductById = async (req, res) => {
 // @desc    Checkout cart and create order
 // @route   POST /api/shop/checkout
 // @access  Public (guest checkout allowed; a logged-in user is linked via optionalAuth)
-// NOTE: no payment gateway is connected yet. Prices are now taken from the database and
-// totals recomputed server-side, but "paid" must come from a Razorpay/Stripe webhook before launch.
+// Prices come from the database and totals are worked out here. The buyer pays on Stripe's page;
+// the order is only marked paid (and delivered) when Stripe confirms the payment.
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 const money = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// A coupon is only counted once the payment goes through, so checkouts that are still open on
+// Stripe (they close after an hour) count towards its limits too. Otherwise one member could
+// open two checkouts with a one-time coupon and pay both.
+const couponHeldByOpenCheckouts = async (code, userId, email) => {
+  const { data: coupon } = await supabase.from('coupons').select('id, max_redemptions, max_per_user, redemptions_count').eq('code', code).maybeSingle();
+  if (!coupon) return null;
+  const since = new Date(Date.now() - 65 * 60 * 1000).toISOString();
+  const { data: open } = await supabase
+    .from('orders')
+    .select('id, user_id, customer_email')
+    .eq('coupon_code', code)
+    .eq('payment_status', 'pending')
+    .gte('created_at', since);
+  const openList = open || [];
+  if (coupon.max_redemptions != null && (coupon.redemptions_count || 0) + openList.length >= coupon.max_redemptions) {
+    return 'That coupon has reached its maximum number of uses.';
+  }
+  if (coupon.max_per_user > 0) {
+    const mine = (r) => (userId && r.user_id === userId) || (email && String(r.customer_email || '').toLowerCase() === email);
+    const { data: used } = await supabase.from('coupon_redemptions').select('user_id, customer_email').eq('coupon_id', coupon.id);
+    if ((used || []).filter(mine).length + openList.filter(mine).length >= coupon.max_per_user) {
+      return 'You have already used this coupon the maximum number of times (or it is waiting in an unfinished checkout, which closes after an hour).';
+    }
+  }
+  return null;
+};
 
 const checkout = async (req, res) => {
   // Any "discount" sent by the browser is ignored: the discount is worked out here from the coupon.
@@ -146,6 +175,8 @@ const checkout = async (req, res) => {
         return res.status(verdict.status >= 400 ? verdict.status : 400).json({ message: verdict.data?.message || 'Coupon could not be applied.' });
       }
       discountAmount = money(Math.min(Math.max(verdict.data.discountAmount || 0, 0), subtotal));
+      const held = await couponHeldByOpenCheckouts(code, req.user?.id || null, buyerEmail);
+      if (held) return res.status(400).json({ message: held });
     }
 
     // Rewards level discount (Bronze 5% … Ambassador 40%) for logged-in members, on eligible items.
@@ -177,6 +208,10 @@ const checkout = async (req, res) => {
     const releaseClaims = async () => {
       if (claimed.length) await supabase.from('product_authorizations').update({ status: 'approved', order_id: null }).in('id', claimed);
     };
+    const needsPayment = total > 0;
+    if (needsPayment && !stripe.stripeEnabled()) {
+      return res.status(503).json({ message: 'Online card payments are not available right now. Please try again later.' });
+    }
     for (const a of pendingAuths) {
       const { data: got } = await supabase
         .from('product_authorizations')
@@ -191,7 +226,7 @@ const checkout = async (req, res) => {
       claimed.push(a.id);
     }
 
-    // 2. Create order
+    // 2. Create the order. With money to pay it waits as "pending" until Stripe confirms the payment.
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert([{
@@ -207,18 +242,19 @@ const checkout = async (req, res) => {
         reward_level: rewardLevel,
         total,
         shipping_status: 'pending',
-        payment_status: 'paid',
+        payment_status: needsPayment ? 'pending' : 'paid',
       }])
       .select()
       .single();
 
     if (orderError) { await releaseClaims(); throw orderError; }
 
-    // 3. Order items (inserted before stock changes so a failure can't leave stock deducted)
+    // 3. Order items
     const { error: itemsError } = await supabase.from('order_items').insert(
       lines.map(({ item, product, event, qty, unitPrice }) => ({
         order_id: order.id,
         product_id: product ? product.id : null,
+        event_id: event ? event.id : null,
         product_name: product ? product.name : event ? `Ticket: ${event.title}` : (item.title || item.name || 'Item'),
         price: unitPrice,
         quantity: qty,
@@ -235,81 +271,58 @@ const checkout = async (req, res) => {
     };
     if (itemsError) { await undoOrder(); throw itemsError; }
 
-    // Use up the coupon only now that the order exists. The database function enforces the total
-    // and per-account limits atomically, so a race between two buyers can't exceed them.
-    if (code && discountAmount > 0) {
-      const { data: result, error: redeemError } = await supabase.rpc('redeem_coupon_v2', {
-        p_code: code,
-        p_user: req.user?.id || null,
-        p_email: buyerEmail,
-        p_context: 'shop',
-        p_reference: String(order.id),
-        p_discount: discountAmount,
-      });
-      if (redeemError || result !== 'ok') {
-        await undoOrder();
-        if (redeemError) throw redeemError;
-        const reasons = {
-          not_found: 'That coupon code is not valid.',
-          inactive: 'That coupon is no longer active.',
-          limit_total: 'That coupon has reached its maximum number of uses.',
-          limit_user: 'You have already used this coupon the maximum number of times.',
-        };
-        return res.status(400).json({ message: reasons[result] || 'Coupon could not be applied.' });
-      }
-    }
-
-    // 4. Issue event tickets to the buyer
-    const crypto = require('crypto');
-    const ticketRows = [];
-    for (const l of lines) {
-      if (!l.event) continue;
-      for (let i = 0; i < l.qty; i++) {
-        ticketRows.push({
-          user_id: req.user.id,
-          event_id: l.event.id,
-          access_code: `TKT-${crypto.randomBytes(12).toString('hex').toUpperCase()}`,
-          status: 'active',
-          ticket_type: 'spectator',
-          expires_at: l.event.date ? new Date(new Date(l.event.date).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
-        });
-      }
-    }
-    if (ticketRows.length) {
-      const { error: ticketError } = await supabase.from('tickets').insert(ticketRows);
-      if (ticketError) console.error('Ticket issue failed for order', order.id, ticketError.message);
-    }
-
-    // Approvals claimed above are now linked to this order
+    // Approvals claimed above belong to this order (released again if the payment is not completed)
     if (claimed.length) {
       await supabase.from('product_authorizations').update({ order_id: order.id, updated_at: new Date() }).in('id', claimed);
     }
 
-    // 5. Stock levels
-    for (const { item, product, qty } of lines) {
-      if (!product) continue;
-      const sizes = Array.isArray(product.sizes)
-        ? product.sizes.map((sz) =>
-            item.size && String(sz.size).toLowerCase() === String(item.size).toLowerCase()
-              ? { ...sz, stock: Math.max(0, (sz.stock ?? sz.stockCount ?? 0) - qty) }
-              : sz
-          )
-        : product.sizes;
-      const { error: stockError } = await supabase
-        .from('products')
-        .update({ stock_count: Math.max(0, (product.stock_count || 0) - qty), sizes, updated_at: new Date() })
-        .eq('id', product.id);
-      if (stockError) console.error(`Stock update failed for ${product.id}:`, stockError.message);
+    const breakdown = { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, total, note: rewardNote };
+
+    if (!needsPayment) {
+      // Nothing to charge (fully discounted): use up the coupon now and deliver the order.
+      const redeem = await redeemOrderCoupon(order);
+      if (redeem !== 'ok') {
+        await undoOrder();
+        return res.status(400).json({ message: COUPON_REASONS[redeem] || 'Coupon could not be applied.' });
+      }
+      await fulfilOrder(order.id);
+      return res.status(201).json({ message: 'Order placed successfully!', orderId: order.id, order: { ...order, payment_status: 'paid' }, breakdown });
     }
 
-    // Purchase reward points (the order is marked paid above; with Stripe this moves to the payment webhook)
-    await rewards.syncOrderRewards(order.id);
+    // 4. Pay on Stripe's secure page. The order is delivered when Stripe confirms the payment.
+    let checkout;
+    try {
+      checkout = await stripe.createCheckout({
+        req,
+        kind: 'shop',
+        referenceId: order.id,
+        userId: req.user?.id || null,
+        email: buyerEmail,
+        description: `AMPEX order ${String(order.id).slice(0, 8).toUpperCase()}`,
+        lines: lines.map((l) => ({
+          name: l.product ? l.product.name : l.event ? `Ticket: ${l.event.title}` : (l.item.title || l.item.name || 'Item'),
+          description: [l.item.size && `Size ${l.item.size}`, l.item.color].filter(Boolean).join(' · ') || undefined,
+          amount: l.unitPrice,
+          qty: l.qty,
+        })),
+        discountAmount: money(discountAmount + rewardDiscount),
+        discountName: [discountAmount > 0 && code, rewardDiscount > 0 && rewardLevel].filter(Boolean).join(' + ') || null,
+        successPath: '/cart',
+        cancelPath: '/cart',
+        metadata: { order_id: order.id },
+      });
+    } catch (e) {
+      await undoOrder();
+      console.error('Stripe checkout could not start:', e.message);
+      return res.status(e.status && e.status < 500 ? e.status : 502).json({ message: e.status && e.status < 500 ? e.message : 'Could not open the secure payment page. Please try again.' });
+    }
 
     res.status(201).json({
-      message: 'Order placed successfully!',
+      message: 'Redirecting to secure payment…',
       orderId: order.id,
-      order,
-      breakdown: { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, total, note: rewardNote },
+      checkoutUrl: checkout.url,
+      paymentId: checkout.paymentId,
+      breakdown,
     });
   } catch (error) {
     console.error('Checkout error:', error);
@@ -317,9 +330,142 @@ const checkout = async (req, res) => {
   }
 };
 
+const COUPON_REASONS = {
+  not_found: 'That coupon code is not valid.',
+  inactive: 'That coupon is no longer active.',
+  limit_total: 'That coupon has reached its maximum number of uses.',
+  limit_user: 'You have already used this coupon the maximum number of times.',
+};
+
+// Use up the order's coupon. The database function enforces the total and per-account limits atomically.
+const redeemOrderCoupon = async (order) => {
+  if (!order.coupon_code || !(Number(order.discount_amount) > 0)) return 'ok';
+  const { data: result, error } = await supabase.rpc('redeem_coupon_v2', {
+    p_code: order.coupon_code,
+    p_user: order.user_id || null,
+    p_email: order.customer_email,
+    p_context: 'shop',
+    p_reference: String(order.id),
+    p_discount: Number(order.discount_amount),
+  });
+  if (error) throw error;
+  return result;
+};
+
+/**
+ * Deliver a paid order: event tickets, stock levels, reward points, a note in the buyer's inbox.
+ * Safe to call twice (tickets are only issued once per order).
+ */
+const fulfilOrder = async (orderId) => {
+  const crypto = require('crypto');
+  const { data: order } = await supabase.from('orders').select('*, items:order_items(*)').eq('id', orderId).maybeSingle();
+  if (!order) return;
+  const items = order.items || [];
+
+  // Event tickets
+  const ticketItems = items.filter((i) => i.event_id);
+  if (ticketItems.length && order.user_id) {
+    const { count } = await supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('order_id', order.id);
+    if (!count) {
+      const { data: evs } = await supabase.from('events').select('id, date').in('id', [...new Set(ticketItems.map((i) => i.event_id))]);
+      const dateOf = Object.fromEntries((evs || []).map((e) => [e.id, e.date]));
+      const rows = [];
+      for (const it of ticketItems) {
+        for (let n = 0; n < (it.quantity || 1); n++) {
+          const d = dateOf[it.event_id];
+          rows.push({
+            user_id: order.user_id,
+            event_id: it.event_id,
+            order_id: order.id,
+            access_code: `TKT-${crypto.randomBytes(12).toString('hex').toUpperCase()}`,
+            status: 'active',
+            ticket_type: 'spectator',
+            expires_at: d ? new Date(new Date(d).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+          });
+        }
+      }
+      const { error: ticketError } = await supabase.from('tickets').insert(rows);
+      if (ticketError) console.error('Ticket issue failed for order', order.id, ticketError.message);
+    }
+  }
+
+  // Stock levels
+  for (const it of items.filter((i) => i.product_id)) {
+    const { data: product } = await supabase.from('products').select('id, stock_count, sizes').eq('id', it.product_id).maybeSingle();
+    if (!product) continue;
+    const qty = it.quantity || 1;
+    const sizes = Array.isArray(product.sizes)
+      ? product.sizes.map((sz) => (it.size && String(sz.size).toLowerCase() === String(it.size).toLowerCase()
+        ? { ...sz, stock: Math.max(0, (sz.stock ?? sz.stockCount ?? 0) - qty) }
+        : sz))
+      : product.sizes;
+    const { error: stockError } = await supabase
+      .from('products')
+      .update({ stock_count: Math.max(0, (product.stock_count || 0) - qty), sizes, updated_at: new Date() })
+      .eq('id', product.id);
+    if (stockError) console.error(`Stock update failed for ${product.id}:`, stockError.message);
+  }
+
+  await rewards.syncOrderRewards(order.id);
+
+  if (order.user_id) {
+    await notifyMember({
+      userId: order.user_id,
+      subject: `Order ${String(order.id).slice(0, 8).toUpperCase()} confirmed`,
+      body: `Thank you! We received your payment of $${Number(order.total).toFixed(2)}.\n\n${items.map((i) => `• ${i.quantity} × ${i.product_name}${i.size ? ` (${i.size})` : ''}`).join('\n')}${ticketItems.length ? '\n\nYour spectator passes are on your account: open the event page to watch.' : ''}`,
+    });
+  }
+};
+
+// Stripe → shop orders (see utils/stripe.js)
+const paymentHooks = {
+  onPaid: async (payment) => {
+    const { data: order } = await supabase
+      .from('orders')
+      .update({ payment_status: 'paid', updated_at: new Date() })
+      .eq('id', payment.reference_id)
+      .eq('payment_status', 'pending')
+      .select()
+      .maybeSingle();
+    if (!order) return; // already delivered (or the order was removed)
+    const redeem = await redeemOrderCoupon(order);
+    if (redeem !== 'ok') console.warn(`[Shop] order ${order.id} paid but coupon ${order.coupon_code} could not be counted (${redeem}).`);
+    await fulfilOrder(order.id);
+  },
+  onFailed: async (payment) => {
+    // Checkout closed without paying: cancel the order and give belt approvals back.
+    const { data: order } = await supabase
+      .from('orders')
+      .update({ payment_status: 'failed', shipping_status: 'cancelled', updated_at: new Date() })
+      .eq('id', payment.reference_id)
+      .eq('payment_status', 'pending')
+      .select('id')
+      .maybeSingle();
+    if (!order) return;
+    await supabase.from('product_authorizations').update({ status: 'approved', order_id: null, updated_at: new Date() }).eq('order_id', order.id).eq('status', 'fulfilled');
+  },
+  onRefund: async (payment, { full, refunded }) => {
+    const { data: order } = await supabase.from('orders').select('id, user_id, total').eq('id', payment.reference_id).maybeSingle();
+    if (!order) return;
+    if (full) {
+      await supabase.from('orders').update({ payment_status: 'refunded', updated_at: new Date() }).eq('id', order.id);
+      await supabase.from('tickets').update({ status: 'revoked', updated_at: new Date() }).eq('order_id', order.id).in('status', ['active', 'pending']);
+      await rewards.syncOrderRewards(order.id); // takes the purchase points back
+    }
+    if (order.user_id) {
+      await notifyMember({
+        userId: order.user_id,
+        subject: `Refund for order ${String(order.id).slice(0, 8).toUpperCase()}`,
+        body: `We refunded $${Number(refunded).toFixed(2)} to your card. It usually shows on your statement within 5–10 business days.${full ? ' Any spectator passes from this order are no longer valid.' : ''}`,
+      });
+    }
+  },
+};
+
 module.exports = {
   getProducts,
   getProductById,
   checkout,
+  fulfilOrder,
+  paymentHooks,
 };
-

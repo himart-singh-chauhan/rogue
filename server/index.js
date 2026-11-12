@@ -16,7 +16,14 @@ const supabase = require('./config/supabase');
 const app = express();
 
 // Middleware
-app.use(express.json({ limit: '10mb' }));
+// Webhooks (Stripe, Mux) are checked against the exact bytes that were sent, so keep them for those routes.
+const RAW_BODY_ROUTES = ['/api/payments/stripe/webhook', '/api/streams/mux/webhook'];
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    if (RAW_BODY_ROUTES.some((p) => String(req.originalUrl || '').startsWith(p))) req.rawBody = Buffer.from(buf);
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS: restrict to the site's own domains when CLIENT_URLS is set (comma separated),
@@ -97,6 +104,8 @@ app.use('/api/weight-classes', require('./routes/weightClassRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/rewards', require('./routes/rewardRoutes'));
+app.use('/api/payments', require('./routes/paymentRoutes'));
+app.post('/api/streams/mux/webhook', require('./controllers/eventController').muxWebhook);
 app.get('/api/settings/public', require('./controllers/adminExtrasController').getPublicSettings);
 app.use('/api/social', require('./routes/socialRoutes'));
 

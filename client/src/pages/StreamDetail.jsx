@@ -10,6 +10,8 @@ import { useAuth } from "../context/AuthContext";
 import { apiCall } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
 import { addTicketToCart, isRealEventId } from "../utils/ticketCart";
+import StreamPlayer from "../components/StreamPlayer";
+import MuxStreamPanel from "../components/admin/MuxStreamPanel";
 
 const CountdownBox = ({ value, label }) => (
   <div style={{ textAlign: "center" }}>
@@ -683,6 +685,16 @@ const StreamDetail = () => {
                     </div>
                   </div>
                 </>
+              ) : isPlaying && isRealEventId(event?.id || event?._id || id) ? (
+                <div style={{ width: "100%", height: "100%", position: "relative", background: "#000" }}>
+                  <StreamPlayer
+                    eventId={event?.id || event?._id || id}
+                    token={user?.token}
+                    title={currentEvent.title}
+                    poster={currentEvent.imageUrl || currentEvent.image || currentEvent.img}
+                    onLocked={() => { setCanWatch(false); setIsPlaying(false); }}
+                  />
+                </div>
               ) : isPlaying ? (
                 <div style={{ width: "100%", height: "100%", position: "relative", background: "#0c0c0c" }}>
                   <img loading="lazy" decoding="async"
@@ -1028,6 +1040,7 @@ const StreamDetail = () => {
                         </button>
                       </div>
                     </form>
+                    {isRealEventId(event?.id || event?._id || id) && user?.token && <MuxStreamPanel eventId={event?.id || event?._id || id} token={user.token} />}
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -3,6 +3,8 @@ const supabase = require('../config/supabase');
 // Membership plans come from the membership_plans table (editable in Admin → Memberships → Plans).
 const { getPlanBySlug, formatPlan } = require('./planController');
 const { evaluateCoupon } = require('./couponController');
+const stripe = require('../utils/stripe');
+const { notifyMember } = require('../utils/notify');
 
 // Adapter: plan row -> the shape the membership code expects
 const tierConfigFor = async (slug) => {
@@ -53,6 +55,7 @@ const getFormattedMembership = (m) => {
     cancellationDate: m.cancellation_date,
     cancellationReason: m.cancellation_reason,
     notes: m.notes || '',
+    paidByCard: !!(m.stripe_subscription_id || m.stripe_customer_id), // Stripe: "Manage billing" is available
     createdAt: m.created_at,
     updatedAt: m.updated_at
   };
@@ -448,6 +451,17 @@ const cancelMembership = async (req, res) => {
       return res.status(404).json({ message: 'Membership not found' });
     }
 
+    // A plan paid by subscription stops billing in Stripe straight away.
+    if (existingMembership.stripe_subscription_id && stripe.stripeEnabled()) {
+      try {
+        await stripe.getStripe().subscriptions.cancel(existingMembership.stripe_subscription_id);
+      } catch (e) {
+        if (e.code !== 'resource_missing') {
+          return res.status(502).json({ message: `Stripe could not cancel the subscription: ${e.message}` });
+        }
+      }
+    }
+
     const { data: membership, error } = await supabase
       .from('memberships')
       .update({
@@ -637,6 +651,40 @@ const requestMembership = async (req, res) => {
       .single();
     if (error) throw error;
 
+    // Pay on Stripe's page; the plan switches on when Stripe confirms the payment.
+    if (stripe.stripeEnabled()) {
+      const recurring = ['month', 'year'].includes(plan.billingInterval) ? plan.billingInterval : null;
+      try {
+        const customerId = await stripe.ensureCustomer(userId);
+        const checkout = await stripe.createCheckout({
+          req,
+          kind: 'membership',
+          referenceId: membership.id,
+          userId,
+          customerId,
+          mode: recurring ? 'subscription' : 'payment',
+          description: `AMPEX ${plan.name} membership`,
+          lines: [{
+            name: `AMPEX ${plan.name} membership`,
+            description: recurring ? `Renews every ${recurring}. Cancel any time.` : 'One-time payment',
+            amount: plan.price,
+            qty: 1,
+            recurring,
+          }],
+          discountAmount: couponDiscount,
+          discountName: couponDiscount > 0 ? couponCode : null,
+          successPath: '/elite',
+          cancelPath: '/elite',
+          metadata: { membership_id: membership.id, plan: slug },
+        });
+        return res.status(201).json({ status: 'checkout', checkoutUrl: checkout.url, paymentId: checkout.paymentId });
+      } catch (e) {
+        await supabase.from('memberships').update({ status: 'cancelled', cancellation_reason: 'Payment page could not open', updated_at: new Date() }).eq('id', membership.id);
+        console.error('Stripe membership checkout could not start:', e.message);
+        return res.status(e.status && e.status < 500 ? e.status : 502).json({ message: e.status && e.status < 500 ? e.message : 'Could not open the secure payment page. Please try again.' });
+      }
+    }
+
     res.status(202).json({
       status: 'pending',
       message: `Your ${plan.name} upgrade request has been received. Your card has not been charged. Our team will confirm your upgrade and payment by email.`,
@@ -657,13 +705,8 @@ const activateMembership = async (req, res) => {
     const cfg = await tierConfigFor(m.tier);
     if (!cfg) return res.status(400).json({ message: 'This plan no longer exists. Change the plan first.' });
 
-    // only one active membership per user
-    await supabase
-      .from('memberships')
-      .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Replaced by a new plan', updated_at: new Date() })
-      .eq('user_id', m.user_id)
-      .eq('status', 'active')
-      .neq('id', m.id);
+    // only one active membership per user (a replaced Stripe subscription is stopped too)
+    await cancelOtherActive(m.user_id, m.id, 'Replaced by a new plan');
 
     const history = (m.payment_history || []).map((p) =>
       p.status === 'pending' ? { ...p, status: paymentReceived ? 'completed' : 'waived', confirmedAt: new Date().toISOString(), confirmedBy: req.user.id } : p);
@@ -703,7 +746,211 @@ const activateMembership = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Stripe: monthly / yearly plans are Stripe subscriptions; one-time plans a single payment.
+// ---------------------------------------------------------------------------
+const planNameFor = async (slug) => {
+  const { data } = await supabase.from('membership_plans').select('name').eq('slug', slug).maybeSingle();
+  return data?.name || slug;
+};
+const unix = (s) => (s ? new Date(s * 1000).toISOString() : null);
+
+// Only one active plan per member. Replaced plans that bill through Stripe are stopped there too,
+// so a member who upgrades is not charged for both plans.
+const cancelOtherActive = async (userId, exceptId, reason) => {
+  const { data: others } = await supabase
+    .from('memberships')
+    .select('id, stripe_subscription_id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .neq('id', exceptId);
+  for (const o of others || []) {
+    if (o.stripe_subscription_id && stripe.stripeEnabled()) {
+      try {
+        await stripe.getStripe().subscriptions.cancel(o.stripe_subscription_id);
+      } catch (e) {
+        if (e.code !== 'resource_missing') console.warn('[Membership] could not stop old subscription:', e.message);
+      }
+    }
+  }
+  if ((others || []).length) {
+    await supabase
+      .from('memberships')
+      .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: reason, auto_renew: false, updated_at: new Date() })
+      .in('id', others.map((o) => o.id));
+  }
+};
+
+const membershipForSubscription = async (subscriptionId) => {
+  const { data } = await supabase
+    .from('memberships')
+    .select('*')
+    .eq('stripe_subscription_id', subscriptionId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+};
+
+const paymentHooks = {
+  // Checkout paid: the pending request becomes the member's active plan.
+  onPaid: async (payment, session) => {
+    const { data: m } = await supabase.from('memberships').select('*').eq('id', payment.reference_id).maybeSingle();
+    if (!m || m.status === 'active') return;
+    const cfg = await tierConfigFor(m.tier);
+    const subscriptionId = payment.stripe_subscription_id || null;
+    let endDate = endDateFor(m.tier, cfg || {});
+    if (subscriptionId) {
+      const sub = await stripe.getStripe().subscriptions.retrieve(subscriptionId);
+      endDate = unix(sub.current_period_end) || endDate;
+    }
+    await cancelOtherActive(m.user_id, m.id, 'Replaced by a new plan');
+    const transactionId = payment.stripe_payment_intent_id || subscriptionId || session?.id || payment.id;
+    const history = (m.payment_history || []).map((p) => (p.status === 'pending'
+      ? { ...p, amount: Number(payment.amount), status: 'completed', transactionId, paidVia: 'stripe', confirmedAt: new Date().toISOString() }
+      : p));
+    const { error } = await supabase
+      .from('memberships')
+      .update({
+        status: 'active',
+        start_date: new Date().toISOString(),
+        end_date: endDate,
+        auto_renew: !!subscriptionId,
+        submission_limit: cfg ? cfg.submissionLimit : m.submission_limit,
+        features: cfg ? cfg.features : m.features,
+        payment_history: history,
+        stripe_subscription_id: subscriptionId,
+        stripe_customer_id: payment.stripe_customer_id || null,
+        updated_at: new Date(),
+      })
+      .eq('id', m.id);
+    if (error) throw error;
+
+    let app = {};
+    try { app = JSON.parse(m.notes || '{}') || {}; } catch { app = {}; }
+    if (app.couponCode && Number(app.couponDiscount) > 0) {
+      const { data: result } = await supabase.rpc('redeem_coupon_v2', {
+        p_code: app.couponCode, p_user: m.user_id, p_email: app.email || null,
+        p_context: 'membership', p_reference: String(m.id), p_discount: Number(app.couponDiscount),
+      });
+      if (result !== 'ok') console.warn(`[Membership] paid but coupon ${app.couponCode} could not be counted (${result}).`);
+    }
+    const name = await planNameFor(m.tier);
+    await notifyMember({
+      userId: m.user_id,
+      subject: `Your ${name} membership is active`,
+      body: `Welcome to ${name}! We received $${Number(payment.amount).toFixed(2)}.${subscriptionId ? `\n\nYour plan renews automatically${endDate ? ` on ${new Date(endDate).toLocaleDateString('en-US')}` : ''}. You can update your card or cancel any time on the Membership page → Manage billing.` : ''}`,
+    });
+  },
+  onFailed: async (payment) => {
+    await supabase
+      .from('memberships')
+      .update({ status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Payment was not completed', updated_at: new Date() })
+      .eq('id', payment.reference_id)
+      .eq('status', 'pending');
+  },
+  onRefund: async (payment, { full, refunded }) => {
+    const { data: m } = await supabase.from('memberships').select('*').eq('id', payment.reference_id).maybeSingle();
+    if (!m) return;
+    const history = [...(m.payment_history || []), {
+      date: new Date().toISOString(), amount: -Number(refunded), type: 'refund', status: 'refunded',
+      transactionId: payment.stripe_payment_intent_id || payment.id, paidVia: 'stripe',
+    }];
+    const updates = { payment_history: history, updated_at: new Date() };
+    // A refunded one-time plan ends. A refunded subscription keeps running until it is cancelled in Stripe.
+    if (full && !m.stripe_subscription_id && m.status === 'active') {
+      Object.assign(updates, { status: 'cancelled', cancellation_date: new Date(), cancellation_reason: 'Payment refunded', auto_renew: false });
+    }
+    await supabase.from('memberships').update(updates).eq('id', m.id);
+    await notifyMember({
+      userId: m.user_id,
+      subject: 'Membership payment refunded',
+      body: `We refunded $${Number(refunded).toFixed(2)} to your card. It usually shows within 5–10 business days.`,
+    });
+  },
+};
+
+// invoice.paid: a monthly / yearly renewal went through (the first payment is handled by the checkout).
+const onInvoicePaid = async (invoiceId) => {
+  const s = stripe.getStripe();
+  const invoice = await s.invoices.retrieve(invoiceId);
+  const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+  if (!subscriptionId || invoice.billing_reason === 'subscription_create') return;
+  const m = await membershipForSubscription(subscriptionId);
+  if (!m) return;
+  const amount = stripe.dollars(invoice.amount_paid);
+  // One row per invoice (unique), so a repeated webhook does nothing the second time.
+  const { error: payError } = await supabase.from('payments').insert([{
+    user_id: m.user_id, kind: 'membership', reference_id: m.id, status: 'paid', amount, paid_at: new Date().toISOString(),
+    stripe_invoice_id: invoice.id, stripe_subscription_id: subscriptionId,
+    stripe_payment_intent_id: typeof invoice.payment_intent === 'string' ? invoice.payment_intent : invoice.payment_intent?.id || null,
+    stripe_customer_id: typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id || null,
+    description: 'Membership renewal',
+  }]);
+  if (payError) {
+    if (payError.code === '23505') return;
+    throw payError;
+  }
+  const periodEnd = invoice.lines?.data?.[0]?.period?.end;
+  const history = [...(m.payment_history || []), {
+    date: new Date().toISOString(), amount, type: 'renewal', status: 'completed', transactionId: invoice.id, paidVia: 'stripe',
+  }];
+  await supabase
+    .from('memberships')
+    .update({ status: 'active', submission_count: 0, end_date: unix(periodEnd) || m.end_date, payment_history: history, updated_at: new Date() })
+    .eq('id', m.id);
+};
+
+// invoice.payment_failed: tell the member; Stripe retries the card automatically.
+const onInvoiceFailed = async (invoiceId) => {
+  const invoice = await stripe.getStripe().invoices.retrieve(invoiceId);
+  const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+  if (!subscriptionId) return;
+  const m = await membershipForSubscription(subscriptionId);
+  if (!m || (m.payment_history || []).some((p) => p.transactionId === invoice.id && p.status === 'failed')) return;
+  const history = [...(m.payment_history || []), {
+    date: new Date().toISOString(), amount: stripe.dollars(invoice.amount_due), type: 'renewal', status: 'failed', transactionId: invoice.id, paidVia: 'stripe',
+  }];
+  await supabase.from('memberships').update({ payment_history: history, updated_at: new Date() }).eq('id', m.id);
+  const name = await planNameFor(m.tier);
+  await notifyMember({
+    userId: m.user_id,
+    subject: `Payment for your ${name} membership failed`,
+    body: `We couldn't charge your card for your ${name} membership. Please update your card on the Membership page → Manage billing. We'll try the card again over the next few days.`,
+  });
+};
+
+// customer.subscription.updated / deleted: renew on/off, new period end, or the plan ended.
+const onSubscriptionChange = async (subscriptionId, deleted = false) => {
+  const m = await membershipForSubscription(subscriptionId);
+  if (!m) return;
+  let sub = null;
+  try {
+    sub = await stripe.getStripe().subscriptions.retrieve(subscriptionId);
+  } catch (e) {
+    if (e.code !== 'resource_missing') throw e;
+  }
+  const ended = deleted || !sub || ['canceled', 'incomplete_expired'].includes(sub.status);
+  if (ended) {
+    if (m.status !== 'active') return;
+    const over = m.end_date && new Date(m.end_date) <= new Date();
+    await supabase
+      .from('memberships')
+      .update({ status: over ? 'expired' : 'cancelled', auto_renew: false, cancellation_date: new Date(), cancellation_reason: 'Subscription ended in Stripe', updated_at: new Date() })
+      .eq('id', m.id);
+    return;
+  }
+  await supabase
+    .from('memberships')
+    .update({ auto_renew: !sub.cancel_at_period_end, end_date: unix(sub.current_period_end) || m.end_date, updated_at: new Date() })
+    .eq('id', m.id);
+};
+
 module.exports = {
+  paymentHooks,
+  onInvoicePaid,
+  onInvoiceFailed,
+  onSubscriptionChange,
   tierConfigFor,
   endDateFor,
   requestMembership,

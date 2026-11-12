@@ -6,7 +6,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { apiCall, formatProductImage } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { formatCardNumber, formatExpiry, formatCvv, validateCard, CARD_INPUT_PROPS, EXPIRY_INPUT_PROPS, CVV_INPUT_PROPS } from "../utils/cardInput";
+import { goToCheckout, readPaymentReturn, clearPaymentReturn, checkPayment, cancelPayment } from "../utils/payments";
 
 const isTicket = (item) => item.type === "ticket" || String(item.title || "").toLowerCase().includes("spectator pass");
 
@@ -38,11 +38,9 @@ const Cart = () => {
   const [showCheckout, setShowCheckout] = React.useState(false);
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [isSuccess, setIsSuccess] = React.useState(false);
-  const [cardholderName, setCardholderName] = React.useState("");
-  const [cardNumber, setCardNumber] = React.useState("");
-  const [expiryDate, setExpiryDate] = React.useState("");
-  const [cvv, setCvv] = React.useState("");
-  const [billingZip, setBillingZip] = React.useState("");
+  const [cardholderName, setCardholderName] = React.useState(user?.name || "");
+  const [receiptItems, setReceiptItems] = React.useState(null); // what was paid for (from the server after Stripe)
+  const [returnNotice, setReturnNotice] = React.useState(null);
   const [shippingAddress, setShippingAddress] = React.useState("");
   const [buyerEmail, setBuyerEmail] = React.useState("");
   const needsShipping = items.some((item) => !isTicket(item));
@@ -72,24 +70,6 @@ const Cart = () => {
     fetchMessages();
   }, []);
 
-  const handleCardNumberChange = (e) => {
-    setCardNumber(formatCardNumber(e.target.value));
-  };
-
-  const handleExpiryDateChange = (e) => {
-    setExpiryDate(formatExpiry(e.target.value));
-  };
-
-  const handleCvvChange = (e) => {
-    setCvv(formatCvv(e.target.value, cardNumber));
-  };
-
-  const handleBillingZipChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const limited = raw.substring(0, 6);
-    setBillingZip(limited);
-  };
-
   const validateCardDetails = () => {
     if (needsShipping && !shippingAddress.trim()) {
       return "Shipping address is required.";
@@ -102,26 +82,8 @@ const Cart = () => {
       return "Please log in to buy event tickets. Tickets are linked to your account.";
     }
     if (!cardholderName.trim()) {
-      return "Name on card is required.";
+      return "Your full name is required.";
     }
-    if (/[^a-zA-Z\s.-]/.test(cardholderName)) {
-      return "Name on card can only contain letters, spaces, hyphens, and periods.";
-    }
-
-    const cardError = validateCard({ number: cardNumber, expiry: expiryDate, cvv });
-    if (cardError) return cardError;
-
-    const rawZip = billingZip.replace(/\s/g, "");
-    if (!rawZip) {
-      return "Billing zip code is required.";
-    }
-    if (/[^\d]/.test(rawZip)) {
-      return "Billing zip code must contain numbers only.";
-    }
-    if (rawZip.length < 5 || rawZip.length > 6) {
-      return "Billing zip code must be 5 or 6 digits.";
-    }
-
     return null;
   };
 
@@ -217,6 +179,43 @@ const Cart = () => {
   const total = Math.max(0, subtotal - couponPart - rewardPart);
   const savings = subtotal - total;
 
+  // Back from Stripe: show the receipt once the payment is confirmed, or say nothing was charged.
+  React.useEffect(() => {
+    const back = readPaymentReturn();
+    if (!back.status) return;
+    clearPaymentReturn();
+    if (back.status === "cancelled") {
+      cancelPayment(back.ref, user?.token);
+      setReturnNotice({ type: "info", text: "Payment cancelled. Nothing was charged and your bag is still here." });
+      return;
+    }
+    if (back.status !== "success" || !back.sessionId) return;
+    setShowCheckout(true);
+    setIsProcessing(true);
+    checkPayment(back.sessionId, user?.token)
+      .then((r) => {
+        const order = r?.order;
+        if (r?.payment?.status === "paid" && order) {
+          setReceiptItems((order.items || []).map((i) => ({ id: i.product_name, title: i.product_name, qty: i.quantity, price: Number(i.price), size: i.size, color: i.color, type: i.event_id ? "ticket" : "product" })));
+          setPaidBreakdown({ total: Number(order.total) });
+          setItems([]);
+          localStorage.removeItem("rogue_cart_items");
+          setIsProcessing(false);
+          setIsSuccess(true);
+        } else {
+          setIsProcessing(false);
+          setShowCheckout(false);
+          setReturnNotice({ type: "error", text: r?.payment?.status === "pending" ? "Your payment is still being confirmed by the bank. We'll message you as soon as it goes through." : "The payment did not go through. Nothing was charged." });
+        }
+      })
+      .catch((e) => {
+        setIsProcessing(false);
+        setShowCheckout(false);
+        setReturnNotice({ type: "error", text: e.message || "We could not confirm the payment. Please check Profile → Messages or contact us." });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <PageTransition>
       <div style={{ background: "#0A0A0A", color: "white", minHeight: "100vh", fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
@@ -226,6 +225,13 @@ const Cart = () => {
           <Link to="/shop" style={{ display: "flex", alignItems: "center", gap: "8px", color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: "14px", fontWeight: "700", marginBottom: "40px", transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "white"} onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}>
             <ArrowLeft size={16} /> BACK TO SHOP
           </Link>
+
+          {returnNotice && (
+            <div role="status" style={{ marginBottom: "28px", background: returnNotice.type === "error" ? "rgba(239,68,68,0.1)" : "rgba(255,106,0,0.08)", border: `1px solid ${returnNotice.type === "error" ? "rgba(239,68,68,0.4)" : "rgba(255,106,0,0.3)"}`, color: "white", padding: "14px 18px", borderRadius: "14px", fontSize: "14px", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+              <span>{returnNotice.text}</span>
+              <button type="button" onClick={() => setReturnNotice(null)} aria-label="Close" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: "16px" }}>✕</button>
+            </div>
+          )}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: "60px" }}>
 
@@ -452,11 +458,7 @@ const Cart = () => {
               <button
                 onClick={() => {
                   if (items.length > 0) {
-                    setCardholderName("");
-                    setCardNumber("");
-                    setExpiryDate("");
-                    setCvv("");
-                    setShippingAddress("");
+                    if (!cardholderName && user?.name) setCardholderName(user.name);
                     setShowCheckout(true);
                   }
                 }}
@@ -527,8 +529,9 @@ const Cart = () => {
                   <h3 style={{ fontSize: "28px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>PAYMENT SUCCESSFUL</h3>
                   <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", lineHeight: "1.6", marginBottom: "24px" }}>
                     {(() => {
-                      const hasPass = items.some(isTicket);
-                      const hasOtherItems = items.some(item => !isTicket(item));
+                      const paidItems = receiptItems || items;
+                      const hasPass = paidItems.some(isTicket);
+                      const hasOtherItems = paidItems.some(item => !isTicket(item));
 
                       if (hasPass && !hasOtherItems) {
                         return successMessages.msg_spectator;
@@ -544,7 +547,7 @@ const Cart = () => {
                   <div style={{ background: "rgba(255,106,0,0.05)", border: "1px solid rgba(255,106,0,0.15)", borderRadius: "16px", padding: "18px", marginBottom: "28px", textAlign: "left" }}>
                     <div style={{ fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>ORDER RECEIPT</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {items.map((item, i) => (
+                      {(receiptItems || items).map((item, i) => (
                         <div key={`receipt-${item.id}-${i}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
                           <div>
                             <div style={{ fontSize: "13px", fontWeight: "800", color: "white" }}>{item.qty}x {item.title}</div>
@@ -567,7 +570,7 @@ const Cart = () => {
 
                   <button
                     type="button"
-                    onClick={() => { setShowCheckout(false); setIsSuccess(false); setItems([]); localStorage.removeItem("rogue_cart_items"); }}
+                    onClick={() => { setShowCheckout(false); setIsSuccess(false); setReceiptItems(null); setItems([]); localStorage.removeItem("rogue_cart_items"); }}
                     style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", boxShadow: "0 10px 20px rgba(255,106,0,0.3)" }}
                   >
                     CONTINUE SHOPPING
@@ -576,8 +579,8 @@ const Cart = () => {
               ) : isProcessing ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <div style={{ width: "50px", height: "50px", border: "4px solid rgba(255,106,0,0.1)", borderTop: "4px solid #FF6A00", borderRadius: "50%", margin: "0 auto 24px", animation: "spin 1s linear infinite" }} />
-                  <h3 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px" }}>PROCESSING SECURE PAYMENT</h3>
-                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Verifying card details with payment gateway...</p>
+                  <h3 style={{ fontSize: "20px", fontWeight: "900", textTransform: "uppercase", marginBottom: "12px" }}>SECURE PAYMENT</h3>
+                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>One moment… connecting to Stripe, our secure payment partner.</p>
                 </div>
               ) : (
                 <form
@@ -617,6 +620,10 @@ const Cart = () => {
 
                       const placed = await apiCall("/shop/checkout", "POST", payload, user?.token);
                       setPaidBreakdown(placed?.breakdown || null);
+                      if (placed?.checkoutUrl) {
+                        goToCheckout(placed.checkoutUrl); // pay on Stripe; we come back to this page
+                        return;
+                      }
                       setIsProcessing(false);
                       setIsSuccess(true);
                     } catch (err) {
@@ -680,34 +687,19 @@ const Cart = () => {
                     </div>
                     )}
                     <div style={{ textAlign: "left" }}>
-                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARDHOLDER NAME</label>
-                      <input type="text" placeholder="John Doe" value={cardholderName} onChange={(e) => setCardholderName(e.target.value.replace(/[^a-zA-Z\s.-]/g, ""))} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
+                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>FULL NAME</label>
+                      <input type="text" autoComplete="name" placeholder="John Doe" value={cardholderName} onChange={(e) => setCardholderName(e.target.value)} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
                     </div>
-                    <div style={{ textAlign: "left" }}>
-                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CARD NUMBER</label>
-                      <input type="text" {...CARD_INPUT_PROPS} placeholder="•••• •••• •••• ••••" value={cardNumber} onChange={handleCardNumberChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", textAlign: "left" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>EXPIRY DATE</label>
-                        <input type="text" {...EXPIRY_INPUT_PROPS} placeholder="MM/YY" value={expiryDate} onChange={handleExpiryDateChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>CVV</label>
-                        <input type="text" {...CVV_INPUT_PROPS} placeholder="•••" value={cvv} onChange={handleCvvChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "8px", textTransform: "uppercase" }}>ZIP CODE</label>
-                        <input type="text" inputMode="numeric" autoComplete="postal-code" placeholder="10001" value={billingZip} onChange={handleBillingZipChange} style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 18px", color: "white", outline: "none", fontSize: "13px" }} />
-                      </div>
-                    </div>
+                    <p style={{ margin: 0, fontSize: "12px", color: "rgba(255,255,255,0.5)", lineHeight: 1.5, textAlign: "left" }}>
+                      Next you'll enter your card on Stripe's secure payment page. Your card details are never stored on our site.
+                    </p>
                   </div>
 
                   <button
                     type="submit"
                     style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", boxShadow: "0 10px 20px rgba(255,106,0,0.3)", marginTop: "8px" }}
                   >
-                    <span>SECURELY PAY ${total.toFixed(2)}</span> <Shield size={16} />
+                    <span>{total > 0 ? `CONTINUE TO SECURE PAYMENT · $${total.toFixed(2)}` : "PLACE ORDER"}</span> <Shield size={16} />
                   </button>
                 </form>
               )}
