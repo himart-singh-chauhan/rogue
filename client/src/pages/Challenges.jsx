@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ArrowLeft, Play, Lock, Unlock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ArrowLeft, Play, Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall } from "../utils/api";
+import WatchToUnlockVideo from "../components/WatchToUnlockVideo";
 
 // Official score = the verified value and unit saved on the record
 const officialScore = (record) => {
@@ -102,19 +103,6 @@ const Challenges = () => {
     ? challengeCards 
     : challengeCards.filter(c => c.cat === activeTab);
 
-  const handleVideoTimeUpdate = (e) => {
-    if (e.target.currentTime > 2 && !hasWatched) {
-      setHasWatched(true);
-    }
-  };
-
-  const handleVideoPlay = () => {
-    setHasWatched(true);
-  };
-
-  const handleVideoEnded = () => {
-    setHasWatched(true);
-  };
 
   const getMockAttempts = (challenge) => {
     const attempts = [
@@ -367,82 +355,7 @@ const Challenges = () => {
               <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
                 {/* Video Player Side */}
                 <div style={{ flex: "1.2", background: "black", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", overflow: "hidden" }}>
-                {(() => {
-                  const src = selectedChallenge.videoUrl || '';
-                  const isYouTube = src.includes('youtube') || src.includes('youtu.be');
-                  if (isYouTube) {
-                    const youtubeId = src.includes('youtube.com/watch?v=') 
-                      ? src.split('v=')[1]?.split('&')[0] 
-                      : (src.includes('youtu.be/') ? src.split('youtu.be/')[1]?.split('?')[0] : null);
-                    
-                    return (
-                      <iframe 
-                        src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`} 
-                        frameBorder="0" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                        allowFullScreen 
-                        style={{ width: "100%", height: "100%", objectFit: "cover", border: "none" }}
-                        onLoad={() => {
-                          setTimeout(() => setHasWatched(true), 3000);
-                        }}
-                      />
-                    );
-                  }
-                  
-                  return (
-                    <video
-                      src={src}
-                      controls
-                      autoPlay
-                      onPlay={handleVideoPlay}
-                      onTimeUpdate={handleVideoTimeUpdate}
-                      onEnded={handleVideoEnded}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  );
-                })()}
-                {!hasWatched && (
-                  <div style={{
-                    position: "absolute",
-                    top: "24px",
-                    left: "24px",
-                    background: "rgba(0,0,0,0.75)",
-                    border: "1px solid #FF6A00",
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    fontSize: "11px",
-                    fontWeight: "900",
-                    color: "#FF6A00",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
-                  }}>
-                    <Lock size={12} /> Watch video to unlock challenge
-                  </div>
-                )}
-                {hasWatched && (
-                  <div style={{
-                    position: "absolute",
-                    top: "24px",
-                    left: "24px",
-                    background: "rgba(34, 197, 94, 0.95)",
-                    border: "1px solid #22c55e",
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    fontSize: "11px",
-                    fontWeight: "900",
-                    color: "white",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
-                  }}>
-                    <CheckCircle2 size={12} /> Record Watched - Challenge Unlocked
-                  </div>
-                )}
+                <WatchToUnlockVideo key={selectedChallenge.id} src={selectedChallenge.videoUrl || ''} onUnlock={() => setHasWatched(true)} />
               </div>
 
                 {/* Record Metadata Side */}

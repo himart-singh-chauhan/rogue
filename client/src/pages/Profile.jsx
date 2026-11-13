@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { convertWeight, convertHeight } from "../utils/units";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Trophy, MapPin, Calendar, Activity, Zap, Timer,
@@ -8,6 +9,7 @@ import {
   Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search, Download, ExternalLink, Gift
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+import MessageComposer from "../components/MessageComposer";
 import Footer from "../components/Footer";
 import MyRewards from "../components/MyRewards";
 import { useAuth } from "../context/AuthContext";
@@ -80,59 +82,167 @@ const MyCertificates = ({ state, token }) => {
   );
 };
 
-// ---------- Messages from AMPEX (Admin → Communications) ----------
-const Inbox = ({ state, token, onRead }) => {
+// ---------- Messages: notices from AMPEX and messages from other members ----------
+const inboxBtn = (on) => ({ background: on ? "#FF5500" : "rgba(255,255,255,0.05)", color: on ? "white" : "#bbb", border: on ? "1px solid #FF5500" : "1px solid rgba(255,255,255,0.1)", borderRadius: "100px", padding: "8px 16px", fontSize: "13px", fontWeight: 800, cursor: "pointer" });
+
+const FindMember = ({ token, onPick, onClose }) => {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    if (q.trim().length < 2) return undefined;
+    let alive = true;
+    const t = setTimeout(() => {
+      setSearching(true);
+      apiCall(`/messages/recipients?q=${encodeURIComponent(q.trim())}`, "GET", null, token)
+        .then((r) => { if (alive) setResults(Array.isArray(r) ? r : []); })
+        .catch(() => {})
+        .finally(() => { if (alive) setSearching(false); });
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [q, token]);
+  return (
+    <div style={{ background: "rgba(13,13,16,0.6)", border: "1px solid rgba(255,85,0,0.3)", borderRadius: "18px", padding: "16px", marginBottom: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+        <strong style={{ fontSize: "14px" }}>Who do you want to message?</strong>
+        <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", color: "#888", cursor: "pointer" }}><X size={16} /></button>
+      </div>
+      <div style={{ position: "relative" }}>
+        <Search size={15} color="#777" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or username" aria-label="Search members"
+          style={{ width: "100%", boxSizing: "border-box", background: "#0b0b0b", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "12px", padding: "12px 14px 12px 36px", color: "white", fontSize: "15px", outline: "none" }} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px" }}>
+        {searching && <span style={{ color: "#777", fontSize: "13px" }}>Searching…</span>}
+        {!searching && q.trim().length >= 2 && results.length === 0 && <span style={{ color: "#777", fontSize: "13px" }}>No members found.</span>}
+        {(q.trim().length >= 2 ? results : []).map((m) => (
+          <button key={m.id} type="button" onClick={() => onPick(m)} style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "10px 12px", color: "white", cursor: "pointer", textAlign: "left" }}>
+            <img src={m.profile_image || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name || "M")}&background=FF6A00&color=fff&size=64`} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+            <span><strong style={{ fontSize: "14px" }}>{m.name}</strong>{m.username && <span style={{ color: "#888", fontSize: "12px" }}> @{m.username}</span>}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const EmailSetting = ({ token }) => {
+  const [on, setOn] = useState(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    apiCall("/email/preferences", "GET", null, token).then((r) => setOn(r.marketingEmails !== false)).catch(() => setOn(true));
+  }, [token]);
+  if (on === null) return null;
+  const toggle = async () => {
+    const next = !on;
+    setOn(next);
+    try { const r = await apiCall("/email/preferences", "PUT", { marketingEmails: next }, token); setMsg(r.message || ""); }
+    catch (e) { setOn(!next); setMsg(e.message || "Could not save."); }
+  };
+  return (
+    <div style={{ marginTop: "28px", background: "rgba(13,13,16,0.5)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "18px", padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+      <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+        <div style={{ fontWeight: 800, fontSize: "14px" }}>Promotions and challenge news by email</div>
+        <div style={{ color: "#777", fontSize: "12px", marginTop: "4px", lineHeight: 1.5 }}>{msg || "Emails about your account (orders, records, membership) always arrive."}</div>
+      </div>
+      <button type="button" role="switch" aria-checked={on} onClick={toggle} style={{ width: 52, height: 30, borderRadius: 100, border: "none", cursor: "pointer", background: on ? "#FF5500" : "#333", position: "relative", flexShrink: 0 }}>
+        <span style={{ position: "absolute", top: 3, left: on ? 25 : 3, width: 24, height: 24, borderRadius: "50%", background: "white", transition: "left 0.2s" }} />
+      </button>
+    </div>
+  );
+};
+
+const Inbox = ({ state, token, onRead, myId }) => {
   const [openId, setOpenId] = useState(null);
+  const [box, setBox] = useState("inbox");
+  const [sent, setSent] = useState({ loaded: false, list: [] });
+  const [composer, setComposer] = useState(null); // { to, subject, recordId }
+  const [finding, setFinding] = useState(false);
+
+  const loadSent = () => apiCall("/messages/sent", "GET", null, token)
+    .then((list) => setSent({ loaded: true, list: Array.isArray(list) ? list : [] }))
+    .catch(() => setSent({ loaded: true, list: [] }));
+  useEffect(() => { if (box === "sent" && !sent.loaded) loadSent(); }, [box]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const open = (m) => {
     setOpenId(openId === m.id ? null : m.id);
-    if (!m.is_read) {
+    if (box === "inbox" && !m.is_read) {
       onRead(m.id);
       apiCall(`/messages/${m.id}/read`, "PUT", {}, token).catch(() => {});
     }
   };
+  const reply = (m) => setComposer({ to: { id: m.sender.id, name: m.sender.name }, subject: /^re:/i.test(m.subject || "") ? m.subject : `Re: ${m.subject || ""}`, recordId: m.record_id || null });
+  const list = box === "inbox" ? state.list : sent.list;
+  const loaded = box === "inbox" ? state.loaded : sent.loaded;
+
   return (
     <div>
       <h2 style={{ fontSize: "22px", fontWeight: "900", letterSpacing: "-0.5px", margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: "10px" }}>
         <Mail size={22} color="#FF5500" /> MESSAGES
       </h2>
-      <p style={{ color: "#666", fontSize: "13px", margin: "0 0 24px 0" }}>Notices and replies from the AMPEX World Records team</p>
-      {!state.loaded ? (
+      <p style={{ color: "#666", fontSize: "13px", margin: "0 0 18px 0" }}>Notices from the AMPEX World Records team and messages from other members. Message a member to call them out on a record.</p>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "18px" }}>
+        <button type="button" style={inboxBtn(box === "inbox")} onClick={() => setBox("inbox")}>Inbox</button>
+        <button type="button" style={inboxBtn(box === "sent")} onClick={() => setBox("sent")}>Sent</button>
+        <button type="button" style={{ ...inboxBtn(false), marginLeft: "auto", color: "white", borderColor: "rgba(255,85,0,0.5)", display: "inline-flex", alignItems: "center", gap: "6px" }} onClick={() => setFinding(true)}><Plus size={14} /> New message</button>
+      </div>
+      {finding && <FindMember token={token} onClose={() => setFinding(false)} onPick={(m) => { setFinding(false); setComposer({ to: { id: m.id, name: m.name }, subject: "" }); }} />}
+      {!loaded ? (
         <div style={{ color: "#666", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> Loading messages...</div>
-      ) : state.error ? (
+      ) : box === "inbox" && state.error ? (
         <div style={{ color: "#f87171", fontSize: "14px" }}>{state.error}</div>
-      ) : state.list.length === 0 ? (
+      ) : list.length === 0 ? (
         <div style={{ background: "rgba(13,13,16,0.5)", border: "1px dashed rgba(255,255,255,0.08)", borderRadius: "24px", padding: "40px 24px", textAlign: "center", color: "#777", fontSize: "14px" }}>
-          Your inbox is empty.
+          {box === "inbox" ? "Your inbox is empty." : "You have not sent any messages yet."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {state.list.map((m) => {
+          {list.map((m) => {
             const isOpen = openId === m.id;
+            const unread = box === "inbox" && !m.is_read;
+            const person = box === "inbox" ? m.sender : m.receiver;
+            const fromMember = box === "inbox" && m.is_member_message;
+            const who = box === "inbox"
+              ? (fromMember ? person?.name || "A member" : person?.name ? `${person.name} · AMPEX team` : "AMPEX World Records")
+              : `To ${person?.name || "member"}`;
             return (
-              <div key={m.id} style={{ background: "rgba(13,13,16,0.5)", border: `1px solid ${m.is_read ? "rgba(255,255,255,0.05)" : "rgba(255,85,0,0.35)"}`, borderRadius: "18px", overflow: "hidden" }}>
+              <div key={m.id} style={{ background: "rgba(13,13,16,0.5)", border: `1px solid ${unread ? "rgba(255,85,0,0.35)" : "rgba(255,255,255,0.05)"}`, borderRadius: "18px", overflow: "hidden" }}>
                 <button
+                  type="button"
                   onClick={() => open(m)}
                   aria-expanded={isOpen}
                   style={{ width: "100%", background: "none", border: "none", color: "white", textAlign: "left", padding: "16px 18px", cursor: "pointer", display: "flex", gap: "12px", alignItems: "center" }}
                 >
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: m.is_read ? "transparent" : "#FF5500", flexShrink: 0 }} />
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: unread ? "#FF5500" : "transparent", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontWeight: m.is_read ? 700 : 900, fontSize: "14px", overflowWrap: "anywhere" }}>{m.subject || "(no subject)"}</span>
+                    <span style={{ display: "block", fontWeight: unread ? 900 : 700, fontSize: "14px", overflowWrap: "anywhere" }}>{m.subject || "(no subject)"}</span>
                     <span style={{ display: "block", color: "#777", fontSize: "12px", marginTop: "3px" }}>
-                      {m.sender?.name || "AMPEX World Records"} · {formatCertDate(m.created_at)}
+                      {who} · {formatCertDate(m.created_at)}{box === "sent" ? (m.is_read ? " · Read" : " · Not read yet") : ""}
                     </span>
                   </span>
                   <ChevronRight size={16} color="#666" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
                 </button>
                 {isOpen && (
-                  <div style={{ padding: "0 18px 18px 38px", color: "rgba(255,255,255,0.75)", fontSize: "14px", lineHeight: 1.7, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
-                    {m.body}
+                  <div style={{ padding: "0 18px 18px 38px" }}>
+                    <div style={{ color: "rgba(255,255,255,0.75)", fontSize: "14px", lineHeight: 1.7, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{m.body}</div>
+                    {m.record?.title && <div style={{ marginTop: "10px" }}><Link to={`/record/${m.record.id}`} style={{ color: "#FF6A00", fontSize: "13px", fontWeight: 700 }}>Record: {m.record.title}</Link></div>}
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "14px" }}>
+                      {box === "inbox" && person?.id && String(person.id) !== String(myId) && (
+                        <button type="button" onClick={() => reply(m)} style={{ ...inboxBtn(true), padding: "8px 18px" }}>Reply</button>
+                      )}
+                      {person?.username && <Link to={`/profile/${person.username}`} style={{ ...inboxBtn(false), textDecoration: "none" }}>View profile</Link>}
+                    </div>
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+      )}
+      <EmailSetting token={token} />
+      {composer && (
+        <MessageComposer to={composer.to} subject={composer.subject} recordId={composer.recordId}
+          onClose={() => setComposer(null)} onSent={() => { setSent({ loaded: false, list: [] }); if (box === "sent") loadSent(); }} />
       )}
     </div>
   );
@@ -1044,7 +1154,7 @@ const Profile = () => {
               {activeTab === "certificates" && <MyCertificates state={certState} token={user?.token} />}
 
               {/* TAB 4: Inbox */}
-              {activeTab === "messages" && <Inbox state={inboxState} token={user?.token} onRead={markReadLocally} />}
+              {activeTab === "messages" && <Inbox state={inboxState} token={user?.token} onRead={markReadLocally} myId={user?._id || user?.id} />}
               {activeTab === "rewards" && <MyRewards token={user?.token} />}
             </div>
           ) : (
@@ -1710,8 +1820,8 @@ const Profile = () => {
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                       <label style={{ fontSize: "16px", fontWeight: "900", color: "#555", letterSpacing: "1px" }}>WEIGHT</label>
                       <div style={{ display: "flex", gap: "8px" }}>
-                        <button type="button" onClick={() => setEditForm({ ...editForm, weightUnit: "kg" })} style={{ background: "transparent", border: "none", color: editForm.weightUnit === "kg" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>KG</button>
-                        <button type="button" onClick={() => setEditForm({ ...editForm, weightUnit: "lbs" })} style={{ background: "transparent", border: "none", color: editForm.weightUnit === "lbs" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>LBS</button>
+                        <button type="button" onClick={() => setEditForm({ ...editForm, weightUnit: "kg", weight: convertWeight(editForm.weight, editForm.weightUnit, "kg") })} style={{ background: "transparent", border: "none", color: editForm.weightUnit === "kg" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>KG</button>
+                        <button type="button" onClick={() => setEditForm({ ...editForm, weightUnit: "lbs", weight: convertWeight(editForm.weight, editForm.weightUnit, "lbs") })} style={{ background: "transparent", border: "none", color: editForm.weightUnit === "lbs" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>LBS</button>
                       </div>
                     </div>
                     <input
@@ -1726,8 +1836,8 @@ const Profile = () => {
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                       <label style={{ fontSize: "16px", fontWeight: "900", color: "#555", letterSpacing: "1px" }}>HEIGHT ({editForm.heightUnit.toUpperCase()})</label>
                       <div style={{ display: "flex", gap: "8px" }}>
-                        <button type="button" onClick={() => setEditForm({ ...editForm, heightUnit: "cm" })} style={{ background: "transparent", border: "none", color: editForm.heightUnit === "cm" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>CM</button>
-                        <button type="button" onClick={() => setEditForm({ ...editForm, heightUnit: "ft_in" })} style={{ background: "transparent", border: "none", color: editForm.heightUnit === "ft_in" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>FT/IN</button>
+                        <button type="button" onClick={() => setEditForm({ ...editForm, heightUnit: "cm", height: convertHeight(editForm.height, editForm.heightUnit, "cm") })} style={{ background: "transparent", border: "none", color: editForm.heightUnit === "cm" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>CM</button>
+                        <button type="button" onClick={() => setEditForm({ ...editForm, heightUnit: "ft_in", height: convertHeight(editForm.height, editForm.heightUnit, "ft_in") })} style={{ background: "transparent", border: "none", color: editForm.heightUnit === "ft_in" ? "#FF5500" : "#555", fontSize: "16px", fontWeight: "900", cursor: "pointer" }}>FT/IN</button>
                       </div>
                     </div>
                     <input

@@ -3,7 +3,7 @@
 // "Download PDF" button and the athlete's "My Certificates".
 //
 // Field positions are fractions of the template's width (x, maxW) and height (y, size),
-// measured on the two AMPEX designs supplied by the client.
+// measured on the two signed AMPEX designs supplied by the client (Curtis Freeman / Stephen Pelham signatures).
 
 const NAME_FONT = '"Georgia", "Times New Roman", serif';
 const BODY_FONT = '"Georgia", "Times New Roman", serif';
@@ -18,10 +18,11 @@ export const LAYOUT_PRESETS = {
       recipientName: { x: 0.497, y: 0.503, maxW: 0.52, size: 0.043, align: 'center', baseline: 'middle', font: NAME_FONT, style: 'italic bold', minScale: 0.42 },
       recordTitle: { x: 0.21, y: 0.721, maxW: 0.198, size: 0.022, align: 'left', wrap: true },
       recordValue: { x: 0.3, y: 0.765, maxW: 0.107, size: 0.022, align: 'left' },
-      dateAchieved: { x: 0.727, y: 0.713, maxW: 0.166, size: 0.022, align: 'left' },
-      dateVerified: { x: 0.718, y: 0.754, maxW: 0.175, size: 0.022, align: 'left' },
-      certificateNumber: { x: 0.756, y: 0.794, maxW: 0.137, size: 0.019, align: 'left', style: 'bold' },
-      verifyUrl: { x: 0.725, y: 0.884, maxW: 0.25, size: 0.0135, align: 'center', color: SOFT_INK, prefix: 'Verify at ' },
+      dateAchieved: { x: 0.747, y: 0.713, maxW: 0.17, size: 0.021, align: 'left' },
+      dateVerified: { x: 0.73, y: 0.7545, maxW: 0.188, size: 0.021, align: 'left' },
+      certificateNumber: { x: 0.779, y: 0.795, maxW: 0.141, size: 0.017, align: 'left', style: 'bold' },
+      // under "Verified By", clear of the signature and the gold corner
+      verifyUrl: { x: 0.72, y: 0.899, maxW: 0.2, size: 0.0105, align: 'center', color: SOFT_INK, prefix: 'Verify at ', wrapPrefix: true },
     },
   },
   // 8.5 x 11 in design
@@ -34,7 +35,8 @@ export const LAYOUT_PRESETS = {
       dateAchieved: { x: 0.322, y: 0.7195, maxW: 0.533, size: 0.0165, align: 'left' },
       dateVerified: { x: 0.317, y: 0.7435, maxW: 0.538, size: 0.0165, align: 'left' },
       certificateNumber: { x: 0.384, y: 0.7685, maxW: 0.472, size: 0.0155, align: 'left', style: 'bold' },
-      verifyUrl: { x: 0.86, y: 0.8, maxW: 0.26, size: 0.0098, align: 'right', color: SOFT_INK, prefix: 'Verify at ', wrapPrefix: true },
+      // one small line between the Certificate Number line and the signatures
+      verifyUrl: { x: 0.86, y: 0.7895, maxW: 0.3, size: 0.0085, align: 'right', color: SOFT_INK, prefix: 'Verify at ' },
     },
   },
   // Custom uploads: the template has no printed labels, so labels are drawn with the values

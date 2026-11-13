@@ -26,8 +26,11 @@ import AdminCertificates from "../components/admin/AdminCertificates";
 import ImageUploadField from "../components/admin/ImageUploadField";
 import AdminMemberProfile from "../components/admin/AdminMemberProfile";
 import AdminRewards from "../components/admin/AdminRewards";
+import AdminAchievementAwards from "../components/admin/AdminAchievementAwards";
+import AdminEmailMembers from "../components/admin/AdminEmailMembers";
 import AdminFeesCard from "../components/admin/AdminFeesCard";
 import { Modal as AdminModal } from "../components/admin/adminUi";
+import BodyUnitsFields from "../components/admin/BodyUnitsFields";
 import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
 
 // Recommended artwork size for each sponsor placement (shown in the sponsor form)
@@ -268,7 +271,7 @@ const Admin = () => {
   // Dynamic Form states bound to inputs
   const [recordForm, setRecordForm] = useState({ title: "", category: "Strength", description: "", value: "", unit: "", status: "pending", evidenceUrl: "", venueName: "", city: "", recordType: "standard", userId: "" });
   const [recordThumbFile, setRecordThumbFile] = useState(null);
-  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
+  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", weightUnit: "kg", height: "", heightUnit: "cm", country: "", city: "" });
   const [eventForm, setEventForm] = useState({ title: "", description: "", date: "", location: "", imageUrl: "", isPaid: false, ticketPrice: 0 });
   const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false, imageFile: null, imagePreview: "" });
   const [adminProductDragActive, setAdminProductDragActive] = useState(false);
@@ -1050,6 +1053,13 @@ const Admin = () => {
   };
 
   // Open Modal Helper
+  // Users "⋮" menu: open the member's profile on a given tab (optionally with a new message open)
+  const [profileStart, setProfileStart] = useState({ tab: "overview", compose: null, n: 0 });
+  const openProfileAt = (u, tab = "overview", compose = null) => {
+    setProfileStart((p) => ({ tab, compose, n: p.n + 1 }));
+    openModal("viewProfile", u);
+  };
+
   const openModal = (type, item = null) => {
     setModalType(type);
     setModalTarget(item);
@@ -1117,12 +1127,14 @@ const Admin = () => {
           gender: item.gender || "male",
           dob: item.dob ? new Date(item.dob).toISOString().split("T")[0] : "",
           weight: item.weight || "",
+          weightUnit: item.weight_unit || item.weightUnit || "kg",
           height: item.height || "",
+          heightUnit: item.height_unit || item.heightUnit || "cm",
           country: item.country || "",
           city: item.city || ""
         });
       } else {
-        setUserForm({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
+        setUserForm({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", weightUnit: "kg", height: "", heightUnit: "cm", country: "", city: "" });
       }
     } else if (activeTab === "events") {
       if (type === "edit" && item) {
@@ -1295,6 +1307,8 @@ const Admin = () => {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    // View-only pop-ups (member / adjudicator profiles) have nothing to save; Enter in their inputs must not save.
+    if (String(modalType || "").startsWith("view")) return;
     setModalLoading(true);
     try {
       if (activeTab === "videoManagement") {
@@ -1414,7 +1428,11 @@ const Admin = () => {
             role: userForm.role,
             membershipType: userForm.membershipType,
             accountStatus: userForm.accountStatus,
-            isAdmin: userForm.role === 'system_admin'
+            isAdmin: userForm.role === 'system_admin',
+            height: userForm.height,
+            heightUnit: userForm.heightUnit,
+            weight: userForm.weight,
+            weightUnit: userForm.weightUnit
           };
           // Only include password for new users
           if (modalType === "add" && userForm.password) {
@@ -1525,7 +1543,7 @@ const Admin = () => {
 
         // Reset forms
         if (activeTab === "users" || activeTab === "adjudicators") {
-          setUserForm({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", height: "", country: "", city: "" });
+          setUserForm({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", weightUnit: "kg", height: "", heightUnit: "cm", country: "", city: "" });
         } else if (activeTab === "coupons") {
           setCouponForm({
             code: "",
@@ -2831,7 +2849,7 @@ const Admin = () => {
                                 <img loading="lazy" decoding="async" src={u.profile_image ? formatProductImage(u.profile_image) : `https://ui-avatars.com/api/?name=${u.name}&background=random`} alt={u.name} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
                                 <div>
                                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    <span style={{ color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }} onClick={() => openModal('viewProfile', u)}>{u.name}</span>
+                                    <span style={{ color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }} onClick={() => openProfileAt(u, 'overview')}>{u.name}</span>
                                     {(u.member_number || u.memberNumber) && (
                                       <span style={{ color: "#FF5500", fontSize: "11px", fontWeight: "800", background: "rgba(255,85,0,0.06)", border: "1px solid rgba(255,85,0,0.15)", borderRadius: "4px", padding: "1px 6px" }}>
                                         {u.member_number || u.memberNumber}
@@ -2899,12 +2917,12 @@ const Admin = () => {
                                     <MoreVertical size={16} />
                                   </button>
                                   <div id={`actions-${u.id}`} style={{ display: 'none', position: 'absolute', right: 0, top: '100%', background: '#222', border: '1px solid #333', borderRadius: '8px', padding: '4px', zIndex: 10, width: '180px' }}>
-                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openModal('viewProfile', u); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>View Profile</button>
+                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openProfileAt(u, 'overview'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>View Profile</button>
                                      <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openModal('edit', u); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Edit User</button>
-                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; alert('Membership Details - Coming Soon'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Membership Details</button>
-                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; alert('Appeals/Disputes - Coming Soon'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Appeals/Disputes</button>
-                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; alert('Message User - Coming Soon'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Message User</button>
-                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; alert('Profile Management Upload - Coming Soon'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Upload/Profile Management</button>
+                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openProfileAt(u, 'membership'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Membership Details</button>
+                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openProfileAt(u, 'appeals'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Appeals/Disputes</button>
+                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openProfileAt(u, 'overview', 'message'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Message User</button>
+                                     <button type="button" onClick={(e) => { e.preventDefault(); document.getElementById(`actions-${u.id}`).style.display='none'; openProfileAt(u, 'manage'); }} style={{ width: '100%', textAlign: 'left', padding: '8px', background: 'transparent', border: 'none', color: 'white', fontSize: '12px', cursor: 'pointer' }}>Upload/Profile Management</button>
                                      <div style={{ width: "100%", height: "1px", background: "rgba(255,255,255,0.1)", margin: "4px 0" }}></div>
                                      {(!u.account_status || u.account_status === 'active') ? (
                                        <>
@@ -7118,6 +7136,8 @@ const Admin = () => {
 
           {/* ==================== 5M. VIP & RANKINGS (PHASE 4) ==================== */}
           {activeTab === "rewards" && <AdminRewards />}
+          {activeTab === "awards" && <AdminAchievementAwards />}
+          {activeTab === "emails" && <AdminEmailMembers />}
 
           {activeTab === "vip" && (
             <div>
@@ -8532,23 +8552,14 @@ const Admin = () => {
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>CITY</label>
                         <input type="text" value={userForm.city} onChange={(e) => setUserForm({ ...userForm, city: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                        <div>
-                          <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>HEIGHT (cm)</label>
-                          <input type="number" value={userForm.height} onChange={(e) => setUserForm({ ...userForm, height: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
-                        </div>
-                        <div>
-                          <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>WEIGHT (kg)</label>
-                          <input type="number" value={userForm.weight} onChange={(e) => setUserForm({ ...userForm, weight: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
-                        </div>
-                      </div>
                     </div>
+                    <BodyUnitsFields form={userForm} setForm={setUserForm} />
                   </>
                 )}
 
                 {/* 7. VIEW USER PROFILE: real data, message / email the member */}
                 {activeTab === "users" && modalType === "viewProfile" && modalTarget && (
-                  <AdminMemberProfile userId={modalTarget.id || modalTarget._id} />
+                  <AdminMemberProfile key={`${modalTarget.id || modalTarget._id}-${profileStart.n}`} userId={modalTarget.id || modalTarget._id} initialTab={profileStart.tab} initialCompose={profileStart.compose} />
                 )}
 
                 {activeTab === "adjudicators" && modalType === "viewAdjudicatorProfile" && modalTarget && (

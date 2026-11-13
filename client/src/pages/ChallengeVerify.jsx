@@ -752,12 +752,13 @@ const ChallengeVerify = () => {
                               required
                               style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none", marginBottom: "20px" }}
                             />
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                            {/* City / State is one normal single-line field (it used to stretch to the height of the date and time pickers) */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
                               <input
-                                type="text" placeholder="CITY / STATE" value={formData.city}
+                                type="text" placeholder="CITY / STATE" aria-label="City / State" value={formData.city}
                                 onChange={(e) => setFormData({...formData, city: e.target.value})}
                                 required
-                                style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
+                                style={{ width: "100%", height: "48px", alignSelf: "start", boxSizing: "border-box", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "0 20px", color: "white", outline: "none" }}
                               />
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
                                 {/* Labelled, visible date & time pickers (they used to look like empty black boxes on tablets) */}

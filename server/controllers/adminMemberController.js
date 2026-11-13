@@ -1,9 +1,11 @@
 // Admin → Users → a member's full profile: everything about one member on one screen.
 const supabase = require('../config/supabase');
 const rewards = require('../utils/rewards');
+const email = require('../utils/email');
+const { createAndStart } = require('./emailController');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
-const USER_COLUMNS = 'id, name, email, is_admin, role, membership_type, account_status, suspended_until, suspension_reason, profile_image, username, phone, gender, dob, weight, weight_unit, height, height_unit, country, city, street_address, apartment, state, zip_code, member_number, created_at, last_login_at, referral_code, referred_by';
+const USER_COLUMNS = 'id, name, email, is_admin, role, membership_type, account_status, suspended_until, suspension_reason, profile_image, username, phone, gender, dob, weight, weight_unit, height, height_unit, country, city, street_address, apartment, state, zip_code, member_number, created_at, last_login_at, referral_code, referred_by, marketing_opt_out';
 
 // Pick only the columns that exist (older databases may miss a few optional ones)
 const loadUser = async (id) => {
@@ -23,7 +25,7 @@ const getMemberOverview = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'Member not found' });
 
     const safe = (p) => p.then((r) => r.data || []).catch(() => []);
-    const [ranking, records, memberships, orders, certificates, messages, tickets, approvals, referrer] = await Promise.all([
+    const [ranking, records, memberships, orders, certificates, messages, tickets, approvals, referrer, emails, awards, appeals] = await Promise.all([
       supabase.from('user_rankings').select('total_points, global_rank, verified_records_count, world_records_count, tier_badge').eq('user_id', id).maybeSingle().then((r) => r.data || null),
       safe(supabase.from('records').select('id, title, category, value, unit, status, verification_status, record_type, created_at, verified_at, slug').eq('user_id', id).order('created_at', { ascending: false }).limit(200)),
       safe(supabase.from('memberships').select('id, tier, status, start_date, end_date, price, payment_history, created_at').eq('user_id', id).order('created_at', { ascending: false })),
@@ -33,6 +35,9 @@ const getMemberOverview = async (req, res) => {
       safe(supabase.from('tickets').select('id, status, created_at, event:events(title, date)').eq('user_id', id).order('created_at', { ascending: false })),
       safe(supabase.from('product_authorizations').select('id, status, created_at, product:products(name)').eq('user_id', id).order('created_at', { ascending: false })),
       user.referred_by ? supabase.from('users').select('id, name').eq('id', user.referred_by).maybeSingle().then((r) => r.data || null) : Promise.resolve(null),
+      safe(supabase.from('email_deliveries').select('id, status, error, sent_at, created_at, campaign:campaign_id(subject, kind)').eq('user_id', id).order('created_at', { ascending: false }).limit(50)),
+      safe(supabase.from('member_awards').select('id, award_number, award_date, recipient_name, title_override, award:award_id(title, icon, status)').eq('user_id', id).order('created_at', { ascending: false })),
+      safe(supabase.from('appeals').select('id, status, priority, appeal_reason, admin_notes, created_at, resolved_at, record:record_id(id, title)').eq('user_id', id).order('created_at', { ascending: false }).limit(100)),
     ]);
 
     const payments = [];
@@ -56,34 +61,34 @@ const getMemberOverview = async (req, res) => {
       messages,
       tickets,
       approvals,
+      emails,
+      awards,
+      appeals,
       rewards: reward ? { ...reward, referralCode: user.referral_code, referredBy: referrer } : null,
-      emailService: !!process.env.RESEND_API_KEY,
+      emailService: email.emailEnabled(),
+      emailFrom: email.senderAddress(),
     });
   } catch (e) {
     res.status(500).json({ message: 'Could not load this member', error: e.message });
   }
 };
 
-// POST /api/admin/members/:id/email { subject, body } — real email when an email service is connected
+// POST /api/admin/members/:id/email { subject, body, imageUrl?, buttonText?, buttonUrl?, requestKey }
+// Sent from the AMPEX address and saved in the email history like any other send.
 const emailMember = async (req, res) => {
-  const subject = String(req.body.subject || '').trim().slice(0, 200);
-  const body = String(req.body.body || '').trim().slice(0, 10000);
-  if (!subject || !body) return res.status(400).json({ message: 'Subject and message are required' });
-  if (!process.env.RESEND_API_KEY) {
-    return res.status(501).json({ message: 'Sending email from the site needs an email service (not connected yet). Use "Open in my email app" instead.' });
-  }
+  if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Member not found' });
   try {
     const user = await loadUser(req.params.id);
-    if (!user?.email) return res.status(404).json({ message: 'Member not found' });
-    const from = process.env.EMAIL_FROM || 'AMPEX World Records <onboarding@resend.dev>';
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [user.email], subject, text: body }),
-    });
-    if (!r.ok) return res.status(502).json({ message: 'The email service refused the message' });
-    await supabase.from('audit_logs').insert({ actor_id: req.user.id, action_type: 'email_member', metadata: { to: user.id, subject } });
-    res.json({ message: `Email sent to ${user.email}` });
+    if (!user) return res.status(404).json({ message: 'Member not found' });
+    if (!user.email) return res.status(400).json({ message: 'This member has no email address.' });
+    const r = await createAndStart(req, { ...req.body, kind: 'account', audience: { type: 'member', userId: user.id } });
+    if (r.status >= 400) return res.status(r.status).json(r.json);
+    const c = r.json.campaign;
+    if (c && c.sent_count === 0 && c.failed_count > 0) {
+      const { data: d } = await supabase.from('email_deliveries').select('error').eq('campaign_id', c.id).limit(1).maybeSingle();
+      return res.status(502).json({ message: `The email could not be delivered: ${d?.error || 'unknown error'}` });
+    }
+    res.status(r.json.duplicate ? 200 : 201).json({ ...r.json, message: r.json.duplicate ? 'This email was already sent.' : `Email sent to ${user.email}` });
   } catch (e) {
     res.status(500).json({ message: 'Email could not be sent', error: e.message });
   }

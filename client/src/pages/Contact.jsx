@@ -88,10 +88,10 @@ const Contact = () => {
               <h2 style={{ fontSize: "32px", fontWeight: "900", textTransform: "uppercase", marginBottom: "40px" }}>CONTACT INFO</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 {[
-                  { icon: <MessageSquare size={20} />, title: "GENERAL SUPPORT", email: "support@rogueworldrecords.com", desc: "Questions, Account, Memberships, Tech issues" },
-                  { icon: <Shield size={20} />, title: "RECORD SUBMISSIONS", email: "submissions@rogueworldrecords.com", desc: "Applications, Evidence, Rule clarification" },
-                  { icon: <User size={20} />, title: "MEDIA & PRESS", email: "media@rogueworldrecords.com", desc: "Interviews, News, Podcasts, TV" },
-                  { icon: <ArrowRight size={20} />, title: "SPONSORSHIPS & PARTNERSHIPS", email: "partnerships@rogueworldrecords.com", desc: "Brands, Events, Advertising" }
+                  { icon: <MessageSquare size={20} />, title: "GENERAL SUPPORT", email: "ampexworldrecords@gmail.com", desc: "Questions, Account, Memberships, Tech issues" },
+                  { icon: <Shield size={20} />, title: "RECORD SUBMISSIONS", email: "ampexworldrecords@gmail.com", desc: "Applications, Evidence, Rule clarification" },
+                  { icon: <User size={20} />, title: "MEDIA & PRESS", email: "ampexworldrecords@gmail.com", desc: "Interviews, News, Podcasts, TV" },
+                  { icon: <ArrowRight size={20} />, title: "SPONSORSHIPS & PARTNERSHIPS", email: "ampexworldrecords@gmail.com", desc: "Brands, Events, Advertising" }
                 ].map((item, idx) => (
                   <div key={idx} style={{ background: "#161616", padding: "24px 32px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.03)", display: "flex", alignItems: "center", gap: "24px", transition: "all 0.2s" }}>
                     <div style={{ color: "#FF6A00" }}>{item.icon}</div>

@@ -114,7 +114,7 @@ const Terms = () => {
       id: "contact-info",
       icon: <Mail size={24} />,
       title: "18. Contact Information",
-      content: "For questions regarding these Terms of Service, please contact:\nGeneral Support\nsupport@rogueworldrecords.com"
+      content: "For questions regarding these Terms of Service, please contact:\nGeneral Support\ampexworldrecords@gmail.com"
     }
   ];
 
@@ -236,7 +236,7 @@ const Terms = () => {
                 <p style={{ color: "rgba(255,255,255,0.9)", fontSize: "18px", marginBottom: "40px", maxWidth: "600px", margin: "0 auto 40px" }}>
                   Our legal and compliance team is here to help you understand your rights and responsibilities on the platform.
                 </p>
-                <a href="mailto:legal@rogueworldrecords.com" style={{ 
+                <a href="mailto:ampexworldrecords@gmail.com" style={{ 
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "12px",

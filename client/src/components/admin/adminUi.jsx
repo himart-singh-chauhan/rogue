@@ -66,7 +66,7 @@ export const Notice = ({ type = "info", children, onClose }) => {
   return (
     <div style={{ background: `${c}14`, border: `1px solid ${c}55`, color: c, borderRadius: "12px", padding: "12px 16px", fontSize: "13px", fontWeight: 700, marginBottom: "16px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
       <span>{children}</span>
-      {onClose && <button onClick={onClose} style={{ background: "none", border: "none", color: c, cursor: "pointer", padding: 0 }} aria-label="Dismiss"><X size={14} /></button>}
+      {onClose && <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: c, cursor: "pointer", padding: 0 }} aria-label="Dismiss"><X size={14} /></button>}
     </div>
   );
 };
@@ -86,7 +86,7 @@ export const Modal = ({ title, onClose, children, width = 560, footer }) => {
       <div role="dialog" aria-modal="true" aria-label={title} style={{ background: "#151515", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "18px", width: "100%", maxWidth: `${width}px`, margin: "auto", boxShadow: "0 30px 60px rgba(0,0,0,0.6)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "18px 22px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <h3 style={{ ...ui.h3, fontSize: "17px" }}>{title}</h3>
-          <button onClick={onClose} style={ui.iconBtn} aria-label="Close"><X size={16} /></button>
+          <button type="button" onClick={onClose} style={ui.iconBtn} aria-label="Close"><X size={16} /></button>
         </div>
         <div style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>{children}</div>
         {footer && <div style={{ padding: "16px 22px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" }}>{footer}</div>}
@@ -112,6 +112,7 @@ export const Tabs = ({ tabs, value, onChange }) => (
   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "22px" }}>
     {tabs.map((t) => (
       <button
+        type="button"
         key={t.id}
         onClick={() => onChange(t.id)}
         style={{ ...ui.btnGhost, background: value === t.id ? ACCENT : "rgba(255,255,255,0.04)", borderColor: value === t.id ? ACCENT : "rgba(255,255,255,0.1)" }}

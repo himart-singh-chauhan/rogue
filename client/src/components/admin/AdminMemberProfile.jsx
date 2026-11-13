@@ -1,8 +1,13 @@
 // Admin → Users → click a member: their full profile with real data, and ways to contact them.
-import React, { useCallback, useEffect, useState } from "react";
+// initialTab / initialCompose let the Users "⋮" menu open it on Membership, Appeals, Manage or a new message.
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail, MessageSquare, ExternalLink, RefreshCw } from "lucide-react";
+import { Mail, MessageSquare, ExternalLink, RefreshCw, Send } from "lucide-react";
 import { ui, pill, StatusPill, useAdminApi, Notice, Empty, Tabs, Table, fmtDate, fmtMoney } from "./adminUi";
+import ImageUploadField from "./ImageUploadField";
+import { formatHeight, formatWeight } from "../../utils/units";
+
+const newKey = () => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 const Stat = ({ label, value, color = "white" }) => (
   <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 16px", minWidth: 0 }}>
@@ -17,14 +22,18 @@ const Row = ({ label, value }) => (
   </div>
 );
 
-export default function AdminMemberProfile({ userId }) {
+export default function AdminMemberProfile({ userId, initialTab = "overview", initialCompose = null }) {
   const api = useAdminApi();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("overview");
-  const [compose, setCompose] = useState(null); // { mode: 'message' | 'email', subject, body }
+  const [tab, setTab] = useState(initialTab);
+  const [compose, setCompose] = useState(initialCompose ? { mode: initialCompose, subject: "", body: "" } : null); // { mode: 'message' | 'email', subject, body }
   const [notice, setNotice] = useState(null);
   const [sending, setSending] = useState(false);
+  const [composeError, setComposeError] = useState("");
+  const sendKey = useRef(newKey()); // one key per email: a double click never sends it twice
+  const [photo, setPhoto] = useState(null);
+  const [savingPhoto, setSavingPhoto] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -39,24 +48,39 @@ export default function AdminMemberProfile({ userId }) {
   const address = [u.street_address, u.apartment, u.city, u.state, u.zip_code, u.country].filter(Boolean).join(", ");
   const mailto = (subject = "", body = "") => `mailto:${encodeURIComponent(u.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
+  const openCompose = (mode) => { setNotice(null); setComposeError(""); sendKey.current = newKey(); setCompose({ mode, subject: "", body: "" }); };
   const send = async () => {
-    if (!compose.subject.trim() || !compose.body.trim()) { setNotice({ type: "error", text: "Write a subject and a message." }); return; }
+    if (sending) return;
+    if (compose.mode === "email" && !u.email) { setComposeError("This member has no email address."); return; }
+    if (!compose.subject.trim()) { setComposeError("Write a subject."); return; }
+    if (!compose.body.trim()) { setComposeError("Write a message."); return; }
+    setComposeError("");
     setSending(true);
     try {
       if (compose.mode === "message") {
         await api("/admin/messages", "POST", { to: "user", receiverId: u.id, subject: compose.subject, body: compose.body });
         setNotice({ type: "success", text: `Message sent. ${u.name} will see it under Messages on their profile.` });
       } else {
-        const r = await api(`/admin/members/${u.id}/email`, "POST", { subject: compose.subject, body: compose.body });
+        const r = await api(`/admin/members/${u.id}/email`, "POST", { subject: compose.subject, body: compose.body, requestKey: sendKey.current });
         setNotice({ type: "success", text: r.message || "Email sent." });
       }
       setCompose(null);
       load();
     } catch (e) {
-      setNotice({ type: "error", text: e.message });
+      setComposeError(e.message);
     } finally {
       setSending(false);
     }
+  };
+
+  const savePhoto = async (url) => {
+    setSavingPhoto(true);
+    try {
+      await api(`/dashboard/users/${u.id}`, "PUT", { profileImage: url || "" });
+      setPhoto(null);
+      setNotice({ type: "success", text: url ? "Profile photo updated." : "Profile photo removed." });
+      load();
+    } catch (e) { setNotice({ type: "error", text: e.message }); } finally { setSavingPhoto(false); }
   };
 
   const tabs = [
@@ -67,6 +91,10 @@ export default function AdminMemberProfile({ userId }) {
     { id: "certificates", label: "Certificates", count: data.certificates.length },
     { id: "rewards", label: "Rewards" },
     { id: "messages", label: "Messages", count: data.messages.length },
+    { id: "awards", label: "Awards", count: (data.awards || []).length },
+    { id: "emails", label: "Emails", count: (data.emails || []).length },
+    { id: "appeals", label: "Appeals", count: (data.appeals || []).length },
+    { id: "manage", label: "Manage" },
   ];
 
   return (
@@ -85,8 +113,8 @@ export default function AdminMemberProfile({ userId }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button type="button" style={ui.btn} onClick={() => { setNotice(null); setCompose({ mode: "message", subject: "", body: "" }); }}><MessageSquare size={15} /> Message</button>
-          <button type="button" style={ui.btnGhost} onClick={() => { setNotice(null); setCompose({ mode: "email", subject: "", body: "" }); }}><Mail size={15} /> Email</button>
+          <button type="button" style={ui.btn} onClick={() => openCompose("message")}><MessageSquare size={15} /> Message</button>
+          <button type="button" style={ui.btnGhost} onClick={() => openCompose("email")}><Mail size={15} /> Email</button>
           {u.username && <Link to={`/profile/${u.username}`} target="_blank" rel="noreferrer" style={{ ...ui.btnGhost, textDecoration: "none" }}><ExternalLink size={15} /> Public profile</Link>}
           <button type="button" style={ui.iconBtn} onClick={load} aria-label="Refresh"><RefreshCw size={15} /></button>
         </div>
@@ -97,20 +125,24 @@ export default function AdminMemberProfile({ userId }) {
       {compose && (
         <div style={{ ...ui.card, padding: "20px", borderColor: "rgba(255,85,0,0.3)" }}>
           <div style={{ color: "white", fontWeight: 900, marginBottom: "12px" }}>
-            {compose.mode === "message" ? `Send a message to ${u.name} (arrives in their Messages on the site)` : `Email ${u.email}`}
+            {compose.mode === "message" ? `Send a message to ${u.name} (arrives in their Messages on the site)` : `Email ${u.email || "(no email address)"}`}
           </div>
-          <input style={{ ...ui.input, marginBottom: "10px" }} placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} />
-          <textarea style={{ ...ui.input, minHeight: "120px", resize: "vertical" }} placeholder="Write your message…" value={compose.body} onChange={(e) => setCompose({ ...compose, body: e.target.value })} />
+          {compose.mode === "email" && data.emailService && <div style={{ color: "#888", fontSize: "12px", marginBottom: "10px" }}>From {data.emailFrom}. The email is saved under Admin → Email Members.</div>}
+          <input style={{ ...ui.input, marginBottom: "10px" }} placeholder="Subject" aria-label="Subject" maxLength={200} value={compose.subject}
+            onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+            onChange={(e) => setCompose({ ...compose, subject: e.target.value })} />
+          <textarea style={{ ...ui.input, minHeight: "120px", resize: "vertical" }} placeholder="Write your message…" aria-label="Message" value={compose.body} onChange={(e) => setCompose({ ...compose, body: e.target.value })} />
+          {composeError && <div role="alert" style={{ color: "#f87171", fontSize: "13px", fontWeight: 700, marginTop: "8px" }}>{composeError}</div>}
           {compose.mode === "email" && !data.emailService && (
             <div style={{ color: "#aaa", fontSize: "12px", marginTop: "8px", lineHeight: 1.5 }}>
-              Sending email straight from the site needs an email service, which is not connected yet. "Open in my email app" opens your own email program with this message filled in.
+              Email from the site is not switched on yet (the Gmail App Password for ampexworldrecords@gmail.com still has to be added on the server). Until then, "Open in my email app" opens your own email program with this message filled in.
             </div>
           )}
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
             {compose.mode === "email" && !data.emailService
               ? <a href={mailto(compose.subject, compose.body)} style={{ ...ui.btn, textDecoration: "none" }}><Mail size={15} /> Open in my email app</a>
-              : <button type="button" style={ui.btn} disabled={sending} onClick={send}>{sending ? "Sending…" : compose.mode === "message" ? "Send message" : "Send email"}</button>}
-            <button type="button" style={ui.btnGhost} onClick={() => setCompose(null)}>Cancel</button>
+              : <button type="button" style={ui.btn} disabled={sending} onClick={send}><Send size={15} /> {sending ? "Sending…" : compose.mode === "message" ? "Send message" : "Send email"}</button>}
+            <button type="button" style={ui.btnGhost} disabled={sending} onClick={() => setCompose(null)}>Cancel</button>
           </div>
         </div>
       )}
@@ -133,7 +165,8 @@ export default function AdminMemberProfile({ userId }) {
             <Row label="Date of birth" value={u.dob ? fmtDate(u.dob) : ""} />
             <Row label="Gender" value={u.gender} />
             <Row label="Address" value={address} />
-            <Row label="Height / weight" value={[u.height && `${u.height} ${u.height_unit || "cm"}`, u.weight && `${u.weight} ${u.weight_unit || "kg"}`].filter(Boolean).join(" · ")} />
+            <Row label="Height / weight" value={[formatHeight(u.height, u.height_unit), formatWeight(u.weight, u.weight_unit)].filter(Boolean).join(" · ")} />
+            <Row label="Promotional emails" value={u.marketing_opt_out ? "Opted out (gets account emails only)" : "Subscribed"} />
             {u.account_status !== "active" && <Row label="Suspension" value={[u.suspension_reason, u.suspended_until && `until ${fmtDate(u.suspended_until)}`].filter(Boolean).join(" ")} />}
           </div>
         </>
@@ -240,6 +273,60 @@ export default function AdminMemberProfile({ userId }) {
           ))}
         </div>
       ) : <Empty>No messages sent to this member yet.</Empty>)}
+
+      {tab === "awards" && ((data.awards || []).length ? (
+        <Table head={["Award", "Number", "Date", "Shown"]} minWidth={480}>
+          {data.awards.map((a) => (
+            <tr key={a.id}>
+              <td style={ui.td}>{a.award?.icon} {a.title_override || a.award?.title}</td>
+              <td style={{ ...ui.td, fontFamily: "monospace", fontSize: 12 }}>{a.award_number}</td>
+              <td style={ui.td}>{fmtDate(a.award_date)}</td>
+              <td style={ui.td}>{a.award?.status === "published" ? <span style={pill("#22c55e")}>on profile</span> : <span style={pill("#fbbf24")}>award is a draft</span>}</td>
+            </tr>
+          ))}
+        </Table>
+      ) : <Empty>No achievement awards yet. Give one under Admin → Achievement Awards.</Empty>)}
+
+      {tab === "emails" && ((data.emails || []).length ? (
+        <Table head={["Date", "Subject", "Type", "Status"]} minWidth={520}>
+          {data.emails.map((e) => (
+            <tr key={e.id}>
+              <td style={ui.td}>{fmtDate(e.sent_at || e.created_at)}</td>
+              <td style={ui.td}>{e.campaign?.subject}</td>
+              <td style={ui.td}>{e.campaign?.kind === "marketing" ? "Promotional" : "Account"}</td>
+              <td style={ui.td}><span style={pill(e.status === "sent" ? "#22c55e" : e.status === "failed" ? "#ef4444" : "#38bdf8")}>{e.status}</span>{e.error && <div style={{ color: "#f87171", fontSize: 11, marginTop: 4 }}>{e.error}</div>}</td>
+            </tr>
+          ))}
+        </Table>
+      ) : <Empty>No emails sent to this member from the site yet.</Empty>)}
+
+      {tab === "appeals" && ((data.appeals || []).length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {data.appeals.map((a) => (
+            <div key={a.id} style={{ ...ui.card, padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                <strong style={{ color: "white" }}>{a.record?.title || "Record"}</strong>
+                <span style={{ display: "flex", gap: 6, alignItems: "center" }}><StatusPill status={a.status} />{a.priority && <span style={pill("#aaa")}>{a.priority}</span>}<span style={{ color: "#888", fontSize: "12px" }}>{fmtDate(a.created_at)}</span></span>
+              </div>
+              <div style={{ color: "#bbb", fontSize: "13px", marginTop: "6px", whiteSpace: "pre-wrap" }}>{a.appeal_reason}</div>
+              {a.admin_notes && <div style={{ color: "#fbbf24", fontSize: "12px", marginTop: "6px" }}>Admin notes: {a.admin_notes}</div>}
+            </div>
+          ))}
+          <Link to="/admin?tab=appeals" style={{ ...ui.btnGhost, textDecoration: "none", alignSelf: "flex-start" }}>Open Appeals to handle them</Link>
+        </div>
+      ) : <Empty>This member has no appeals or disputes.</Empty>)}
+
+      {tab === "manage" && (
+        <div style={{ ...ui.card, padding: "20px", display: "grid", gap: "16px", maxWidth: "560px" }}>
+          <div style={{ color: "white", fontWeight: 900 }}>Profile photo</div>
+          <ImageUploadField label="Upload a new photo" value={photo ?? u.profile_image ?? ""} onChange={setPhoto} previewHeight={140} />
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button type="button" style={ui.btn} disabled={savingPhoto || photo === null} onClick={() => savePhoto(photo)}>{savingPhoto ? "Saving…" : "Save photo"}</button>
+            {u.profile_image && <button type="button" style={ui.btnDanger} disabled={savingPhoto} onClick={() => { if (window.confirm(`Remove ${u.name}'s profile photo?`)) savePhoto(""); }}>Remove photo</button>}
+          </div>
+          <div style={{ color: "#888", fontSize: "12px", lineHeight: 1.5 }}>To change the name, email, plan, height or weight, use "Edit User Details" in the member's ⋮ menu.</div>
+        </div>
+      )}
     </div>
   );
 }

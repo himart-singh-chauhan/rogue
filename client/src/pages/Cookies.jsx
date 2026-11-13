@@ -89,7 +89,7 @@ const Cookies = () => {
       title: "9. Contact Information",
       scope: "09 / SUPPORT",
       icon: <Mail size={24} color="#FF6A00" />,
-      content: "For questions regarding this Cookie Policy, please contact: Privacy & Compliance Department at privacy@rogueworldrecords.com or General Support at support@rogueworldrecords.com.",
+      content: "For questions regarding this Cookie Policy, please contact: Privacy & Compliance Department at ampexworldrecords@gmail.com or General Support at ampexworldrecords@gmail.com.",
       fullWidth: true
     }
   ];

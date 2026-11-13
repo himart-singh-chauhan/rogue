@@ -1,10 +1,17 @@
 const supabase = require('../config/supabase');
 
-// The public website address, for links inside inbox messages (first entry of CLIENT_URLS).
+// The public website address, for links in messages, emails and referral links.
+// PUBLIC_SITE_URL wins; otherwise the first CLIENT_URLS entry that is an AMPEX address (not the old
+// "rogue-client" one), so adding the AMPEX domain to CLIENT_URLS switches every link over.
+const withScheme = (u) => (/^https?:\/\//.test(u) ? u : `https://${u}`);
 const siteUrl = () => {
-  const first = String(process.env.CLIENT_URLS || '').split(',')[0].trim().replace(/\/+$/, '');
-  if (!first) return 'https://rogue-client.vercel.app';
-  return /^https?:\/\//.test(first) ? first : `https://${first}`;
+  const pinned = String(process.env.PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '');
+  if (pinned) return withScheme(pinned);
+  const list = String(process.env.CLIENT_URLS || '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter(Boolean)
+    .filter((x) => !/localhost|127\.0\.0\.1/.test(x));
+  const ampex = list.find((x) => !/rogue/i.test(x));
+  const pick = ampex || list[0];
+  return pick ? withScheme(pick) : 'https://rogue-client.vercel.app';
 };
 
 /**

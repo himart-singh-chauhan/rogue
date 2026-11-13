@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Eye, Heart, Zap, Trophy, Play, User, AlertCircle, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiCall, formatProductImage } from '../utils/api';
@@ -41,7 +41,7 @@ export default function ExploreRecords() {
         return;
       }
       const res = await apiCall(`/social/${recordId}/like`, 'POST', null, userInfo.token);
-      setRecords(records.map(r => r.id === recordId ? { ...r, isLiked: res.isLiked, likes: res.likes } : r));
+      setRecords((list) => list.map(r => r.id === recordId ? { ...r, isLiked: res.isLiked, likes: res.likes } : r));
     } catch (err) {
       if (err.message.includes('Not authorized')) showAuthMessage('Please login to like records!');
     }
@@ -64,8 +64,8 @@ export default function ExploreRecords() {
   };
   const activeNode = activeCategory !== 'All' ? findNode(categoryTree, activeCategory) : null;
   const activeNames = activeNode ? namesWithChildren(activeNode).map((n) => n.toLowerCase()) : [String(activeCategory).toLowerCase()];
-  const hasChildren = !!(activeNode && activeNode.children && activeNode.children.length);
-  const parentFilter = hasChildren ? activeNode.name.toLowerCase() : '';
+  // Changes only when the category list itself changes (not on every render)
+  const treeKey = JSON.stringify(categoryTree.map((c) => [c.name, (c.children || []).map((ch) => ch.name)]));
   const tabs = [
     { id: 'new', label: '🆕 New Records' },
     { id: 'featured', label: '⭐ Featured' },
@@ -79,9 +79,12 @@ export default function ExploreRecords() {
     const cat = params.get('category') || 'All';
     setSearchQuery(q);
     setActiveCategory(cat);
-    // a parent with subcategories is filtered here in the page (records store one category name)
-    fetchRecords(q, parentFilter && parentFilter === cat.toLowerCase() ? 'All' : cat, filterType);
-  }, [location.search, filterType, parentFilter]);
+    // A parent category also asks for its subcategories (Talent includes Funny Talent)
+    const node = cat !== 'All' ? findNode(categoryTree, cat) : null;
+    const names = cat === 'All' ? [] : node ? namesWithChildren(node) : [cat];
+    fetchRecords(q, names, filterType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, filterType, treeKey]);
 
   const handleCategoryClick = (cat) => {
     setActiveCategory(cat);
@@ -91,23 +94,30 @@ export default function ExploreRecords() {
     navigate(`/explore?${params.toString()}`);
   };
 
-  const fetchRecords = async (q = '', category = 'All', filter = 'new') => {
+  // Several requests can be in flight when someone taps categories quickly, and they can come back in any
+  // order. Only the newest one may update the page; an older answer arriving late is ignored.
+  const latestRequest = useRef(0);
+  const fetchRecords = async (q = '', categories = [], filter = 'new') => {
+    const requestId = ++latestRequest.current;
+    setLoading(true);
     try {
-      setLoading(true);
       let endpoint = '/records/explore/all';
       const params = new URLSearchParams();
       if (q) params.append('search', q);
-      if (category && category !== 'All') params.append('category', category);
+      if (categories.length) params.append('category', categories.join(','));
       if (filter) params.append('filter', filter);
       const qs = params.toString();
       if (qs) endpoint += `?${qs}`;
 
       const data = await apiCall(endpoint, 'GET');
+      if (requestId !== latestRequest.current) return;
       setRecords(data.records || []);
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       console.error('Error fetching records:', err);
+      setRecords([]);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   };
 

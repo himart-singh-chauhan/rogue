@@ -27,7 +27,10 @@ const withSearch = (query, search) => {
 const withCategory = (query, category) => {
   if (!category || category === 'all' || category === 'All') return query;
   if (isUUID(category)) return query.eq('category_id', category);
-  return query.ilike('category', String(category).replace(/-/g, ' ').trim());
+  // "Talent,Funny Talent": a parent category together with its subcategories (case-insensitive)
+  const names = String(category).split(',').map((n) => n.replace(/-/g, ' ').replace(/["\\]/g, '').trim()).filter(Boolean).slice(0, 30);
+  if (names.length > 1) return query.or(names.map((n) => `category.ilike."${n}"`).join(','));
+  return query.ilike('category', names[0] || '');
 };
 
 const send = (res, { data, count, error }, limit, extra = {}) => {

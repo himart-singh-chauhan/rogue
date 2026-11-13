@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowRight, Menu, X, User, LogOut, ChevronDown, BarChart3, Users, FileText, Settings, DollarSign, CreditCard, Layers, Target, Shield, ClipboardList, Sparkles, MessageSquare, ShieldAlert, Image, Layout, Lock, Server, TrendingUp, Megaphone, Crown, Home, Video, Tag, Gift } from "lucide-react";
+import { ArrowRight, Menu, X, User, LogOut, ChevronDown, BarChart3, Users, FileText, Settings, DollarSign, CreditCard, Layers, Target, Shield, ClipboardList, Sparkles, MessageSquare, ShieldAlert, Image, Layout, Lock, Server, TrendingUp, Megaphone, Crown, Home, Video, Tag, Gift, Mail, Award } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const Navbar = () => {
@@ -39,6 +39,7 @@ const Navbar = () => {
     { label: "Verification Queue", icon: <ClipboardList size={16} />, to: "/admin?tab=verification-queue" },
     { label: "AI Controls", icon: <Sparkles size={16} />, to: "/admin?tab=aiVerification" },
     { label: "Communications", icon: <MessageSquare size={16} />, to: "/admin?tab=communications" },
+    { label: "Email Members", icon: <Mail size={16} />, to: "/admin?tab=emails" },
     { label: "Moderation", icon: <ShieldAlert size={16} />, to: "/admin?tab=moderation" },
     { label: "Media Library", icon: <Image size={16} />, to: "/admin?tab=mediaLibrary" },
     { label: "Video Management", icon: <Video size={16} />, to: "/admin?tab=videoManagement" },
@@ -53,6 +54,7 @@ const Navbar = () => {
     { label: "Coupons", icon: <Tag size={16} />, to: "/admin?tab=coupons" },
     { label: "Fees", icon: <DollarSign size={16} />, to: "/admin?tab=systemSettings#fees" },
     { label: "Rewards & Referrals", icon: <Gift size={16} />, to: "/admin?tab=rewards" },
+    { label: "Achievement Awards", icon: <Award size={16} />, to: "/admin?tab=awards" },
     { label: "Memberships", icon: <CreditCard size={16} />, to: "/admin?tab=memberships" },
     { label: "Shop Catalog", icon: <Layers size={16} />, to: "/admin?tab=products" },
     { label: "Shop Orders", icon: <CreditCard size={16} />, to: "/admin?tab=orders" },
@@ -138,10 +140,10 @@ const Navbar = () => {
 
               {/* Admin Dropdown Menu */}
               {adminDropdownOpen && (
-                <div style={{
+                <div data-lenis-prevent="true" style={{
                   position: "absolute",
                   top: "100%",
-                  left: "0",
+                  right: "0",
                   marginTop: "8px",
                   background: "#161616",
                   border: "1px solid rgba(255,106,0,0.3)",
@@ -149,9 +151,15 @@ const Navbar = () => {
                   minWidth: "440px",
                   zIndex: 1000,
                   boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-                  overflow: "hidden",
+                  // Long menu: never run off the bottom of the screen, scroll inside instead
+                  maxHeight: "calc(100dvh - 110px)",
+                  maxWidth: "calc(100vw - 32px)",
+                  overflowY: "auto",
+                  overscrollBehavior: "contain",
+                  WebkitOverflowScrolling: "touch",
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
+                  alignContent: "start",
                 }}>
                   {adminMenuItems.map((item, idx) => (
                     <Link

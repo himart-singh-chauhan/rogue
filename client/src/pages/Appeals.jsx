@@ -759,8 +759,8 @@ const Appeals = () => {
                 <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "14px" }}>Completed your application offline? Submit via official channels.</p>
               </div>
               <div style={{ display: "flex", gap: "20px" }}>
-                <a href="mailto:appeals@rogueworldrecords.com" style={{ background: "rgba(255,106,0,0.1)", color: "#FF6A00", textDecoration: "none", padding: "20px 40px", borderRadius: "100px", fontWeight: "900", fontSize: "14px", display: "flex", alignItems: "center", gap: "12px", border: "1px solid rgba(255,106,0,0.2)" }}>
-                   <Mail size={18} /> APPEALS@ROGUENETWORK.COM
+                <a href="mailto:ampexworldrecords@gmail.com" style={{ background: "rgba(255,106,0,0.1)", color: "#FF6A00", textDecoration: "none", padding: "20px 40px", borderRadius: "100px", fontWeight: "900", fontSize: "14px", display: "flex", alignItems: "center", gap: "12px", border: "1px solid rgba(255,106,0,0.2)" }}>
+                   <Mail size={18} /> AMPEXWORLDRECORDS@GMAIL.COM
                 </a>
               </div>
            </div>

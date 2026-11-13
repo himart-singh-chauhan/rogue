@@ -305,7 +305,8 @@ const createUser = async (req, res) => {
         membership_type: membershipType || 'free_athlete',
         account_status: accountStatus || 'active',
         is_admin: computedIsAdmin,
-        member_number: memberNumber
+        member_number: memberNumber,
+        ...bodyFields(req.body)
       })
       .select(ADMIN_USER_COLUMNS);
 
@@ -323,6 +324,25 @@ const createUser = async (req, res) => {
 // @desc    Update user
 // @route   PUT /api/admin/users/:id
 // @access  Private/Admin
+// Height and weight are stored the way the member typed them, next to their unit
+// (height "188" + "cm" or 6'2" + "ft_in"; weight "305" + "lbs" or "kg"). Returns only the fields that were sent.
+const bodyFields = (b) => {
+  const out = {};
+  if (b.heightUnit !== undefined) out.height_unit = b.heightUnit === 'ft_in' ? 'ft_in' : 'cm';
+  if (b.weightUnit !== undefined) out.weight_unit = b.weightUnit === 'lbs' ? 'lbs' : 'kg';
+  if (b.height !== undefined) {
+    const h = String(b.height ?? '').trim().slice(0, 20);
+    if (!h) out.height = null;
+    else if ((out.height_unit || 'cm') === 'cm') { const n = Math.round(parseFloat(h)); out.height = Number.isFinite(n) && n > 0 && n < 300 ? String(n) : null; }
+    else out.height = /^\d{1,2}'\d{1,2}"$/.test(h) ? h : null;
+  }
+  if (b.weight !== undefined) {
+    const n = parseFloat(String(b.weight ?? '').replace(',', '.'));
+    out.weight = Number.isFinite(n) && n > 0 && n < 1500 ? String(Math.round(n * 10) / 10) : null;
+  }
+  return out;
+};
+
 const updateUser = async (req, res) => {
   const { name, email, username, country, gender, dob, phone, city, role, membershipType, accountStatus } = req.body;
   const updateData = {};
@@ -342,6 +362,12 @@ const updateUser = async (req, res) => {
     }
     if (membershipType) updateData.membership_type = membershipType;
     if (accountStatus) updateData.account_status = accountStatus;
+    Object.assign(updateData, bodyFields(req.body));
+    // Admin → member profile → Manage: replace or remove the profile photo
+    if (req.body.profileImage !== undefined) {
+      const img = String(req.body.profileImage || '').trim();
+      updateData.profile_image = /^https?:\/\//i.test(img) ? img.slice(0, 1000) : null;
+    }
     updateData.updated_at = new Date();
 
     const { data: user, error } = await supabase

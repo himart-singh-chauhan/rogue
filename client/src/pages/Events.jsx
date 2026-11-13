@@ -105,8 +105,8 @@ const eventsData = [
     desc: "The pinnacle of raw powerlifting. The world's top heavyweight lifters battle for the absolute bench press record live.",
     videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
     ticketLink: "",
-    sponsors: "Rogue Fitness, Hanger 24, Thorne Nutrition",
-    rules: "1. All lifters must use certified Rogue plates.\n2. Bench shirt is prohibited (raw lifting standards apply).\n3. Elbow lock must be fully held until marshal call.",
+    sponsors: "Hanger 24, Thorne Nutrition",
+    rules: "1. All lifters must use certified competition plates.\n2. Bench shirt is prohibited (raw lifting standards apply).\n3. Elbow lock must be fully held until marshal call.",
     location: "AMPEX Arena Main Stage",
     judges: "Marshal Team A",
     isPaid: true,
@@ -847,7 +847,7 @@ const Events = () => {
                       type="text"
                       value={formFields.sponsors}
                       onChange={e => setFormFields({...formFields, sponsors: e.target.value})}
-                      placeholder="e.g. Rogue Fitness, Thorne Nutrition, Red Bull"
+                      placeholder="e.g. Thorne Nutrition, Red Bull"
                       style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 16px", color: "white", fontSize: "13px", outline: "none" }}
                     />
                   </div>
@@ -1165,7 +1165,7 @@ const Events = () => {
                           </span>
                         ))
                       ) : (
-                        ["AWR Gold Club", "Rogue Fitness", "Seiko Timing", "Red Bull"].map((s, idx) => (
+                        ["AWR Gold Club", "AMPEX Partners", "Seiko Timing", "Red Bull"].map((s, idx) => (
                           <span key={idx} style={{
                             background: "rgba(255, 255, 255, 0.03)",
                             border: "1px solid rgba(255, 255, 255, 0.08)",

@@ -208,6 +208,27 @@ const members = require('../controllers/adminMemberController');
 router.get('/members/:id/overview', members.getMemberOverview);
 router.post('/members/:id/email', members.emailMember);
 
+// Email members (Admin → Email Members)
+const emails = require('../controllers/emailController');
+router.get('/emails', emails.listCampaigns);
+router.get('/emails/options', emails.audienceOptions);
+router.post('/emails/preview', emails.previewAudience);
+router.post('/emails', emails.createCampaign);
+router.get('/emails/:id', emails.getCampaign);
+router.post('/emails/:id/continue', emails.continueCampaign);
+router.post('/emails/:id/retry', emails.retryFailed);
+
+// Achievement awards (Admin → Achievement Awards)
+const awards = require('../controllers/awardController');
+router.get('/awards', awards.listAwards);
+router.post('/awards', awards.createAward);
+router.put('/awards/:id', awards.updateAward);
+router.delete('/awards/:id', awards.deleteAward);
+router.get('/awards/:id/members', awards.listAssignments);
+router.post('/awards/:id/assign', awards.assignAward);
+router.put('/member-awards/:id', awards.updateAssignment);
+router.delete('/member-awards/:id', awards.removeAssignment);
+
 // Referral, Points & Rewards program
 const rewards = require('../controllers/rewardsController');
 router.get('/rewards/settings', rewards.getSettings);

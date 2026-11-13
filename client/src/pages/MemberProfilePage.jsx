@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Share2, MapPin, Award, Medal, Shield, Activity, TrendingUp, HelpCircle, FileText, CheckCircle2, Search, X, UserX, AlertTriangle, Home, Trophy, Globe } from 'lucide-react';
+import { Share2, MessageSquare, MapPin, Award, Medal, Shield, Activity, TrendingUp, HelpCircle, FileText, CheckCircle2, Search, X, UserX, AlertTriangle, Home, Trophy, Globe } from 'lucide-react';
 import { apiCall, formatProductImage } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { downloadAwardCertificatePdf } from '../utils/certificatePdf';
+import { downloadAwardPdf } from '../utils/awardPdf';
+import MessageComposer from '../components/MessageComposer';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
 
@@ -20,7 +21,17 @@ export default function MemberProfilePage() {
   const [selectedAchievement, setSelectedAchievement] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState('');
+  const [awards, setAwards] = useState([]);
+  const [composeOpen, setComposeOpen] = useState(false);
   const { user } = useAuth();
+
+  // Achievement awards given by AMPEX (Admin → Achievement Awards)
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+    let alive = true;
+    apiCall(`/awards/user/${profile.id}`, 'GET').then((list) => { if (alive) setAwards(Array.isArray(list) ? list : []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [profile?.id]);
 
   const handleShare = async () => {
     try {
@@ -224,6 +235,15 @@ export default function MemberProfilePage() {
                   <MapPin size={14} /> {profile.country}
                 </div>
               )}
+              {(!user || String(user._id || user.id) !== String(profile.id)) && (
+                <button
+                  type="button"
+                  onClick={() => (user ? setComposeOpen(true) : navigate('/login', { state: { message: 'Log in to message other members.' } }))}
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700 }}
+                >
+                  <MessageSquare size={14} /> Message
+                </button>
+              )}
               <button
                 onClick={handleShare}
                 style={{ background: copied ? '#4ade80' : '#FF5500', border: 'none', color: copied ? 'black' : 'white', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '700', transition: 'all 0.3s' }}
@@ -364,6 +384,8 @@ export default function MemberProfilePage() {
             { id: 'certified', icon: '📜', label: 'AMPEX Certified', earned: (ranking?.certificates_earned || 0) > 0, desc: `Successfully earned ${ranking?.certificates_earned || 0} Official AMPEX Certificates for verified, record-breaking performances.`, color: '#4ade80' },
             { id: 'ambassador', icon: '🎖️', label: 'AMPEX Ambassador', earned: !!ranking?.rewards?.isAmbassador, desc: 'Reached the top level of the AMPEX Rewards program by inviting members and supporting AMPEX World Records.', color: '#FF6A00' }
           ];
+          // Awards given by AMPEX come first; each one prints as its own design
+          awards.forEach((a) => achievementsList.unshift({ id: a.id, icon: a.icon || '🏆', image: a.imageUrl, label: a.title, earned: true, desc: a.description, color: a.color || '#FF6A00', award: a }));
 
           return (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '16px' }}>
@@ -401,7 +423,7 @@ export default function MemberProfilePage() {
                     }
                   }}
                 >
-                  <div style={{ fontSize: '40px', marginBottom: '12px', filter: achievement.earned ? `drop-shadow(0 0 10px ${achievement.color}80)` : 'none' }}>{achievement.icon}</div>
+                  <div style={{ fontSize: '40px', marginBottom: '12px', filter: achievement.earned ? `drop-shadow(0 0 10px ${achievement.color}80)` : 'none' }}>{achievement.image ? <img src={achievement.image} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} /> : achievement.icon}</div>
                   <div style={{ color: achievement.earned ? 'white' : '#888', fontWeight: '800', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {achievement.label}
                   </div>
@@ -596,11 +618,11 @@ export default function MemberProfilePage() {
               filter: `drop-shadow(0 0 30px ${selectedAchievement.color})`,
               animation: 'pulse 2s infinite ease-in-out'
             }}>
-              {selectedAchievement.icon}
+              {selectedAchievement.image ? <img src={selectedAchievement.image} alt="" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }} /> : selectedAchievement.icon}
             </div>
 
             <div style={{ color: selectedAchievement.color, fontSize: '12px', fontWeight: '900', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>
-              ACHIEVEMENT UNLOCKED
+              {selectedAchievement.award ? 'ACHIEVEMENT AWARD' : 'ACHIEVEMENT UNLOCKED'}
             </div>
 
             <h2 style={{ color: 'white', fontSize: '32px', fontWeight: '950', margin: '0 0 16px 0', letterSpacing: '-1px' }}>
@@ -624,25 +646,31 @@ export default function MemberProfilePage() {
                   onClick={async () => {
                     setPrinting(true); setPrintError('');
                     try {
-                      await downloadAwardCertificatePdf({
-                        recipientName: profile.display_name,
-                        awardTitle: `${selectedAchievement.label} Award`,
-                        awardDetail: `${ranking?.tier_badge || 'AMPEX'} · ${ranking?.total_points || 0} points`,
-                        memberNumber: profile.member_number,
-                        badgeId: selectedAchievement.id,
-                      });
+                      // Prints the achievement shown here (its own award design), not the World Record certificate
+                      const a = selectedAchievement;
+                      const member = String(profile.member_number || 'AMPEX').replace(/[^A-Z0-9-]/gi, '').toUpperCase();
+                      await downloadAwardPdf(a.award
+                        ? { ...a.award, recipientName: a.award.recipientName || profile.display_name }
+                        : {
+                          title: a.label, description: a.desc, icon: a.icon, color: a.color,
+                          recipientName: profile.display_name, date: new Date().toISOString().slice(0, 10),
+                          awardNumber: `${member}-${String(a.id).toUpperCase().replace(/[^A-Z0-9]/g, '')}`,
+                        });
                     } catch (err) { setPrintError(err.message || 'Could not create the certificate.'); }
                     finally { setPrinting(false); }
                   }}
                   style={{ marginTop: '16px', width: '100%', background: '#FF6A00', color: 'white', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: 900, fontSize: '13px', letterSpacing: '0.5px', cursor: printing ? 'wait' : 'pointer' }}
                 >
-                  {printing ? 'Preparing…' : '🖨️ Print award certificate (PDF)'}
+                  {printing ? 'Preparing…' : '🖨️ Print / download this award (PDF)'}
                 </button>
                 {printError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px' }}>{printError}</div>}
               </>
             )}
           </div>
         </div>
+      )}
+      {composeOpen && profile && (
+        <MessageComposer to={{ id: profile.id, name: profile.display_name }} onClose={() => setComposeOpen(false)} />
       )}
     </div>
   );

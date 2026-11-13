@@ -104,7 +104,7 @@ const FAQ = () => {
              <h4 style={{ fontSize: "24px", fontWeight: "950", textTransform: "uppercase", marginBottom: "24px" }}>STILL HAVE <br/> QUESTIONS?</h4>
              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", fontWeight: "700" }}>
-                 <Mail size={16} color="#FF6A00" /> support@rogueworldrecords.com
+                 <Mail size={16} color="#FF6A00" /> ampexworldrecords@gmail.com
                </div>
                <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", fontWeight: "700" }}>
                  <MapPin size={16} color="#FF6A00" /> Visit our full Contact Page

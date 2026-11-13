@@ -104,6 +104,12 @@ app.use('/api/weight-classes', require('./routes/weightClassRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/rewards', require('./routes/rewardRoutes'));
+// Public: a member's achievement awards; unsubscribe link in promotional emails
+app.get('/api/awards/user/:userId', require('./controllers/awardController').awardsForUser);
+app.get('/api/email/unsubscribe', require('./controllers/emailController').unsubscribe);
+app.post('/api/email/unsubscribe', express.urlencoded({ extended: false }), require('./controllers/emailController').unsubscribe);
+app.get('/api/email/preferences', require('./middleware/authMiddleware').protect, require('./controllers/emailController').getPreferences);
+app.put('/api/email/preferences', require('./middleware/authMiddleware').protect, require('./controllers/emailController').setPreferences);
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.post('/api/streams/mux/webhook', require('./controllers/eventController').muxWebhook);
 app.get('/api/settings/public', require('./controllers/adminExtrasController').getPublicSettings);

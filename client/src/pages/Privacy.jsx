@@ -131,7 +131,7 @@ const Privacy = () => {
       title: "15. Contact Us",
       scope: "15 / SUPPORT",
       icon: <Mail size={24} color="#FF6A00" />,
-      content: "Privacy: privacy@rogueworldrecords.com | Support: support@rogueworldrecords.com. We are committed to a trusted and fair environment.",
+      content: "Privacy: ampexworldrecords@gmail.com | Support: ampexworldrecords@gmail.com. We are committed to a trusted and fair environment.",
       fullWidth: true
     }
   ];
