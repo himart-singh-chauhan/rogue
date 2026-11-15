@@ -105,7 +105,7 @@ const sendBatch = async (req, campaign) => {
       const msg = email.buildEmail({
         subject: campaign.subject, body: campaign.body, imageUrl: campaign.image_url,
         buttonText: campaign.button_text, buttonUrl: campaign.button_url, member: { name: d.name },
-        kind: campaign.kind, unsubscribe: d.user_id ? email.unsubscribeUrl(req, d.user_id) : null,
+        kind: campaign.kind, unsubscribe: d.user_id ? email.unsubscribePageUrl(d.user_id) : null,
       });
       const headers = campaign.kind === 'marketing' && d.user_id
         ? { 'List-Unsubscribe': `<${email.unsubscribeUrl(req, d.user_id)}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }

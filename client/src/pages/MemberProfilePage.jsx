@@ -5,6 +5,7 @@ import { apiCall, formatProductImage } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { downloadAwardPdf } from '../utils/awardPdf';
 import MessageComposer from '../components/MessageComposer';
+import AwardPreview from '../components/AwardPreview';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
 
@@ -16,20 +17,22 @@ export default function MemberProfilePage() {
   const [records, setRecords] = useState([]);
   const [pointsHistory, setPointsHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => (new URLSearchParams(window.location.search).get('tab') === 'achievements' ? 'achievements' : 'overview'));
   const [copied, setCopied] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState('');
   const [awards, setAwards] = useState([]);
+  const [catalog, setCatalog] = useState([]);
   const [composeOpen, setComposeOpen] = useState(false);
   const { user } = useAuth();
 
-  // Achievement awards given by AMPEX (Admin → Achievement Awards)
+  // Achievement awards: the member's awards (automatic ones are given when the profile opens) and the catalog
   useEffect(() => {
     if (!profile?.id) return undefined;
     let alive = true;
     apiCall(`/awards/user/${profile.id}`, 'GET').then((list) => { if (alive) setAwards(Array.isArray(list) ? list : []); }).catch(() => {});
+    apiCall('/awards/catalog', 'GET').then((list) => { if (alive) setCatalog(Array.isArray(list) ? list : []); }).catch(() => {});
     return () => { alive = false; };
   }, [profile?.id]);
 
@@ -387,6 +390,49 @@ export default function MemberProfilePage() {
           // Awards given by AMPEX come first; each one prints as its own design
           awards.forEach((a) => achievementsList.unshift({ id: a.id, icon: a.icon || '🏆', image: a.imageUrl, label: a.title, earned: true, desc: a.description, color: a.color || '#FF6A00', award: a }));
 
+          // The award catalog (Admin → Achievement Awards): every award in the AMPEX design, earned ones carry
+          // the member's name; automatic awards not earned yet show how to earn them.
+          if (catalog.length) {
+            const mine = (id) => awards.filter((a) => a.awardId === id);
+            const cards = [];
+            catalog.forEach((c) => {
+              const got = mine(c.id);
+              if (got.length) got.forEach((a) => cards.push({ key: a.id, earned: true, award: a, catalog: c }));
+              else if (c.criteria !== 'manual') cards.push({ key: c.id, earned: false, catalog: c });
+            });
+            awards.filter((a) => !catalog.some((c) => c.id === a.awardId)).forEach((a) => cards.unshift({ key: a.id, earned: true, award: a, catalog: null }));
+            const earnedCount = cards.filter((x) => x.earned).length;
+            const preview = (x) => (x.earned
+              ? { ...x.award, recipientName: x.award.recipientName || profile.display_name }
+              : { title: x.catalog.title, description: x.catalog.description, design: x.catalog.design, backgroundUrl: x.catalog.background_url, recipientName: '' });
+            return (
+              <div>
+                <p style={{ color: '#888', fontSize: '14px', margin: '0 0 18px' }}>{earnedCount} of {cards.length} achievement awards earned. Awards are given automatically when a member qualifies.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '18px' }}>
+                  {cards.map((x) => (
+                    <button
+                      key={x.key}
+                      type="button"
+                      onClick={() => setSelectedAchievement({
+                        id: x.key, label: x.earned ? x.award.title : x.catalog.title, desc: x.earned ? x.award.description : x.catalog.description,
+                        color: '#FFD15C', icon: (x.award || x.catalog).icon, earned: x.earned, award: x.earned ? x.award : null,
+                        locked: !x.earned, how: x.catalog?.criteria_label || x.award?.criteriaLabel, previewAward: preview(x),
+                      })}
+                      style={{ background: x.earned ? 'rgba(255,209,92,0.08)' : 'rgba(255,255,255,0.02)', border: x.earned ? '1px solid rgba(255,209,92,0.35)' : '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', padding: '10px', cursor: 'pointer', textAlign: 'left', color: 'white' }}
+                    >
+                      <div style={{ position: 'relative' }}>
+                        <AwardPreview award={preview(x)} width={420} dim={!x.earned} />
+                        {!x.earned && <span style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.75)', borderRadius: 100, padding: '4px 10px', fontSize: 11, fontWeight: 800 }}>🔒 Locked</span>}
+                      </div>
+                      <div style={{ fontWeight: 900, fontSize: '13px', marginTop: '10px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{x.earned ? x.award.title : x.catalog.title}</div>
+                      <div style={{ color: '#888', fontSize: '12px', marginTop: '4px', lineHeight: 1.4 }}>{x.earned ? `Earned ${new Date(`${x.award.date}T00:00:00Z`).toLocaleDateString(undefined, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' })}` : `How to earn: ${x.catalog.criteria_label}`}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '16px' }}>
               {achievementsList.map((achievement, idx) => (
@@ -581,8 +627,10 @@ export default function MemberProfilePage() {
             borderRadius: '24px',
             border: `1px solid ${selectedAchievement.color}50`,
             padding: '40px',
-            maxWidth: '400px',
+            maxWidth: selectedAchievement.previewAward ? '460px' : '400px',
             width: '100%',
+            maxHeight: '92vh',
+            overflowY: 'auto',
             textAlign: 'center',
             boxShadow: `0 20px 50px -10px ${selectedAchievement.color}40`,
             position: 'relative',
@@ -612,6 +660,11 @@ export default function MemberProfilePage() {
               <X size={16} />
             </button>
 
+            {selectedAchievement.previewAward ? (
+              <div style={{ margin: '10px 0 20px' }}>
+                <AwardPreview award={selectedAchievement.previewAward} width={900} dim={selectedAchievement.locked} />
+              </div>
+            ) : (
             <div style={{
               fontSize: '80px',
               marginBottom: '20px',
@@ -620,9 +673,10 @@ export default function MemberProfilePage() {
             }}>
               {selectedAchievement.image ? <img src={selectedAchievement.image} alt="" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }} /> : selectedAchievement.icon}
             </div>
+            )}
 
             <div style={{ color: selectedAchievement.color, fontSize: '12px', fontWeight: '900', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '8px' }}>
-              {selectedAchievement.award ? 'ACHIEVEMENT AWARD' : 'ACHIEVEMENT UNLOCKED'}
+              {selectedAchievement.locked ? 'NOT EARNED YET' : selectedAchievement.award ? 'ACHIEVEMENT AWARD' : 'ACHIEVEMENT UNLOCKED'}
             </div>
 
             <h2 style={{ color: 'white', fontSize: '32px', fontWeight: '950', margin: '0 0 16px 0', letterSpacing: '-1px' }}>
@@ -635,10 +689,16 @@ export default function MemberProfilePage() {
               {selectedAchievement.desc}
             </p>
 
+            {selectedAchievement.locked ? (
+              <div style={{ marginTop: '24px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', fontSize: '13px', color: '#bbb', border: '1px solid rgba(255,255,255,0.05)' }}>
+                How to earn it: <span style={{ color: '#fff', fontWeight: 'bold' }}>{selectedAchievement.how}</span>
+              </div>
+            ) : (
             <div style={{ marginTop: '30px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', fontSize: '12px', color: '#666', border: '1px solid rgba(255,255,255,0.05)' }}>
               Acquired by <span style={{ color: '#fff', fontWeight: 'bold' }}>{profile.display_name}</span> • AMPEX Network
             </div>
-            {user && (String(user._id || user.id) === String(profile.id) || user.isAdmin || user.is_admin) && (
+            )}
+            {!selectedAchievement.locked && user && (String(user._id || user.id) === String(profile.id) || user.isAdmin || user.is_admin) && (
               <>
                 <button
                   type="button"
@@ -652,7 +712,7 @@ export default function MemberProfilePage() {
                       await downloadAwardPdf(a.award
                         ? { ...a.award, recipientName: a.award.recipientName || profile.display_name }
                         : {
-                          title: a.label, description: a.desc, icon: a.icon, color: a.color,
+                          design: 'template', title: `${a.label} Achievement Award`, description: a.desc, icon: a.icon, color: a.color,
                           recipientName: profile.display_name, date: new Date().toISOString().slice(0, 10),
                           awardNumber: `${member}-${String(a.id).toUpperCase().replace(/[^A-Z0-9]/g, '')}`,
                         });

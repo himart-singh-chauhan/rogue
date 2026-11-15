@@ -87,10 +87,10 @@ const Navbar = () => {
         <div className="nav-logo-wrap">
           <Link to="/" className="nav-logo-link-main">
             <img
-              src={location.pathname === "/" ? "/images/logo-dark.webp" : "/images/logo-light.webp"}
-              alt="AMPEX Logo"
-              width={450}
-              height={300}
+              src="/images/ampex-logo.webp"
+              alt="AMPEX World Records"
+              width={512}
+              height={512}
               fetchPriority="high"
               className="nav-logo-img"
             />

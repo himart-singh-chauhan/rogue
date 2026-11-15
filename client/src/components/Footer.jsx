@@ -16,18 +16,19 @@ const Footer = () => {
           {/* Brand */}
           <div className="footer-brand">
             <div style={{ marginBottom: 5, marginTop: -30 }}>
-              <img loading="lazy" decoding="async" src="/images/logo-light.webp" alt="AMPEX Logo" width={450} height={300} style={{ height: 150, width: "auto", display: 'block', mixBlendMode: 'screen' }} />
+              <img loading="lazy" decoding="async" src="/images/ampex-logo.webp" alt="AMPEX World Records" width={512} height={512} style={{ height: 130, width: "auto", display: 'block', marginTop: 30, marginBottom: 14 }} />
             </div>
             <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", lineHeight: "1.6", marginBottom: "24px", maxWidth: "260px" }}>
               Structured divisions ensure fairness, increase participation, and scale record categories globally.
             </p>
             <div style={{ display: "flex", gap: "10px" }}>
+              {/* AMPEX social accounts: a button only shows once its link is filled in (the old Rogue accounts are removed) */}
               {[
-                { name: "X", url: "https://x.com/rogueworldrecords" },
-                { name: "IG", url: "https://instagram.com/rogueworldrecords" },
-                { name: "YT", url: "https://youtube.com/rogueworldrecords" },
-                { name: "FB", url: "https://facebook.com/rogueworldrecords" }
-              ].map(s => (
+                { name: "X", url: "" },
+                { name: "IG", url: "" },
+                { name: "YT", url: "" },
+                { name: "FB", url: "" }
+              ].filter((s) => s.url).map(s => (
                 <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
                   <div className="social-btn">{s.name}</div>
                 </a>
@@ -76,6 +77,7 @@ const Footer = () => {
 
         {/* Large Branding Image - Positioned at bottom right, partially off-screen for cool effect */}
         <img loading="lazy" decoding="async" 
+          className="footer-hero-img"
           src="/images/footer-record-holder.webp"
           alt="AMPEX World Record holder with his certificate and medal"
           width={711}

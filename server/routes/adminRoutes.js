@@ -221,6 +221,8 @@ router.post('/emails/:id/retry', emails.retryFailed);
 // Achievement awards (Admin → Achievement Awards)
 const awards = require('../controllers/awardController');
 router.get('/awards', awards.listAwards);
+router.get('/awards/criteria', awards.criteriaOptions);
+router.post('/awards/sync', awards.syncNow);
 router.post('/awards', awards.createAward);
 router.put('/awards/:id', awards.updateAward);
 router.delete('/awards/:id', awards.deleteAward);

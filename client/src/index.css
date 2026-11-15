@@ -169,10 +169,12 @@ a:hover svg {
   flex-shrink: 0;
 }
 
+/* the official AMPEX badge (square, trimmed) */
 .nav-logo-img {
-  height: 100px;
+  height: 70px;
   width: auto;
-  transform: translateY(8px);
+  transform: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
   transition: height 0.3s ease;
 }
 
@@ -190,8 +192,8 @@ a:hover svg {
   }
 
   .nav-logo-img {
-    height: 70px;
-    transform: translateY(4px);
+    height: 54px;
+    transform: none;
   }
 
   .desktop-only {
@@ -2410,4 +2412,10 @@ select option:checked, select option:hover, select option:focus {
     opacity: 1;
     transform: translate(-50%, 0);
   }
+}
+
+/* Footer photo: on phones it sits below the links and above the copyright line instead of covering them */
+@media (max-width: 768px) {
+  .footer { padding-bottom: 230px; }
+  .footer .footer-hero-img { height: 210px !important; bottom: 54px !important; }
 }

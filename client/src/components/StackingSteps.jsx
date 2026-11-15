@@ -227,7 +227,7 @@ export default function StackingSteps() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'rgba(255,106,0,0.1)', border: '1px solid rgba(255,106,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                <img loading="lazy" decoding="async" src="/images/logo-mascot.webp" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'translateY(6px)' }} />
+                <img loading="lazy" decoding="async" src="/images/ampex-logo.webp" alt="AMPEX World Records" style={{ width: '88%', height: '88%', objectFit: 'contain' }} />
               </div>
               <div>
                 <h4 style={{ fontSize: 16, fontWeight: 800, marginBottom: 2 }}>{s.footerTitle}</h4>

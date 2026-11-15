@@ -1787,7 +1787,7 @@ const Admin = () => {
         {
           id: "j-1",
           name: "AMPEX Marshal Team",
-          email: "marshals@rogueworldrecords.com",
+          email: "marshals@ampexworldrecords.com",
           role: "judge",
           admin_notes: "Elite veteran review team. Expert in physical speed and weightlifting challenges.",
           stats: { assigned: 8, pending: 2, completed: 6, verified: 4, rejected: 2, averageSpeed: "0.8 days" }
@@ -1795,7 +1795,7 @@ const Admin = () => {
         {
           id: "j-2",
           name: "Chief Adjudicator Sarah Jenkins",
-          email: "sarah.j@rogueworldrecords.com",
+          email: "sarah.j@ampexworldrecords.com",
           role: "judge",
           admin_notes: "Senior adjudicator, details-oriented. Handles high-stakes tech and endurance records.",
           stats: { assigned: 5, pending: 1, completed: 4, verified: 3, rejected: 1, averageSpeed: "1.4 days" }
@@ -1803,7 +1803,7 @@ const Admin = () => {
         {
           id: "j-3",
           name: "Timing Specialist Liam Vance",
-          email: "liam.vance@rogueworldrecords.com",
+          email: "liam.vance@ampexworldrecords.com",
           role: "judge",
           admin_notes: "Precision calibration analyst. Expert in digital time-based athletics.",
           stats: { assigned: 3, pending: 0, completed: 3, verified: 2, rejected: 1, averageSpeed: "0.9 days" }

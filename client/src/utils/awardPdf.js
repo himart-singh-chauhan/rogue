@@ -41,7 +41,7 @@ const loadImage = (url) => {
 // An achievement_awards row (admin) in the shape drawAward expects
 export const awardFromRow = (a, extra = {}) => ({
   title: a.title, description: a.description, icon: a.icon, imageUrl: a.image_url, backgroundUrl: a.background_url,
-  orientation: a.orientation, color: a.color,
+  orientation: a.orientation, color: a.color, design: a.design || 'classic',
   signers: [
     { name: a.signer1_name, title: a.signer1_title, signatureUrl: a.signer1_signature_url },
     { name: a.signer2_name, title: a.signer2_title, signatureUrl: a.signer2_signature_url },
@@ -186,7 +186,81 @@ const LAYOUTS = {
   },
 };
 
+// ---------- The AMPEX award design (Curtis's artwork, Nov 2026) ----------
+// 'artwork': a finished design (title, description and signatures printed on it) → write the name, date, number
+// 'template': the same design with an empty banner and parchment → also write the title and description
+export const AWARD_TEMPLATE_URL = '/awards/award-template.jpg';
+const NAVY = '#141a46';
+const DESIGNED = {
+  name: [0.5, 0.476, 0.043, 0.68],      // on the line under "PRESENTED TO"
+  meta: [0.5, 0.704, 0.0122, 0.62],     // in the gap above the seal
+  title: { x: 0.5, maxW: 0.53, lines: [[0.279, 0.044], [0.329, 0.056], [0.373, 0.056]] },
+  desc: { x: 0.5, y: 0.549, size: 0.0222, maxW: 0.74, lineH: 1.3, maxLines: 4 },
+};
+
+// "Grand Champion Achievement Award" → ["GRAND CHAMPION", "ACHIEVEMENT", "AWARD"], like the printed designs
+const titleLines = (ctx, title, maxW, sizePx) => {
+  const t = String(title || 'Achievement Award').trim().toUpperCase();
+  const m = t.match(/^(.*?)\s*ACHIEVEMENT\s+AWARD$/);
+  if (m && m[1]) return [m[1], 'ACHIEVEMENT', 'AWARD'];
+  ctx.font = `bold ${sizePx}px ${SERIF}`;
+  return wrapLines(ctx, t, maxW, 3);
+};
+
+const goldText = (ctx, value, x, y, px, maxW) => {
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  const size = fit(ctx, value, px, maxW, 'bold', SERIF, 0.5);
+  ctx.font = `bold ${size}px ${SERIF}`;
+  ctx.shadowColor = 'rgba(0,0,0,0.65)'; ctx.shadowBlur = size * 0.12; ctx.shadowOffsetY = size * 0.05;
+  ctx.lineJoin = 'round'; ctx.lineWidth = size * 0.07; ctx.strokeStyle = '#3a2306'; ctx.strokeText(value, x, y);
+  ctx.shadowColor = 'transparent';
+  const g = ctx.createLinearGradient(0, y - size * 0.75, 0, y + size * 0.05);
+  g.addColorStop(0, '#fff7cf'); g.addColorStop(0.45, '#f5cf62'); g.addColorStop(0.75, '#d9a32e'); g.addColorStop(1, '#a8741a');
+  ctx.fillStyle = g; ctx.fillText(value, x, y);
+  ctx.restore();
+};
+
+const drawDesigned = async (ctx, W, H, award, bgUrl, writeTexts) => {
+  const bg = await loadImage(bgUrl);
+  if (!bg) throw new Error('The award design image could not be loaded.');
+  ctx.drawImage(bg, 0, 0, W, H);
+  if (writeTexts) {
+    const T = DESIGNED.title;
+    const lines = titleLines(ctx, award.title, T.maxW * W, T.lines[1][1] * H);
+    const slots = lines.length === 3 ? T.lines : lines.length === 2 ? [[0.302, 0.056], [0.36, 0.056]] : [[0.333, 0.06]];
+    lines.forEach((ln, i) => goldText(ctx, ln, T.x * W, slots[i][0] * H, slots[i][1] * H, T.maxW * W));
+    if (award.description) {
+      const D = DESIGNED.desc;
+      ctx.save(); ctx.fillStyle = NAVY; ctx.textAlign = 'center';
+      let size = D.size * H;
+      ctx.font = `italic bold ${size}px ${SERIF}`;
+      let desc = wrapLines(ctx, award.description, D.maxW * W, 99);
+      while (desc.length > D.maxLines && size > D.size * H * 0.72) { size *= 0.94; ctx.font = `italic bold ${size}px ${SERIF}`; desc = wrapLines(ctx, award.description, D.maxW * W, 99); }
+      desc = wrapLines(ctx, award.description, D.maxW * W, D.maxLines);
+      const top = D.y * H + ((D.maxLines - desc.length) * size * D.lineH) / 2.6;
+      desc.forEach((ln, i) => ctx.fillText(ln, D.x * W, top + i * size * D.lineH));
+      ctx.restore();
+    }
+  }
+  const [nx, ny, ns, nw] = DESIGNED.name;
+  text(ctx, award.recipientName || '', nx * W, ny * H, ns * H, { style: 'italic bold', maxW: nw * W, color: NAVY });
+  const meta = [award.date ? `Awarded ${formatAwardDate(award.date)}` : '', award.awardNumber ? `Award No. ${award.awardNumber}` : ''].filter(Boolean).join('   ·   ');
+  const [mx, my, ms, mw] = DESIGNED.meta;
+  text(ctx, meta, mx * W, my * H, ms * H, { style: 'bold', maxW: mw * W, color: '#3d3a52' });
+};
+
 export const drawAward = async (canvas, award, { width } = {}) => {
+  if (award.design === 'artwork' || award.design === 'template') {
+    const W = Math.round(width || 2200);
+    const H = Math.round(W * (1427 / 1102));
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    const artwork = award.design === 'artwork' && award.backgroundUrl;
+    await drawDesigned(ctx, W, H, award, artwork ? award.backgroundUrl : AWARD_TEMPLATE_URL, !artwork);
+    return canvas;
+  }
   const portrait = award.orientation === 'portrait';
   const W = Math.round(width || 2200);
   const H = Math.round(portrait ? W * (11 / 8.5) : W * (8.5 / 11));
@@ -196,7 +270,7 @@ export const drawAward = async (canvas, award, { width } = {}) => {
   const L = portrait ? LAYOUTS.portrait : LAYOUTS.landscape;
   const signers = (award.signers && award.signers.length ? award.signers : DEFAULT_SIGNERS).slice(0, 2);
   const [bgImg, logoImg, sealImg, badgeImg, ...sigImgs] = await Promise.all([
-    loadImage(award.backgroundUrl), loadImage('/images/logo-dark.webp'), loadImage('/images/logo-mascot.webp'),
+    loadImage(award.backgroundUrl), loadImage('/images/ampex-logo.webp'), loadImage('/images/ampex-logo.webp'),
     loadImage(award.imageUrl), ...signers.map((s) => loadImage(s.signatureUrl)),
   ]);
 
@@ -266,7 +340,7 @@ export const renderAwardCanvas = async (award, width) => {
 export const downloadAwardPdf = async (award) => {
   const canvas = await renderAwardCanvas(award, 2400);
   const { jsPDF } = await import('jspdf');
-  const portrait = award.orientation === 'portrait';
+  const portrait = award.orientation === 'portrait' || award.design === 'artwork' || award.design === 'template';
   const pageW = portrait ? 612 : 792;
   const pageH = portrait ? 792 : 612;
   const pdf = new jsPDF({ orientation: portrait ? 'portrait' : 'landscape', unit: 'pt', format: [pageW, pageH], compress: true });

@@ -793,6 +793,14 @@ const Profile = () => {
                 >
                   <Award size={15} /> CERTIFICATES ({certState.list.length})
                 </button>
+                {user?.username && (
+                  <Link
+                    to={`/profile/${encodeURIComponent(user.username)}?tab=achievements`}
+                    style={{ flex: '1 1 150px', background: 'transparent', color: '#888', padding: '14px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: '900', letterSpacing: '1px', textDecoration: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                  >
+                    <Trophy size={15} /> ACHIEVEMENTS
+                  </Link>
+                )}
                 <button
                   onClick={() => setActiveTab("messages")}
                   style={{

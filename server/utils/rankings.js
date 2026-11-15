@@ -64,6 +64,8 @@ const awardPoints = async ({ userId, points, source, referenceId = null, reason 
   if (saveError) throw saveError;
 
   await refreshGlobalRanks();
+  // points and records change tiers and category places: give any automatic achievement award now earned
+  await require('./autoAwards').syncQuietly({});
   return saved;
 };
 

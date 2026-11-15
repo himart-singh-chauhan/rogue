@@ -190,6 +190,8 @@ const issueCertificate = async (req, res) => {
       `Certificate number: ${row.certificate_number}\n\n` +
       `Download it as a PDF from your profile under Certificates. Anyone can check it is genuine at ${siteUrl()}/certificate/${row.certificate_number}`,
   });
+  // a first certificate earns the Ampex Certified Achievement Award
+  await require('../utils/autoAwards').syncQuietly({ userId: rec.user_id });
   res.status(201).json(formatIssuance(data));
 };
 

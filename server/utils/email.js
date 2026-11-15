@@ -68,6 +68,8 @@ const apiBase = (req) => {
   return `${proto}://${host}`;
 };
 const unsubscribeUrl = (req, userId) => `${apiBase(req)}/api/email/unsubscribe?u=${encodeURIComponent(userId)}&t=${unsubscribeToken(userId)}`;
+// The link people see in the email opens a page on the AMPEX website (not the API address)
+const unsubscribePageUrl = (userId) => `${siteUrl()}/unsubscribe?u=${encodeURIComponent(userId)}&t=${unsubscribeToken(userId)}`;
 
 // ---------- the email itself ----------
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -75,10 +77,21 @@ const absolute = (url) => {
   const u = String(url || '').trim();
   if (!u) return '';
   if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith('//')) return `https:${u}`;
   if (u.startsWith('/')) return `${siteUrl()}${u}`;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return ''; // javascript:, data:, mailto: … are not web links
   return `https://${u}`;
 };
-const safeLink = (url) => { const u = absolute(url); return /^https?:\/\/[^\s"'<>]+$/i.test(u) ? u : ''; };
+// Only real web addresses: http(s), a host with a dot (or localhost), no spaces or quotes
+const safeLink = (url) => {
+  const u = absolute(url);
+  if (!/^https?:\/\/[^\s"'<>]+$/i.test(u)) return '';
+  try {
+    const { hostname, protocol } = new URL(u);
+    if (!/^https?:$/.test(protocol)) return '';
+    return hostname.includes('.') || hostname === 'localhost' ? u : '';
+  } catch { return ''; }
+};
 // Plain text with line breaks; web addresses become links
 const bodyHtml = (text) => esc(text)
   .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, (m) => `<a href="${m}" style="color:#FF6A00;">${m}</a>`)
@@ -100,7 +113,8 @@ const buildEmail = ({ subject, body, imageUrl, buttonText, buttonUrl, member, ki
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ec;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
 <tr><td style="background:#0A0A0A;padding:22px 28px;text-align:center;">
-<a href="${esc(site)}" style="color:#FF6A00;text-decoration:none;font-size:20px;font-weight:900;letter-spacing:2px;">AMPEX WORLD RECORDS</a></td></tr>
+<a href="${esc(site)}" style="text-decoration:none;"><img src="${esc(site)}/images/ampex-logo-email.png" alt="AMPEX World Records" width="96" height="96" style="display:block;margin:0 auto 8px;border:0;width:96px;height:96px;"></a>
+<a href="${esc(site)}" style="color:#FF6A00;text-decoration:none;font-size:18px;font-weight:900;letter-spacing:2px;">AMPEX WORLD RECORDS</a></td></tr>
 ${img ? `<tr><td><img src="${esc(img)}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;"></td></tr>` : ''}
 <tr><td style="padding:28px 28px 8px;color:#1a1a1a;">
 <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#111;">${esc(personalise(subject, member))}</h1>
@@ -117,5 +131,5 @@ ${kind === 'marketing' && unsubscribe ? `You get these emails because you are an
 
 module.exports = {
   emailEnabled, emailMode: mode, senderAddress, send, buildEmail, outbox,
-  unsubscribeToken, checkUnsubscribeToken, unsubscribeUrl, safeLink,
+  unsubscribeToken, checkUnsubscribeToken, unsubscribeUrl, unsubscribePageUrl, safeLink,
 };

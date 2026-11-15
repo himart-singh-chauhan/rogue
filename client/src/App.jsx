@@ -32,6 +32,7 @@ const Streams = lazy(() => import('./pages/Streams'))
 const Categories = lazy(() => import('./pages/Categories'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Rules = lazy(() => import('./pages/Rules'))
+const Unsubscribe = lazy(() => import('./pages/Unsubscribe'))
 const Appeals = lazy(() => import('./pages/Appeals'))
 const SubmitEvidenceLearnMore = lazy(() => import('./pages/SubmitEvidenceLearnMore'))
 const GlobalRecognitionLearnMore = lazy(() => import('./pages/GlobalRecognitionLearnMore'))
@@ -133,6 +134,7 @@ function App() {
             <Route path="/adjudication-info" element={<ExpertAdjudicationLearnMore />} />
             <Route path="/verification-protocol-info" element={<VerificationProtocolLearnMore />} />
             <Route path="/rules" element={<Rules />} />
+            <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/appeals" element={<Appeals />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/cookies" element={<Cookies />} />

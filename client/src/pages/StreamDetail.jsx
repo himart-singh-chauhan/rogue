@@ -149,7 +149,7 @@ const StreamDetail = () => {
   // Dynamic Chat & Moderation hooks
   const [chatMessages, setChatMessages] = React.useState([
     { id: 1, user: "IronMike", msg: "This is insane! 500kg incoming?", userId: "user-iron-mike" },
-    { id: 2, user: "AmpexMarshal", msg: "Welcome to the finals everyone.", color: "#FF6A00", userId: "user-rogue-marshal" },
+    { id: 2, user: "AmpexMarshal", msg: "Welcome to the finals everyone.", color: "#FF6A00", userId: "user-ampex-marshal" },
     { id: 3, user: "LiftLover", msg: "Thor looks ready today.", userId: "user-lift-lover" },
     { id: 4, user: "GymRat99", msg: "Let's goooooooo!", userId: "user-gym-rat-99" },
     { id: 5, user: "Sarah_Lift", msg: "The atmosphere in Tokyo is electric.", userId: "user-sarah-lift" },

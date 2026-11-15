@@ -278,7 +278,7 @@ const Home = () => {
   useEffect(() => {
     apiCall("/records/explore/all?filter=beaten&limit=12", "GET")
       .then((d) => setBeatenRecords((d?.records || []).map((r) => ({
-        img: r.thumbnail_url && r.thumbnail_url !== "pending_upload" ? formatProductImage(r.thumbnail_url) : "/images/logo-mascot.webp",
+        img: r.thumbnail_url && r.thumbnail_url !== "pending_upload" ? formatProductImage(r.thumbnail_url) : "/images/ampex-logo.webp",
         cat: "BEATEN",
         title: r.title,
         avatar: r.user?.profile_image ? (r.user.profile_image.includes("http") ? r.user.profile_image : formatProductImage(`/uploads/${r.user.profile_image}`)) : "https://ui-avatars.com/api/?name=" + encodeURIComponent(r.user?.name || "Athlete") + "&background=444&color=fff",

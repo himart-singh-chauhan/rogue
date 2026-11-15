@@ -106,6 +106,7 @@ app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/rewards', require('./routes/rewardRoutes'));
 // Public: a member's achievement awards; unsubscribe link in promotional emails
 app.get('/api/awards/user/:userId', require('./controllers/awardController').awardsForUser);
+app.get('/api/awards/catalog', require('./controllers/awardController').catalog);
 app.get('/api/email/unsubscribe', require('./controllers/emailController').unsubscribe);
 app.post('/api/email/unsubscribe', express.urlencoded({ extended: false }), require('./controllers/emailController').unsubscribe);
 app.get('/api/email/preferences', require('./middleware/authMiddleware').protect, require('./controllers/emailController').getPreferences);

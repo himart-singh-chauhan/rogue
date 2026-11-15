@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const { notifyMember, siteUrl } = require('../utils/notify');
+const auto = require('../utils/autoAwards');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
@@ -27,23 +28,34 @@ const readAward = (b, existing = {}) => {
     signer2_title: pick('signer2_title', (v) => clean(v, 80)),
     signer2_signature_url: pick('signer2_signature_url', url),
     status: pick('status', (v) => (v === 'published' ? 'published' : 'draft')),
+    design: pick('design', (v) => (['template', 'artwork', 'classic'].includes(v) ? v : 'template')),
+    criteria: pick('criteria', (v) => (auto.CRITERIA[v] ? v : 'manual')),
+    criteria_value: pick('criteria_value', (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 && n < 1000 ? n : null; }),
+    sort_order: pick('sort_order', (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : 100; }),
   };
 };
+const withCriteria = (a) => ({ ...a, criteria_label: auto.criteriaLabel(a.criteria || 'manual', a.criteria_value) });
+const designError = (row) => (row.design === 'artwork' && !row.background_url ? 'Upload the award artwork (or choose the AMPEX award design).' : null);
 
 // GET /api/admin/awards
 const listAwards = async (req, res) => {
-  const { data, error } = await supabase.from('achievement_awards').select('*, given:member_awards(count)').order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ message: 'Could not load awards', error: error.message });
-  res.json((data || []).map((a) => ({ ...a, given_count: a.given?.[0]?.count || 0, given: undefined })));
+  const { data, error } = await supabase.from('achievement_awards').select('*, given:member_awards(count)').order('sort_order', { ascending: true }).order('created_at', { ascending: true });
+  if (error) {
+    const missing = /schema cache|does not exist|sort_order/i.test(error.message);
+    return res.status(500).json({ message: missing ? 'The awards tables are not in the database yet: run the 2026-11-14 and 2026-11-16 migrations in Supabase.' : 'Could not load awards', error: error.message });
+  }
+  res.json((data || []).map((a) => withCriteria({ ...a, given_count: a.given?.[0]?.count || 0, given: undefined })));
 };
 
 // POST /api/admin/awards
 const createAward = async (req, res) => {
   const row = readAward(req.body || {});
   if (!row.title) return res.status(400).json({ message: 'Give the award a title.' });
+  const bad = designError(row); if (bad) return res.status(400).json({ message: bad });
   const { data, error } = await supabase.from('achievement_awards').insert({ ...row, created_by: req.user.id }).select('*').single();
   if (error) return res.status(500).json({ message: 'Could not save the award', error: error.message });
-  res.status(201).json(data);
+  const granted = data.status === 'published' && data.criteria !== 'manual' ? await auto.syncQuietly({}) : [];
+  res.status(201).json({ ...withCriteria(data), granted: granted.length });
 };
 
 // PUT /api/admin/awards/:id
@@ -53,9 +65,11 @@ const updateAward = async (req, res) => {
   if (!existing) return res.status(404).json({ message: 'Award not found' });
   const row = readAward(req.body || {}, existing);
   if (!row.title) return res.status(400).json({ message: 'Give the award a title.' });
+  const bad = designError(row); if (bad) return res.status(400).json({ message: bad });
   const { data, error } = await supabase.from('achievement_awards').update({ ...row, updated_at: new Date().toISOString() }).eq('id', req.params.id).select('*').single();
   if (error) return res.status(500).json({ message: 'Could not save the award', error: error.message });
-  res.json(data);
+  const granted = data.status === 'published' && data.criteria !== 'manual' ? await auto.syncQuietly({}) : [];
+  res.json({ ...withCriteria(data), granted: granted.length });
 };
 
 // DELETE /api/admin/awards/:id  (also takes it off every member it was given to)
@@ -71,7 +85,7 @@ const deleteAward = async (req, res) => {
 const listAssignments = async (req, res) => {
   if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Award not found' });
   const { data, error } = await supabase.from('member_awards')
-    .select('id, award_number, award_date, recipient_name, title_override, description_override, created_at, user:user_id(id, name, username, email, member_number)')
+    .select('id, award_number, award_date, recipient_name, title_override, description_override, auto, created_at, user:user_id(id, name, username, email, member_number)')
     .eq('award_id', req.params.id).order('created_at', { ascending: false });
   if (error) return res.status(500).json({ message: 'Could not load members', error: error.message });
   res.json(data || []);
@@ -92,6 +106,7 @@ const assignAward = async (req, res) => {
   if (!award) return res.status(404).json({ message: 'Award not found' });
   if (!user) return res.status(404).json({ message: 'Member not found' });
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(b.awardDate || '')) ? b.awardDate : new Date().toISOString().slice(0, 10);
+  // (an admin can also give an automatic award by hand, e.g. for an achievement made outside the site)
   const row = {
     award_id: id, user_id: user.id, award_date: date,
     recipient_name: clean(b.recipientName, 120) || user.name,
@@ -149,6 +164,8 @@ const shape = (row) => {
     title: row.title_override || a.title,
     description: row.description_override || a.description,
     icon: a.icon, imageUrl: a.image_url, backgroundUrl: a.background_url, orientation: a.orientation, color: a.color,
+    design: a.design || 'classic', criteria: a.criteria || 'manual', criteriaLabel: auto.criteriaLabel(a.criteria || 'manual', a.criteria_value),
+    auto: !!row.auto,
     signers: [
       { name: a.signer1_name, title: a.signer1_title, signatureUrl: a.signer1_signature_url },
       { name: a.signer2_name, title: a.signer2_title, signatureUrl: a.signer2_signature_url },
@@ -156,11 +173,12 @@ const shape = (row) => {
   };
 };
 
-// GET /api/awards/user/:userId  (public: published awards of one member)
+// GET /api/awards/user/:userId  (public: published awards of one member; gives any automatic award they now qualify for)
 const awardsForUser = async (req, res) => {
   if (!isUUID(req.params.userId)) return res.json([]);
+  await auto.syncQuietly({ userId: req.params.userId });
   const { data, error } = await supabase.from('member_awards')
-    .select('id, award_number, award_date, recipient_name, title_override, description_override, award:award_id!inner(*)')
+    .select('id, award_number, award_date, recipient_name, title_override, description_override, auto, award:award_id!inner(*)')
     .eq('user_id', req.params.userId)
     .eq('award.status', 'published')
     .order('award_date', { ascending: false });
@@ -171,7 +189,35 @@ const awardsForUser = async (req, res) => {
   res.json((data || []).map(shape));
 };
 
+// GET /api/awards/catalog  (public: every published award and how to earn it, for the profile Achievements tab)
+const catalog = async (req, res) => {
+  const { data, error } = await supabase.from('achievement_awards')
+    .select('id, slug, title, description, icon, image_url, background_url, design, color, criteria, criteria_value, sort_order')
+    .eq('status', 'published').order('sort_order', { ascending: true }).order('created_at', { ascending: true });
+  if (error) {
+    if (/schema cache|does not exist|sort_order|design/i.test(error.message)) return res.json([]); // before the migration
+    return res.status(500).json({ message: 'Could not load awards', error: error.message });
+  }
+  res.json((data || []).map(withCriteria));
+};
+
+// POST /api/admin/awards/sync  (admin: give automatic awards to everyone who qualifies now)
+const syncNow = async (req, res) => {
+  try {
+    const granted = await auto.syncAutoAwards({});
+    res.json({ granted: granted.length, list: granted, message: granted.length ? `${granted.length} ${granted.length === 1 ? 'award' : 'awards'} given to members who qualify.` : 'Everyone who qualifies already has their awards.' });
+  } catch (e) {
+    res.status(500).json({ message: 'Could not check the automatic awards', error: e.message });
+  }
+};
+
+// GET /api/admin/awards/criteria  (choices for the award editor)
+const criteriaOptions = (req, res) => res.json(Object.keys(auto.CRITERIA).map((key) => ({
+  value: key, label: auto.criteriaLabel(key, null), needsNumber: ['pro_competitor', 'first_place', 'top_10', 'certified'].includes(key),
+})));
+
 module.exports = {
+  catalog, syncNow, criteriaOptions,
   listAwards, createAward, updateAward, deleteAward, listAssignments, assignAward, updateAssignment, removeAssignment,
   awardsForUser, shapeAward: shape,
 };
