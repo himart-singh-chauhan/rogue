@@ -31,5 +31,6 @@ router.post('/upload/video', protect, videoUpload.single('video'), uploadVideoFi
 router.get('/:id', optionalAuth, getRecordById);
 router.post('/', protect, createRecord);
 router.post('/:id/checkout', protect, processCheckout);
+router.get('/:id/fee-quote', protect, require('../controllers/recordController').feeQuote);
 
 module.exports = router;

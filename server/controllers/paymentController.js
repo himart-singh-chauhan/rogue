@@ -32,6 +32,10 @@ const detailsFor = async (payment) => {
     }
     return m ? { membership: { id: m.id, tier: m.tier, planName, status: m.status, endDate: m.end_date, autoRenew: m.auto_renew } } : null;
   }
+  if (payment.kind === 'pack') {
+    const { data: u } = await supabase.from('users').select('extra_submissions').eq('id', payment.user_id).maybeSingle();
+    return { pack: { count: parseInt(payment.metadata?.pack_count, 10) || 0, balance: Number(u?.extra_submissions || 0) } };
+  }
   return null;
 };
 

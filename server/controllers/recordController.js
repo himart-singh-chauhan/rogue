@@ -166,6 +166,11 @@ const createRecord = async (req, res) => {
       return res.status(400).json({ message: 'Title and category are required' });
     }
 
+    // Plan's monthly submissions, then extra submissions from packs (see submissionPackController)
+    const packs = require('./submissionPackController');
+    const slot = await packs.reserveSubmission(req.user);
+    if (!slot.ok) return res.status(slot.status).json(slot.body);
+
     // Scan is computed before inserting so a bad field can never leave a half-created record.
     const scanResult = generateScanResult(req.body);
 
@@ -221,7 +226,11 @@ const createRecord = async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (slot.usedCredit) await packs.giveBackCredit(req.user.id); // nothing was submitted: the extra submission goes back
+      throw error;
+    }
+    if (slot.usedCredit) await packs.logCreditUse(req.user.id, createdRecord.id);
 
     // record_meta with pending payment status
     const { error: metaError } = await supabase.from('record_meta').insert([{
@@ -258,13 +267,42 @@ const COUPON_REASONS = {
 };
 const newTrackingNumber = () => `AWR-${require('crypto').randomBytes(5).toString('hex').toUpperCase().slice(0, 9)}`;
 
+// GET /api/records/:id/fee-quote?currency=INR&coupon=CODE  → the fee in that currency (for the checkout page)
+const feeQuote = async (req, res) => {
+  try {
+    if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Record not found' });
+    const { data: record } = await supabase.from('records').select('id, user_id, record_type, country').eq('id', req.params.id).maybeSingle();
+    if (!record) return res.status(404).json({ message: 'Record not found' });
+    if (String(record.user_id) !== String(req.user.id) && !req.user.is_admin) return res.status(403).json({ message: 'Not your submission' });
+    const fx = require('../utils/currency');
+    const usdFee = await feeForRecordType(record.record_type);
+    let usdDiscount = 0;
+    const code = req.query.coupon ? String(req.query.coupon).trim().toUpperCase() : null;
+    if (code) {
+      const verdict = await evaluateCoupon({ code, subtotal: usdFee, items: [], checkoutType: 'ticket', targetId: record.id }, req.user);
+      if (verdict.data?.valid) usdDiscount = Math.min(usdFee, Math.max(0, Number(verdict.data.discountAmount) || 0));
+    }
+    const suggested = fx.currencyForCountry(record.country || req.user.country);
+    const currency = String(req.query.currency || suggested).toUpperCase();
+    const fee = await fx.fromUsd(usdFee, currency);
+    const total = await fx.fromUsd(Math.round((usdFee - usdDiscount) * 100) / 100, currency);
+    res.json({
+      currency: fee.currency, suggested, fee: fee.amount, discount: fx.roundFor(fee.amount - total.amount, fee.currency), total: total.amount,
+      usd: { fee: usdFee, discount: usdDiscount, total: Math.round((usdFee - usdDiscount) * 100) / 100 },
+      currencies: (await fx.supportedCurrencies()).map((c) => c.code),
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ message: e.message || 'Could not work out the fee' });
+  }
+};
+
 const processCheckout = async (req, res) => {
   try {
     if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Record not found' });
 
     const { data: record, error: recordError } = await supabase
       .from('records')
-      .select('id, user_id, title, record_type')
+      .select('id, user_id, title, record_type, country')
       .eq('id', req.params.id)
       .maybeSingle();
     if (recordError) throw recordError;
@@ -287,6 +325,9 @@ const processCheckout = async (req, res) => {
     }
     const fee = Math.round((BASE_FEE - discount) * 100) / 100;
     const isChallenge = record.record_type === 'challenge';
+    // The member pays in the currency they chose (default: the currency of the record's country)
+    const fx = require('../utils/currency');
+    const currency = String(req.body.currency || fx.currencyForCountry(record.country) || 'USD').toUpperCase();
 
     if (fee > 0) {
       if (!stripe.stripeEnabled()) return res.status(503).json({ message: 'Online card payments are not available right now. Please try again later.' });
@@ -299,21 +340,26 @@ const processCheckout = async (req, res) => {
       }], { onConflict: 'record_id' });
       if (metaError) throw metaError;
       try {
+        const local = await fx.fromUsd(BASE_FEE, currency);
+        const localTotal = (await fx.fromUsd(fee, currency)).amount;
+        const localDiscount = fx.roundFor(local.amount - localTotal, local.currency);
         const checkout = await stripe.createCheckout({
           req,
           kind: 'submission',
+          currency: local.currency,
+          amountUsd: fee,
           referenceId: record.id,
           userId: req.user.id,
           email: req.user.email || null,
           description: isChallenge ? 'AMPEX challenge fee' : 'AMPEX record submission fee',
-          lines: [{ name: isChallenge ? 'AMPEX challenge fee' : 'AMPEX record submission fee', description: record.title || undefined, amount: BASE_FEE, qty: 1 }],
-          discountAmount: discount,
+          lines: [{ name: isChallenge ? 'AMPEX challenge fee' : 'AMPEX record submission fee', description: record.title || undefined, amount: local.amount, qty: 1 }],
+          discountAmount: localDiscount,
           discountName: discount > 0 ? couponCode : null,
           successPath: '/submission-checkout',
           cancelPath: `/submission-checkout?record=${record.id}`,
           metadata: { record_id: record.id, coupon_code: discount > 0 ? couponCode : null, coupon_discount: discount || null },
         });
-        return res.status(200).json({ checkoutUrl: checkout.url, paymentId: checkout.paymentId, fee });
+        return res.status(200).json({ checkoutUrl: checkout.url, paymentId: checkout.paymentId, fee, currency: local.currency, localFee: localTotal });
       } catch (e) {
         console.error('Stripe checkout could not start:', e.message);
         return res.status(e.status && e.status < 500 ? e.status : 502).json({ message: e.status && e.status < 500 ? e.message : 'Could not open the secure payment page. Please try again.' });
@@ -545,6 +591,7 @@ module.exports = {
   getAllSubmissionsForAdmin,
   adjudicateRecord,
   processCheckout,
+  feeQuote,
   paymentHooks,
   toggleRecordFeatured,
   PUBLIC_RECORD_COLUMNS,

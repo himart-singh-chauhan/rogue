@@ -218,6 +218,13 @@ router.get('/emails/:id', emails.getCampaign);
 router.post('/emails/:id/continue', emails.continueCampaign);
 router.post('/emails/:id/retry', emails.retryFailed);
 
+// Submission packs and members' extra submissions
+const packs = require('../controllers/submissionPackController');
+router.get('/submission-packs', packs.adminGetPacks);
+router.put('/submission-packs', packs.adminSavePacks);
+router.get('/members/:id/allowance', packs.adminMemberAllowance);
+router.put('/members/:id/extra-submissions', packs.adminSetCredits);
+
 // Achievement awards (Admin → Achievement Awards)
 const awards = require('../controllers/awardController');
 router.get('/awards', awards.listAwards);

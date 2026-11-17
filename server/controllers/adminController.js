@@ -332,6 +332,18 @@ const getAllProductsByAdmin = async (req, res) => {
 
 // Championship belts always need an admin's approval per competitor before they can be bought.
 const APPROVAL_CATEGORIES = ['championship belts'];
+// Shop colors: [{ name, hex, image_url, enabled }], cleaned; undefined = leave the product's colors alone
+const cleanColors = (raw) => {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set();
+  return raw.map((c) => ({
+    name: String(c?.name || '').trim().slice(0, 40),
+    hex: /^#[0-9a-f]{6}$/i.test(String(c?.hex || '')) ? c.hex : '#888888',
+    image_url: /^https?:\/\//i.test(String(c?.image_url || '')) || String(c?.image_url || '').startsWith('/') ? String(c.image_url).slice(0, 1000) : '',
+    enabled: c?.enabled !== false,
+  })).filter((c) => c.name && !seen.has(c.name.toLowerCase()) && seen.add(c.name.toLowerCase())).slice(0, 40);
+};
+
 const needsApproval = (category, flag) =>
   APPROVAL_CATEGORIES.includes(String(category || '').trim().toLowerCase()) || flag === true || flag === 'true';
 
@@ -353,7 +365,8 @@ const createProductByAdmin = async (req, res) => {
           stock_count: parseInt(stockCount) || 0,
           sizes: sizes || [],
           image_urls: imageUrls || [],
-          requires_authorization: needsApproval(category, requiresAuthorization)
+          requires_authorization: needsApproval(category, requiresAuthorization),
+          ...(cleanColors(req.body.colors) ? { colors: cleanColors(req.body.colors) } : {})
         }
       ])
       .select()
@@ -384,6 +397,7 @@ const updateProductByAdmin = async (req, res) => {
         sizes: sizes || [],
         image_urls: imageUrls || [],
         requires_authorization: needsApproval(category, requiresAuthorization),
+        ...(cleanColors(req.body.colors) ? { colors: cleanColors(req.body.colors) } : {}),
         updated_at: new Date()
       })
       .eq('id', req.params.id)

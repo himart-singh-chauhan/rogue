@@ -29,8 +29,10 @@ import AdminRewards from "../components/admin/AdminRewards";
 import AdminAchievementAwards from "../components/admin/AdminAchievementAwards";
 import AdminEmailMembers from "../components/admin/AdminEmailMembers";
 import AdminFeesCard from "../components/admin/AdminFeesCard";
+import AdminSubmissionPacksCard from "../components/admin/AdminSubmissionPacksCard";
 import { Modal as AdminModal } from "../components/admin/adminUi";
 import BodyUnitsFields from "../components/admin/BodyUnitsFields";
+import ProductColorManager from "../components/admin/ProductColorManager";
 import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
 
 // Recommended artwork size for each sponsor placement (shown in the sponsor form)
@@ -273,7 +275,7 @@ const Admin = () => {
   const [recordThumbFile, setRecordThumbFile] = useState(null);
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "athlete", membershipType: "free_athlete", accountStatus: "active", username: "", phone: "", gender: "male", dob: "", weight: "", weightUnit: "kg", height: "", heightUnit: "cm", country: "", city: "" });
   const [eventForm, setEventForm] = useState({ title: "", description: "", date: "", location: "", imageUrl: "", isPaid: false, ticketPrice: 0 });
-  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false, imageFile: null, imagePreview: "" });
+  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], colors: [], requiresAuthorization: false, imageFile: null, imagePreview: "" });
   const [adminProductDragActive, setAdminProductDragActive] = useState(false);
   const adminProductFileInputRef = React.useRef(null);
 
@@ -1161,10 +1163,11 @@ const Admin = () => {
           stockCount: item.stock_count || "",
           sizes: item.sizes || [],
           imageUrls: item.image_urls || [],
+          colors: Array.isArray(item.colors) ? item.colors : [],
           requiresAuthorization: !!item.requires_authorization
         });
       } else {
-        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], requiresAuthorization: false });
+        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], colors: [], requiresAuthorization: false });
       }
     } else if (activeTab === "coupons") {
       if (type === "edit" && item) {
@@ -3387,9 +3390,10 @@ const Admin = () => {
                       <div key={item.id} style={{ background: "rgba(13,13,16,0.6)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "24px", overflow: "hidden", display: "flex", flexDirection: "column", transition: "all 0.25s" }}>
 
                         {/* Product image thumbnail */}
-                        <div style={{ height: "200px", position: "relative", background: "#050507" }}>
+                        {/* the whole picture is shown (contain), never cropped */}
+                        <div style={{ height: "260px", position: "relative", background: "#050507" }}>
                           {item.image_url || item.imageUrl ? (
-                            <img loading="lazy" decoding="async" src={formatProductImage(item.image_url || item.imageUrl)} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img loading="lazy" decoding="async" src={formatProductImage(item.image_url || item.imageUrl)} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "contain", padding: "44px 12px 12px", boxSizing: "border-box" }} />
                           ) : (
                             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#222" }}><ShoppingBag size={48} /></div>
                           )}
@@ -6668,6 +6672,7 @@ const Admin = () => {
                 {seoStatus && <span style={{ marginLeft: "12px", fontSize: "12px", color: seoStatus.startsWith("Saved") ? "#22c55e" : seoStatus === "Saving..." ? "#aaa" : "#ef4444" }}>{seoStatus}</span>}
               </div>
               <AdminFeesCard />
+              <AdminSubmissionPacksCard />
             </div>
           )}
 
@@ -9038,6 +9043,9 @@ const Admin = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Colors: swatches under the product picture, one picture per color */}
+                    <ProductColorManager colors={productForm.colors || []} onChange={(colors) => setProductForm((p) => ({ ...p, colors }))} />
 
                     {/* Side pictures: up to 4 extra photos shown beside the main picture on the product page */}
                     <div style={{ marginTop: "12px" }}>

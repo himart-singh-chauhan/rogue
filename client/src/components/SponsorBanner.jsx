@@ -158,7 +158,7 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
                     decoding="async"
                     style={fit === "cover"
                       ? { position: "relative", display: "block", width: "100%", height: "clamp(110px, 22vw, 260px)", objectFit: "cover", objectPosition: position }
-                      : { position: "relative", display: "block", width: "100%", height: "auto", maxHeight: "min(360px, 70vw)", objectFit: "contain", objectPosition: position, margin: "0 auto" }}
+                      : { position: "relative", display: "block", width: "100%", height: "auto", maxHeight: video ? "min(360px, 70vw)" : "min(560px, 90vw)", objectFit: "contain", objectPosition: position, margin: "0 auto" }}
                   />
                 </div>
               )}

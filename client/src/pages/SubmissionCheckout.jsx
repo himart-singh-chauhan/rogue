@@ -90,6 +90,25 @@ const SubmissionCheckout = () => {
   const baseFee = fees ? Number(isChallenge ? fees.challengeFee : fees.submissionFee) || 0 : 3.50;
   const finalFee = Math.max(0, baseFee - discount);
 
+  // Pay in your own currency: starts with the currency of the record's country; the server converts the fee
+  const [currency, setCurrency] = useState("");
+  const [quote, setQuote] = useState(null);
+  useEffect(() => {
+    if (!submissionData?.id || submissionData.id === "TEMP" || !user?.token) return;
+    const qs = new URLSearchParams();
+    if (currency) qs.set("currency", currency);
+    if (appliedCoupon?.code) qs.set("coupon", appliedCoupon.code);
+    apiCall(`/records/${submissionData.id}/fee-quote?${qs}`, "GET", null, user.token)
+      .then((q) => { setQuote(q); if (!currency) setCurrency(q.currency); })
+      .catch(() => setQuote(null));
+  }, [submissionData?.id, user?.token, currency, appliedCoupon?.code]);
+  const money = (amount, code) => {
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: code || "USD" }).format(amount); } catch { return `${code} ${Number(amount).toFixed(2)}`; }
+  };
+  const currencyName = (code) => { try { return new Intl.DisplayNames(["en"], { type: "currency" }).of(code); } catch { return code; } };
+  const shown = quote ? { fee: money(quote.fee, quote.currency), discount: money(quote.discount, quote.currency), total: money(quote.total, quote.currency), usd: quote.currency !== "USD" ? `about ${money(quote.usd.total, "USD")}` : "" }
+    : { fee: `$${baseFee.toFixed(2)}`, discount: `$${discount.toFixed(2)}`, total: `$${finalFee.toFixed(2)}`, usd: "" };
+
   const applyCoupon = async () => {
     if (!coupon.trim()) return;
     try {
@@ -130,7 +149,8 @@ const SubmissionCheckout = () => {
       const response = await apiCall(`/records/${submissionData.id}/checkout`, 'POST', {
         couponCode: appliedCoupon?.code || null,
         discountAmount: discount,
-        finalAmount: finalFee
+        finalAmount: finalFee,
+        currency: quote?.currency || currency || "USD"
       }, user?.token);
 
       if (response.checkoutUrl) {
@@ -206,7 +226,7 @@ const SubmissionCheckout = () => {
           <div style={{ maxWidth: "1000px", width: "100%" }}>
             <div style={{ marginBottom: "40px" }}>
               <h1 style={{ fontSize: "40px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>SECURE <span style={{ color: "#FF6A00" }}>CHECKOUT</span></h1>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "16px" }}>Complete the {isChallenge ? "challenge" : "processing"} fee of ${baseFee.toFixed(2)} to officially submit your application.</p>
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "16px" }}>Complete the {isChallenge ? "challenge" : "processing"} fee of {shown.fee} to officially submit your application.</p>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "40px" }}>
@@ -229,12 +249,23 @@ const SubmissionCheckout = () => {
                     You'll pay on Stripe's secure payment page (card, Apple Pay or Google Pay) and come straight back here for your tracking number. Your card details are never stored on our site.
                   </p>
 
+                  {quote && quote.currencies?.length > 1 && (
+                    <label style={{ display: "block", marginBottom: "18px" }}>
+                      <span style={{ display: "block", fontSize: "10px", fontWeight: 900, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>Pay in</span>
+                      <select value={quote.currency} onChange={(e) => setCurrency(e.target.value)} style={{ width: "100%", background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px 14px", color: "white", fontSize: "14px", fontWeight: 700 }}>
+                        {[quote.suggested, "USD", ...quote.currencies.filter((c) => c !== quote.suggested && c !== "USD").sort()].filter((c, i, a) => a.indexOf(c) === i).map((c) => (
+                          <option key={c} value={c} style={{ background: "#111" }}>{c} · {currencyName(c)}{c === quote.suggested ? " (your country)" : ""}</option>
+                        ))}
+                      </select>
+                      {quote.currency !== "USD" && <span style={{ display: "block", fontSize: "12px", color: "rgba(255,255,255,0.45)", marginTop: "6px" }}>Converted from {money(quote.usd.total, "USD")} at today's exchange rate. Your bank may show a small difference.</span>}
+                    </label>
+                  )}
                   <button
                     onClick={handlePayment}
                     disabled={loading}
                     style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "18px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", boxShadow: "0 10px 20px rgba(255,106,0,0.2)", opacity: loading ? 0.7 : 1 }}
                   >
-                    {loading ? <><Loader2 size={18} className="animate-spin" /> PROCESSING...</> : finalFee > 0 ? `CONTINUE TO SECURE PAYMENT · $${finalFee.toFixed(2)}` : "SUBMIT"}
+                    {loading ? <><Loader2 size={18} className="animate-spin" /> PROCESSING...</> : finalFee > 0 ? `CONTINUE TO SECURE PAYMENT · ${shown.total}` : "SUBMIT"}
                   </button>
                 </div>
 
@@ -260,18 +291,18 @@ const SubmissionCheckout = () => {
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "14px", color: "rgba(255,255,255,0.6)", marginBottom: "12px" }}>
                       <span>PROCESSING FEE</span>
-                      <span>${baseFee.toFixed(2)}</span>
+                      <span>{shown.fee}</span>
                     </div>
                     {discount > 0 && (
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "14px", color: "#22c55e", fontWeight: "700", marginBottom: "12px" }}>
                         <span>DISCOUNT {appliedCoupon ? `(${appliedCoupon.code})` : ''}</span>
-                        <span>-${discount.toFixed(2)}</span>
+                        <span>-{shown.discount}</span>
                       </div>
                     )}
                     <div style={{ height: "1px", background: "rgba(255,255,255,0.1)", marginBottom: "20px" }}></div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "18px", fontWeight: "900" }}>
                       <span>TOTAL FEE</span>
-                      <span style={{ color: "#FF6A00" }}>${finalFee.toFixed(2)}</span>
+                      <span style={{ color: "#FF6A00", textAlign: "right" }}>{shown.total}{shown.usd && <span style={{ display: "block", fontSize: "11px", color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>{shown.usd}</span>}</span>
                     </div>
                   </div>
 

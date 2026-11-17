@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import ColorSwatches from "../components/ColorSwatches";
+import { availableColors } from "../utils/shopColors";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Star } from "lucide-react";
 import PageTransition from "../components/PageTransition";
@@ -13,6 +15,37 @@ import { SHOP_CATEGORIES, normalizeShopCategory, categorySlug } from "../utils/s
 
 // 6 across × 10 rows on desktop, then the next page
 const PAGE_SIZE = 60;
+
+
+// One product in the shop grid. Clicking a color swatch under the picture shows that color;
+// opening the product keeps the chosen color.
+function ShopCard({ product, navigate }) {
+  const [color, setColor] = useState("");
+  const chosen = product.colors?.find((c) => c.name === color);
+  const open = () => navigate(`/product/${product.id}${color ? `?color=${encodeURIComponent(color)}` : ""}`);
+  return (
+    <div onClick={open} className="shop-card">
+      {/* Whole image always visible: contain, centred, never cropped */}
+      <div className="shop-card-media">
+        <img loading="lazy" decoding="async" src={chosen?.image || product.img} alt={chosen ? `${product.title} in ${chosen.name}` : product.title} />
+        <div className="shop-card-badge">{product.badge}</div>
+      </div>
+      {product.colors?.length > 0 && (
+        <div style={{ padding: "0 16px" }} onClick={(e) => e.stopPropagation()}>
+          <ColorSwatches colors={product.colors} value={color} onChange={setColor} size={20} label={false} compact />
+        </div>
+      )}
+      <div className="shop-card-body">
+        <h3 className="shop-card-title">{product.title}</h3>
+        <div className="shop-card-price">{product.price}</div>
+        {product.requiresAuthorization && <div className="shop-card-note">Requires approval</div>}
+        <button onClick={(e) => { e.stopPropagation(); open(); }} className="shop-card-button">
+          View <ArrowRight size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const Shop = () => {
   const navigate = useNavigate();
@@ -110,7 +143,8 @@ const Shop = () => {
         img: formatProductImage(p.image_url),
         badge: normalizeShopCategory(p.category),
         category: normalizeShopCategory(p.category),
-        requiresAuthorization: !!p.requires_authorization
+        requiresAuthorization: !!p.requires_authorization,
+        colors: availableColors(p)
       }))
     : hardcodedProducts.map(p => ({ ...p, category: normalizeShopCategory(p.category), badge: normalizeShopCategory(p.category) }));
 
@@ -242,31 +276,7 @@ const Shop = () => {
           )}
           <div className="shop-grid">
             {pageProducts.map((product) => (
-                <div
-                  key={product.id}
-                  onClick={() => navigate(`/product/${product.id}`)}
-                  className="shop-card"
-                >
-                  {/* Whole image always visible: contain, centred, never cropped */}
-                  <div className="shop-card-media">
-                    <img loading="lazy" decoding="async" src={product.img} alt={product.title} />
-                    <div className="shop-card-badge">{product.badge}</div>
-                  </div>
-                  <div className="shop-card-body">
-                    <h3 className="shop-card-title">{product.title}</h3>
-                    <div className="shop-card-price">{product.price}</div>
-                    {product.requiresAuthorization && <div className="shop-card-note">Requires approval</div>}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/product/${product.id}`);
-                      }}
-                      className="shop-card-button"
-                    >
-                      View <ArrowRight size={12} />
-                    </button>
-                  </div>
-                </div>
+                <ShopCard key={product.id} product={product} navigate={navigate} />
               ))}
           </div>
 

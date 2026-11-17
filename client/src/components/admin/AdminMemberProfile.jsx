@@ -34,6 +34,18 @@ export default function AdminMemberProfile({ userId, initialTab = "overview", in
   const sendKey = useRef(newKey()); // one key per email: a double click never sends it twice
   const [photo, setPhoto] = useState(null);
   const [savingPhoto, setSavingPhoto] = useState(false);
+  const [allowance, setAllowance] = useState(null);
+  const [extraInput, setExtraInput] = useState("");
+  useEffect(() => {
+    api(`/admin/members/${userId}/allowance`).then((a) => { setAllowance(a); setExtraInput(String(a.extra)); }).catch(() => {});
+  }, [api, userId]);
+  const saveExtra = async () => {
+    try {
+      const r = await api(`/admin/members/${userId}/extra-submissions`, "PUT", { extra: Number(extraInput) });
+      setAllowance((a) => ({ ...a, extra: r.extra }));
+      setNotice({ type: "success", text: r.message });
+    } catch (e) { setNotice({ type: "error", text: e.message }); }
+  };
 
   const load = useCallback(async () => {
     setError("");
@@ -167,6 +179,7 @@ export default function AdminMemberProfile({ userId, initialTab = "overview", in
             <Row label="Address" value={address} />
             <Row label="Height / weight" value={[formatHeight(u.height, u.height_unit), formatWeight(u.weight, u.weight_unit)].filter(Boolean).join(" · ")} />
             <Row label="Promotional emails" value={u.marketing_opt_out ? "Opted out (gets account emails only)" : "Subscribed"} />
+            {allowance && <Row label="Submissions" value={`${allowance.limit === null ? "Unlimited" : `${allowance.used} of ${allowance.limit} used this month`} (${allowance.planName}) · ${allowance.extra} extra`} />}
             {u.account_status !== "active" && <Row label="Suspension" value={[u.suspension_reason, u.suspended_until && `until ${fmtDate(u.suspended_until)}`].filter(Boolean).join(" ")} />}
           </div>
         </>
@@ -227,7 +240,7 @@ export default function AdminMemberProfile({ userId, initialTab = "overview", in
               </div>
               {(o.items || []).map((it, i) => (
                 <div key={i} style={{ color: "#ccc", fontSize: "13px", padding: "4px 0" }}>
-                  {it.quantity}× {it.product_name}{it.size ? ` (${it.size})` : ""} — {fmtMoney(it.price)}
+                  {it.quantity}× {it.product_name}{it.color ? ` · ${it.color}` : ""}{it.size ? ` (${it.size})` : ""} — {fmtMoney(it.price)}
                   {it.notes && <div style={{ color: "#fbbf24", fontSize: "12px", marginTop: "2px", whiteSpace: "pre-wrap" }}>💬 {it.notes}</div>}
                 </div>
               ))}
@@ -324,6 +337,16 @@ export default function AdminMemberProfile({ userId, initialTab = "overview", in
             <button type="button" style={ui.btn} disabled={savingPhoto || photo === null} onClick={() => savePhoto(photo)}>{savingPhoto ? "Saving…" : "Save photo"}</button>
             {u.profile_image && <button type="button" style={ui.btnDanger} disabled={savingPhoto} onClick={() => { if (window.confirm(`Remove ${u.name}'s profile photo?`)) savePhoto(""); }}>Remove photo</button>}
           </div>
+          {allowance && (
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "14px" }}>
+              <div style={{ color: "white", fontWeight: 900, marginBottom: "6px" }}>Extra submissions</div>
+              <div style={{ color: "#888", fontSize: "12px", marginBottom: "10px" }}>Used after the plan's {allowance.limit === null ? "unlimited" : allowance.limit} monthly submissions. Members buy them as packs; you can also set them here.</div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <input type="number" min="0" step="1" value={extraInput} onChange={(e) => setExtraInput(e.target.value)} style={{ ...ui.input, width: "120px" }} aria-label="Extra submissions" />
+                <button type="button" style={ui.btn} onClick={saveExtra}>Save</button>
+              </div>
+            </div>
+          )}
           <div style={{ color: "#888", fontSize: "12px", lineHeight: 1.5 }}>To change the name, email, plan, height or weight, use "Edit User Details" in the member's ⋮ menu.</div>
         </div>
       )}

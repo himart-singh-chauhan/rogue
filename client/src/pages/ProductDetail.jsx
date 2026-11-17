@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import ColorSwatches from "../components/ColorSwatches";
+import { availableColors, hexFor } from "../utils/shopColors";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag, Plus, Minus, Check, Star, AlertCircle } from "lucide-react";
 import PageTransition from "../components/PageTransition";
@@ -111,9 +113,12 @@ const ProductDetail = () => {
         sizes: Array.isArray(dbProduct.sizes) ? dbProduct.sizes.map(sz => sz.size) : [],
         dbSizes: dbProduct.sizes || [],
         imageUrls: dbProduct.image_urls || [],
-        colors: []
+        colors: availableColors(dbProduct)
       }
-    : (hardcodedProducts.find(p => String(p.id) === String(id)) || hardcodedProducts[0]);
+    : (() => {
+        const p = hardcodedProducts.find(p => String(p.id) === String(id)) || hardcodedProducts[0];
+        return p && { ...p, colors: (p.colors || []).map((name) => ({ name, hex: hexFor(name), image: "" })) };
+      })();
 
 
   const allImages = product ? [product.img, ...(product.imageUrls || [])].filter(Boolean).map(url => url.startsWith('http') ? url : formatProductImage(url)) : [];
@@ -130,6 +135,10 @@ const ProductDetail = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
+  const [colorView, setColorView] = useState(false); // true = the picture shows the chosen color
+  const [colorError, setColorError] = useState("");
+  const chosenColor = product?.colors?.find((c) => c.name === selectedColor) || null;
+  const pickColor = (name) => { setSelectedColor(name); setColorView(true); setColorError(""); };
   const [added, setAdded] = useState(false);
   const [orderNotes, setOrderNotes] = useState("");
 
@@ -165,7 +174,12 @@ const ProductDetail = () => {
       } else {
         setSelectedSize("");
       }
-      setSelectedColor(product.colors[0] || "");
+      // a color from the shop card (?color=Pink) is kept; a single color is picked for the buyer
+      const wanted = new URLSearchParams(window.location.search).get("color");
+      const match = product.colors.find((c) => c.name.toLowerCase() === String(wanted || "").toLowerCase());
+      const start = match ? match.name : product.colors.length === 1 ? product.colors[0].name : "";
+      setSelectedColor(start);
+      setColorView(!!start);
     }
   }, [product?.id]);
 
@@ -207,13 +221,18 @@ const ProductDetail = () => {
       return;
     }
     setSizeError("");
+    if (product.colors.length > 0 && !selectedColor) {
+      setColorError("Please choose a color.");
+      document.getElementById("color-selector-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
 
     const numericPrice = getCalculatedPrice();
     const cartItem = {
       id: product.id,
       title: product.title,
       price: numericPrice,
-      img: product.img,
+      img: chosenColor?.image || product.img,
       qty: quantity,
       size: selectedSize,
       color: selectedColor,
@@ -296,25 +315,32 @@ const ProductDetail = () => {
                 }
               `}</style>
               <div className="pd-main" style={{ background: "#161616", borderRadius: "32px", border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden", position: "relative", boxShadow: "0 40px 80px rgba(0,0,0,0.6)" }}>
-                <img loading="lazy" decoding="async" src={allImages[currentImageIndex] || product.img} alt={product.title} style={{ width: "100%", height: "min(550px, 90vw)", objectFit: "contain", objectPosition: "center", background: "#0d0d0d", padding: "16px", boxSizing: "border-box", transition: "opacity 0.3s ease-in-out" }} />
+                <img loading="lazy" decoding="async" src={(colorView && chosenColor?.image) || allImages[currentImageIndex] || product.img} alt={chosenColor ? `${product.title} in ${chosenColor.name}` : product.title} style={{ width: "100%", height: "min(550px, 90vw)", objectFit: "contain", objectPosition: "center", background: "#0d0d0d", padding: "16px", boxSizing: "border-box", transition: "opacity 0.3s ease-in-out" }} />
                 <div style={{ position: "absolute", top: "24px", right: "24px", background: "#FF6A00", color: "white", padding: "6px 16px", borderRadius: "100px", fontSize: "10px", fontWeight: "900", letterSpacing: "0.05em", zIndex: 10 }}>
                   {product.badge}
                 </div>
 
                 {allImages.length > 1 && (
                   <>
-                    <button onClick={prevImage} style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "white", width: "40px", height: "40px", borderRadius: "50%", display: "flex", justifyContent: "center", alignItems: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10 }}>
+                    <button onClick={() => { setColorView(false); prevImage(); }} style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "white", width: "40px", height: "40px", borderRadius: "50%", display: "flex", justifyContent: "center", alignItems: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10 }}>
                       <ChevronLeft size={24} />
                     </button>
-                    <button onClick={nextImage} style={{ position: "absolute", right: "16px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "white", width: "40px", height: "40px", borderRadius: "50%", display: "flex", justifyContent: "center", alignItems: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10 }}>
+                    <button onClick={() => { setColorView(false); nextImage(); }} style={{ position: "absolute", right: "16px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "white", width: "40px", height: "40px", borderRadius: "50%", display: "flex", justifyContent: "center", alignItems: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10 }}>
                       <ChevronRight size={24} />
                     </button>
                     <div style={{ position: "absolute", bottom: "24px", left: "0", right: "0", display: "flex", justifyContent: "center", gap: "8px", zIndex: 10 }}>
                       {allImages.map((_, idx) => (
-                        <div key={idx} onClick={() => setCurrentImageIndex(idx)} style={{ width: "8px", height: "8px", borderRadius: "50%", background: currentImageIndex === idx ? "#FF6A00" : "rgba(255,255,255,0.4)", cursor: "pointer", transition: "all 0.2s" }} />
+                        <div key={idx} onClick={() => { setColorView(false); setCurrentImageIndex(idx); }} style={{ width: "8px", height: "8px", borderRadius: "50%", background: currentImageIndex === idx ? "#FF6A00" : "rgba(255,255,255,0.4)", cursor: "pointer", transition: "all 0.2s" }} />
                       ))}
                     </div>
                   </>
+                )}
+                {/* Color swatches right under the picture: a click shows that color */}
+                {product.colors.length > 0 && (
+                  <div id="color-selector-section" style={{ padding: "4px 20px 20px", background: "#0d0d0d" }}>
+                    <ColorSwatches colors={product.colors} value={selectedColor} onChange={pickColor} size={30} />
+                    {colorError && <div style={{ color: "#ef4444", fontSize: 12, fontWeight: 700, marginTop: 8 }}>{colorError}</div>}
+                  </div>
                 )}
               </div>
 
@@ -322,7 +348,7 @@ const ProductDetail = () => {
               {allImages.length > 1 && (
                 <div className="pd-thumbs custom-scrollbar" role="tablist" aria-label="Product pictures">
                   {allImages.map((imgUrl, idx) => (
-                    <button type="button" key={idx} onClick={() => setCurrentImageIndex(idx)} aria-label={`Picture ${idx + 1}`} aria-selected={currentImageIndex === idx}
+                    <button type="button" key={idx} onClick={() => { setColorView(false); setCurrentImageIndex(idx); }} aria-label={`Picture ${idx + 1}`} aria-selected={currentImageIndex === idx}
                       style={{ width: "88px", height: "88px", padding: 0, borderRadius: "12px", border: currentImageIndex === idx ? "2px solid #FF6A00" : "2px solid rgba(255,255,255,0.06)", overflow: "hidden", cursor: "pointer", flexShrink: 0, opacity: currentImageIndex === idx ? 1 : 0.65, transition: "all 0.2s", background: "#0d0d0d" }}>
                       <img loading="lazy" decoding="async" src={imgUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", background: "#0d0d0d", display: "block" }} />
                     </button>
@@ -418,31 +444,11 @@ const ProductDetail = () => {
                   </div>
                 )}
 
-                {/* COLORS */}
+                {/* chosen color (picked under the picture) */}
                 {product.colors.length > 0 && (
-                  <div style={{ marginBottom: "28px" }}>
-                    <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>SELECT COLOR</label>
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                      {product.colors.map(color => (
-                        <button
-                          key={color}
-                          onClick={() => setSelectedColor(color)}
-                          style={{
-                            padding: "12px 24px",
-                            borderRadius: "100px",
-                            background: selectedColor === color ? "#FF6A00" : "rgba(255, 255, 255, 0.03)",
-                            color: selectedColor === color ? "white" : "rgba(255, 255, 255, 0.6)",
-                            border: selectedColor === color ? "1px solid #FF6A00" : "1px solid rgba(255, 255, 255, 0.05)",
-                            fontSize: "12px",
-                            fontWeight: "800",
-                            cursor: "pointer",
-                            transition: "all 0.2s"
-                          }}
-                        >
-                          {color}
-                        </button>
-                      ))}
-                    </div>
+                  <div style={{ marginBottom: "28px", fontSize: "13px", color: "rgba(255,255,255,0.7)" }}>
+                    <span style={{ fontSize: "10px", fontWeight: 900, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginRight: 8 }}>Color</span>
+                    {selectedColor ? <strong style={{ color: "white" }}>{selectedColor}</strong> : <span>Choose a color under the picture</span>}
                   </div>
                 )}
 

@@ -94,38 +94,72 @@ const safeLink = (url) => {
 };
 // Plain text with line breaks; web addresses become links
 const bodyHtml = (text) => esc(text)
-  .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, (m) => `<a href="${m}" style="color:#FF6A00;">${m}</a>`)
+  .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, (m) => `<a href="${m}" style="color:#a0741c;">${m}</a>`)
   .replace(/\r?\n/g, '<br>');
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || 'there';
 const personalise = (text, member) => String(text || '').replace(/\{\{\s*name\s*\}\}/gi, firstName(member?.name));
 
 /**
- * Builds the branded HTML + plain text email.
- * kind 'marketing' adds the unsubscribe footer (account emails always arrive).
+ * Builds the email in the AMPEX template (Curtis's design, Nov 2026): header and footer are images cut from
+ * the design (client/public/email/), the card in between is real text so names and messages fill in.
+ * kind 'marketing' adds the unsubscribe link (account emails always arrive).
  */
+const FONT = "Arial,Helvetica,sans-serif";
+const fullName = (member) => String(member?.name || '').trim() || 'Member';
 const buildEmail = ({ subject, body, imageUrl, buttonText, buttonUrl, member, kind, unsubscribe }) => {
   const text = personalise(body, member);
   const img = safeLink(imageUrl);
   const btnUrl = safeLink(buttonUrl);
   const btnText = String(buttonText || '').trim() || (btnUrl ? 'Open' : '');
   const site = siteUrl();
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4f1ec;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ec;padding:24px 12px;"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
-<tr><td style="background:#0A0A0A;padding:22px 28px;text-align:center;">
-<a href="${esc(site)}" style="text-decoration:none;"><img src="${esc(site)}/images/ampex-logo-email.png" alt="AMPEX World Records" width="96" height="96" style="display:block;margin:0 auto 8px;border:0;width:96px;height:96px;"></a>
-<a href="${esc(site)}" style="color:#FF6A00;text-decoration:none;font-size:18px;font-weight:900;letter-spacing:2px;">AMPEX WORLD RECORDS</a></td></tr>
-${img ? `<tr><td><img src="${esc(img)}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;"></td></tr>` : ''}
-<tr><td style="padding:28px 28px 8px;color:#1a1a1a;">
-<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#111;">${esc(personalise(subject, member))}</h1>
-<div style="font-size:15px;line-height:1.65;color:#333;">${bodyHtml(text)}</div>
-${btnUrl ? `<p style="margin:26px 0 8px;"><a href="${esc(btnUrl)}" style="display:inline-block;background:#FF6A00;color:#ffffff;text-decoration:none;font-weight:800;padding:13px 26px;border-radius:100px;font-size:14px;">${esc(btnText)}</a></p>` : ''}
+  const host = site.replace(/^https?:\/\//, '');
+  const asset = (name) => `${esc(site)}/email/${name}`;
+  const p = (inner, extra = '') => `<p style="margin:0 0 16px;font-family:${FONT};font-size:16px;line-height:1.5;color:#111111;${extra}">${inner}</p>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(personalise(subject, member))}</title></head>
+<body style="margin:0;padding:0;background:#000000;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(text.slice(0, 140))}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000000;"><tr><td align="center" style="padding:0;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#000000;">
+<tr><td><a href="${esc(site)}" style="text-decoration:none;"><img src="${asset('header.jpg')}" alt="AMPEX World Records · Achievement · Recognition · Excellence" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;"></a></td></tr>
+<tr><td style="padding:0 6px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:4px solid #c99a2e;border-radius:12px;">
+<tr><td style="padding:26px 26px 18px;">
+${p(`<strong style="font-size:18px;">Dear ${esc(fullName(member))},</strong>`, 'margin-bottom:12px;')}
+${p(`Welcome to <strong>Ampex World Records</strong>, where extraordinary talent, dedication, and achievement deserve to be recognized.`)}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px;"><tr><td style="background:#fcf3dc;border:2px solid #d9aa3c;border-radius:10px;padding:16px 18px;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.55;color:#1d1508;font-style:italic;font-weight:bold;text-align:center;">${bodyHtml(text)}</td></tr></table>
+${img ? `<p style="margin:0 0 18px;"><img src="${esc(img)}" alt="" width="536" style="display:block;width:100%;max-width:536px;height:auto;border:0;border-radius:8px;"></p>` : ''}
+${btnUrl ? `<p style="margin:0 0 20px;text-align:center;"><a href="${esc(btnUrl)}" style="display:inline-block;background:#c99a2e;color:#111111;text-decoration:none;font-family:${FONT};font-weight:bold;padding:13px 28px;border-radius:100px;font-size:15px;">${esc(btnText)}</a></p>` : ''}
+${p('We believe everyone deserves an opportunity to showcase their skills and talents, regardless of age or background.')}
+<p style="margin:4px -26px 18px;"><img src="${asset('legacy-banner.jpg')}" alt="Your Talent. Your Achievement. Your Legacy." width="548" style="display:block;width:100%;max-width:548px;height:auto;border:0;"></p>
+${p('Thank you for being part of the Ampex World Records community.')}
+${p('Sincerely,', 'margin-bottom:4px;')}
+<p style="margin:0;"><img src="${asset('signature.jpg')}" alt="Ampex World Records Team" width="300" style="display:block;width:300px;max-width:60%;height:auto;border:0;"></p>
+${p('Official World Record Verification &amp; Recognition', 'margin:2px 0 0;')}
+</td></tr></table>
 </td></tr>
-<tr><td style="padding:22px 28px 26px;color:#888;font-size:12px;line-height:1.6;border-top:1px solid #eee;">
-AMPEX World Records · <a href="${esc(site)}" style="color:#888;">${esc(site.replace(/^https?:\/\//, ''))}</a><br>
-${kind === 'marketing' && unsubscribe ? `You get these emails because you are an AMPEX member. <a href="${esc(unsubscribe)}" style="color:#888;">Unsubscribe from promotional emails</a>.` : 'This message is about your AMPEX World Records account.'}
-</td></tr></table></td></tr></table></body></html>`;
-  const plain = `${personalise(subject, member)}\n\n${text}${btnUrl ? `\n\n${btnText}: ${btnUrl}` : ''}\n\n--\nAMPEX World Records · ${site}${kind === 'marketing' && unsubscribe ? `\nUnsubscribe from promotional emails: ${unsubscribe}` : ''}`;
+<tr><td><img src="${asset('footer.jpg')}" alt="Dare to be extraordinary · ${esc(host)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;"></td></tr>
+<tr><td style="padding:6px 16px 22px;text-align:center;font-family:${FONT};font-size:12px;line-height:1.6;color:#9a9a9a;">
+<a href="${esc(site)}" style="color:#d9aa3c;text-decoration:none;">${esc(host)}</a><br>
+${kind === 'marketing' && unsubscribe ? `You get these emails because you are an Ampex World Records member. <a href="${esc(unsubscribe)}" style="color:#9a9a9a;">Unsubscribe from promotional emails</a>.` : 'This message is about your Ampex World Records account.'}
+</td></tr>
+</table></td></tr></table></body></html>`;
+  const plain = `Dear ${fullName(member)},
+
+Welcome to Ampex World Records, where extraordinary talent, dedication, and achievement deserve to be recognized.
+
+${text}${btnUrl ? `\n\n${btnText}: ${btnUrl}` : ''}
+
+We believe everyone deserves an opportunity to showcase their skills and talents, regardless of age or background.
+
+Your Talent. Your Achievement. Your Legacy.
+
+Thank you for being part of the Ampex World Records community.
+
+Sincerely,
+Ampex World Records Team
+Official World Record Verification & Recognition
+
+${host}${kind === 'marketing' && unsubscribe ? `\nUnsubscribe from promotional emails: ${unsubscribe}` : ''}`;
   return { subject: personalise(subject, member), html, text: plain };
 };
 

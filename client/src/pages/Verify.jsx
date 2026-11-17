@@ -1,3 +1,5 @@
+import { COUNTRIES_US_FIRST } from "../utils/countries";
+import SubmissionAllowanceNote from "../components/SubmissionAllowanceNote";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useCategories } from "../utils/categoryMeta";
 import { motion, AnimatePresence } from "motion/react";
@@ -695,6 +697,7 @@ const Verify = () => {
                           <div style={{ width: "16.6%", height: "100%", background: "#FF6A00", position: "absolute", top: 0, left: 0 }}></div>
                         </div>
                       </div>
+                      <SubmissionAllowanceNote style={{ margin: "-16px 0 28px" }} />
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                         <div>
@@ -850,7 +853,9 @@ const Verify = () => {
                                   <ChevronDown size={16} style={{ opacity: 0.6 }} />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent style={{
+                              <DropdownMenuContent data-lenis-prevent="true" style={{
+                              maxHeight: "320px",
+                              overflowY: "auto",
                                 width: "100%",
                                 minWidth: "250px",
                                 background: "#161616",
@@ -859,7 +864,7 @@ const Verify = () => {
                                 padding: "8px",
                                 boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
                               }}>
-                                {["UNITED STATES", "UNITED KINGDOM", "GERMANY", "CANADA", "AUSTRALIA", "OTHER"].map((country) => (
+                                {COUNTRIES_US_FIRST.map((c) => c.toUpperCase()).map((country) => (
                                   <DropdownMenuItem
                                     key={country}
                                     onClick={() => setFormData({...formData, country})}
@@ -1466,15 +1471,7 @@ const Verify = () => {
                                     style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                   >
                                     <option value="" disabled>Select Country</option>
-                                    <option value="United States">United States</option>
-                                    <option value="Canada">Canada</option>
-                                    <option value="United Kingdom">United Kingdom</option>
-                                    <option value="Australia">Australia</option>
-                                    <option value="Germany">Germany</option>
-                                    <option value="France">France</option>
-                                    <option value="India">India</option>
-                                    <option value="Japan">Japan</option>
-                                    <option value="Other">Other</option>
+                                    {COUNTRIES_US_FIRST.map((c) => <option key={c} value={c}>{c}</option>)}
                                   </select>
                                 </div>
 

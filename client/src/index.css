@@ -2414,7 +2414,12 @@ select option:checked, select option:hover, select option:focus {
   }
 }
 
-/* Footer photo: on phones it sits below the links and above the copyright line instead of covering them */
+/* Footer photo: never over the links. Tablets/laptops: the link columns stop before the photo;
+   phones: the photo sits below the links, above the copyright line. */
+@media (min-width: 769px) and (max-width: 1500px) {
+  .footer .footer-inner { padding-right: 300px; }
+  .footer .footer-hero-img { height: 300px !important; }
+}
 @media (max-width: 768px) {
   .footer { padding-bottom: 230px; }
   .footer .footer-hero-img { height: 210px !important; bottom: 54px !important; }

@@ -110,6 +110,32 @@ const EliteMembership = () => {
   }, [user?.id, user?.token]);
   React.useEffect(() => { loadMyMembership(); }, [loadMyMembership]);
 
+  // Extra submission packs (prices set in Admin → System Settings) and this month's submissions
+  const [packs, setPacks] = useState([]);
+  const [allowance, setAllowance] = useState(null);
+  const [packBusy, setPackBusy] = useState(null);
+  const [packError, setPackError] = useState("");
+  const loadAllowance = React.useCallback(() => {
+    if (!user?.token) return;
+    apiCall("/submissions/allowance", "GET", null, user.token).then(setAllowance).catch(() => {});
+  }, [user?.token]);
+  React.useEffect(() => {
+    apiCall("/submissions/packs", "GET").then((r) => setPacks(r.packs || [])).catch(() => {});
+    loadAllowance();
+  }, [loadAllowance]);
+  const buyPack = async (count) => {
+    setPackError("");
+    if (!user?.token) { navigate("/login", { state: { message: "Log in to buy extra submissions." } }); return; }
+    setPackBusy(count);
+    try {
+      const r = await apiCall("/submissions/packs/checkout", "POST", { count }, user.token);
+      goToCheckout(r.checkoutUrl);
+    } catch (e) {
+      setPackError(e.message || "The payment page could not be opened.");
+      setPackBusy(null);
+    }
+  };
+
   // Back from Stripe: confirm the payment and show the result
   React.useEffect(() => {
     const back = readPaymentReturn();
@@ -129,6 +155,17 @@ const EliteMembership = () => {
     setShowCheckout(true);
     checkPayment(back.sessionId, user?.token)
       .then((r) => {
+        if (r?.payment?.kind === "pack") {
+          const n = r?.pack?.count || 0;
+          setCheckoutItem({ name: `${n} EXTRA SUBMISSION${n === 1 ? "" : "S"}`, price: `$${Number(r?.payment?.amount || 0).toFixed(2)}`, kind: "pack", paid: r?.payment?.status === "paid" });
+          setSuccessMessage(r?.payment?.status === "paid"
+            ? `Payment received. ${n} extra submission${n === 1 ? " was" : "s were"} added: you now have ${r?.pack?.balance ?? n} extra. They are used after your plan's monthly submissions and never expire.`
+            : r?.payment?.status === "pending" ? "Your payment is still being confirmed. The extra submissions are added as soon as it goes through." : "The payment did not go through. Nothing was charged.");
+          setIsProcessing(false);
+          setIsSuccess(true);
+          loadAllowance();
+          return;
+        }
         const m = r?.membership;
         setCheckoutItem({ name: `${(m?.planName || "MEMBERSHIP").toUpperCase()} MEMBERSHIP`, price: `$${Number(r?.payment?.amount || 0).toFixed(2)}`, kind: "plan", paid: r?.payment?.status === "paid" });
         if (r?.payment?.status === "paid") {
@@ -516,18 +553,23 @@ const EliteMembership = () => {
         </section>
 
         {/* ADD-ON PACKS */}
-        <section style={{ padding: "100px 5%", background: "rgba(255,106,0,0.03)", borderTop: "1px solid rgba(255,106,0,0.1)", borderBottom: "1px solid rgba(255,106,0,0.1)" }}>
+        <section id="packs" style={{ padding: "100px 5%", background: "rgba(255,106,0,0.03)", borderTop: "1px solid rgba(255,106,0,0.1)", borderBottom: "1px solid rgba(255,106,0,0.1)" }}>
           <div style={{ maxWidth: "1200px", margin: "0 auto", textAlign: "center" }}>
             <ScrollReveal>
               <h2 style={{ fontSize: "48px", fontWeight: "950", textTransform: "uppercase", marginBottom: "16px" }}>EXTRA SUBMISSION PACKS</h2>
               <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "18px", marginBottom: "60px" }}>Need just one more shot at history? Unlock additional submission slots instantly.</p>
+              {allowance && (
+                <div style={{ display: "inline-flex", flexWrap: "wrap", justifyContent: "center", gap: "10px 28px", background: "#0A0A0A", border: "1px solid rgba(255,106,0,0.25)", borderRadius: "20px", padding: "18px 28px", margin: "-28px 0 40px", fontSize: "14px", color: "rgba(255,255,255,0.75)" }}>
+                  <span><strong style={{ color: "white" }}>{allowance.planName} plan:</strong> {allowance.limit === null ? "unlimited submissions" : `${Math.min(allowance.used, allowance.limit)} of ${allowance.limit} submissions used this month`}</span>
+                  <span><strong style={{ color: "#FF6A00" }}>{allowance.extra}</strong> extra submission{allowance.extra === 1 ? "" : "s"}</span>
+                  {allowance.limit !== null && <span style={{ color: "rgba(255,255,255,0.45)" }}>Resets {new Date(`${allowance.resetsOn}T00:00:00Z`).toLocaleDateString(undefined, { timeZone: "UTC", month: "short", day: "numeric" })}</span>}
+                </div>
+              )}
+              {packError && <div role="alert" style={{ color: "#ef4444", fontWeight: 700, marginBottom: 20 }}>{packError}</div>}
+              <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "13px", margin: "-20px 0 36px" }}>Extra submissions are used after your plan's monthly submissions run out, and they never expire. The usual submission fee still applies to each record.</p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
-                {[
-                  { count: "1 EXTRA SUBMISSION", price: "$4.99", icon: <Zap size={24} /> },
-                  { count: "5 EXTRA SUBMISSIONS", price: "$14.99", icon: <Activity size={24} />, popular: true },
-                  { count: "10 EXTRA SUBMISSIONS", price: "$24.99", icon: <Trophy size={24} /> }
-                ].map((pack, i) => {
+                {packs.map((p, i) => ({ countNum: p.count, count: `${p.count} EXTRA SUBMISSION${p.count === 1 ? "" : "S"}`, price: `$${Number(p.price).toFixed(2)}`, popular: p.popular, icon: [<Zap key="z" size={24} />, <Activity key="a" size={24} />, <Trophy key="t" size={24} />][i % 3] })).map((pack, i) => {
                   const isSelected = selectedPack === i;
                   return (
                     <div
@@ -550,23 +592,8 @@ const EliteMembership = () => {
                       <div style={{ fontSize: "14px", fontWeight: "800", color: "rgba(255,255,255,0.4)", marginBottom: "12px" }}>{pack.count}</div>
                       <div style={{ fontSize: "40px", fontWeight: "950", color: "white", marginBottom: "32px" }}>{pack.price}</div>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedPack(i);
-                          setSuccessMessage("");
-                          setIsSuccess(false);
-                          setFormError("");
-                          setCheckoutItem({
-                            name: pack.count,
-                            price: pack.price,
-                            kind: "pack"
-                          });
-                          setCoupon("");
-                          setCouponMessage("");
-                          setAppliedCoupon(null);
-                          setDiscount(0);
-                          setShowCheckout(true);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); setSelectedPack(i); buyPack(pack.countNum); }}
+                        disabled={packBusy !== null}
                         style={{
                           width: "100%",
                           background: isSelected ? "#FF6A00" : "rgba(255,255,255,0.05)",
@@ -587,7 +614,7 @@ const EliteMembership = () => {
                           if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
                         }}
                       >
-                        PURCHASE PACK
+                        {packBusy === pack.countNum ? "OPENING PAYMENT…" : "PURCHASE PACK"}
                       </button>
                     </div>
                   );

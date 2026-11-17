@@ -1,3 +1,5 @@
+import { COUNTRIES_US_FIRST } from "../utils/countries";
+import SubmissionAllowanceNote from "../components/SubmissionAllowanceNote";
 import React, { useState, useRef } from "react";
 import EvidencePreview, { videoThumbnailFor } from "../components/EvidencePreview";
 import { motion, AnimatePresence } from "motion/react";
@@ -593,6 +595,7 @@ const ChallengeVerify = () => {
                           <div style={{ width: "20%", height: "100%", background: "#FF6A00", position: "absolute", top: 0, left: 0 }}></div>
                         </div>
                       </div>
+                      <SubmissionAllowanceNote style={{ margin: "-16px 0 28px" }} />
 
                       <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
                         <div>
@@ -647,7 +650,9 @@ const ChallengeVerify = () => {
                                 <ChevronDown size={18} style={{ opacity: 0.6 }} />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent style={{
+                            <DropdownMenuContent data-lenis-prevent="true" style={{
+                              maxHeight: "320px",
+                              overflowY: "auto",
                               width: "100%",
                               minWidth: "250px",
                               background: "#161616",
@@ -656,7 +661,7 @@ const ChallengeVerify = () => {
                               padding: "8px",
                               boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
                             }}>
-                              {["UNITED STATES", "UNITED KINGDOM", "GERMANY"].map((country) => (
+                              {COUNTRIES_US_FIRST.map((c) => c.toUpperCase()).map((country) => (
                                 <DropdownMenuItem
                                   key={country}
                                   onClick={() => setFormData({...formData, country})}
@@ -828,15 +833,7 @@ const ChallengeVerify = () => {
                                     style={{ width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "14px 20px", color: "white", outline: "none" }}
                                   >
                                     <option value="" disabled>Select Country</option>
-                                    <option value="United States">United States</option>
-                                    <option value="Canada">Canada</option>
-                                    <option value="United Kingdom">United Kingdom</option>
-                                    <option value="Australia">Australia</option>
-                                    <option value="Germany">Germany</option>
-                                    <option value="France">France</option>
-                                    <option value="India">India</option>
-                                    <option value="Japan">Japan</option>
-                                    <option value="Other">Other</option>
+                                    {COUNTRIES_US_FIRST.map((c) => <option key={c} value={c}>{c}</option>)}
                                   </select>
                                 </div>
 

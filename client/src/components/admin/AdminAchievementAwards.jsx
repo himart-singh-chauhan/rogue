@@ -19,16 +19,25 @@ function AwardEditor({ initial, criteria, onClose, onSaved }) {
   const [form, setForm] = useState({ ...BLANK, ...initial, criteria_value: initial.criteria_value ?? "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Optional: give the award to a member straight away (their name goes on the line under "Presented to")
+  const [member, setMember] = useState(null);
+  const [recipientName, setRecipientName] = useState("");
+  const [awardDate, setAwardDate] = useState(today());
   const set = (k) => (e) => setForm({ ...form, [k]: e?.target ? e.target.value : e });
   const rule = criteria.find((c) => c.value === form.criteria);
 
   const save = async (status) => {
     if (!form.title.trim()) { setError("Give the award a title."); return; }
     if (form.design === "artwork" && !form.background_url) { setError("Upload the award artwork, or choose the AMPEX award design."); return; }
+    if (recipientName.trim() && !member) { setError("Choose the member this award is for (search by name or email), so it shows on their profile."); return; }
     setSaving(true); setError("");
     try {
       const body = { ...form, status, criteria_value: form.criteria_value === "" ? null : Number(form.criteria_value) };
       const saved = form.id ? await api(`/admin/awards/${form.id}`, "PUT", body) : await api("/admin/awards", "POST", body);
+      if (member) {
+        await api(`/admin/awards/${saved.id}/assign`, "POST", { userId: member.id, recipientName: recipientName.trim() || member.name, awardDate });
+        saved.givenTo = recipientName.trim() || member.name;
+      }
       onSaved(saved, status);
     } catch (e) { setError(e.message); } finally { setSaving(false); }
   };
@@ -58,9 +67,23 @@ function AwardEditor({ initial, criteria, onClose, onSaved }) {
             <ImageUploadField label="Award artwork (portrait, 8.5 × 11)" value={form.background_url || ""} onChange={set("background_url")} previewHeight={160}
               hint="Leave the line under “Presented to” empty: the member's name is written there." />
           )}
-          <Field label={form.design === "artwork" ? "Description (shown on the profile)" : "Description (printed on the award)"}>
+          <Field label={form.design === "artwork" ? "Description (shown on the profile)" : "Description (printed on the award)"} hint="What the award is for. The member's name goes in the box below, not here.">
             <textarea style={{ ...ui.input, minHeight: 90, resize: "vertical" }} value={form.description} onChange={set("description")} maxLength={1200} placeholder="What this award recognises" />
           </Field>
+          <div style={{ ...ui.card, padding: 14, display: "grid", gap: 10, borderColor: "rgba(255,85,0,0.3)" }}>
+            <div style={{ color: "white", fontWeight: 900, fontSize: 13 }}>Give this award to a member (optional)</div>
+            {member ? (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, ...ui.input }}>
+                <span><strong>{member.name}</strong> <span style={{ color: "#888" }}>{member.email}</span></span>
+                <button type="button" style={ui.btnGhost} onClick={() => setMember(null)}>Change</button>
+              </div>
+            ) : <MemberPicker onPick={(u) => { setMember(u); setRecipientName(u.name || ""); }} placeholder="Search the member by name, email or username…" />}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+              <Field label="Member's name on the award"><input style={ui.input} value={recipientName} onChange={(e) => setRecipientName(e.target.value)} placeholder="e.g. Curtis Freeman" maxLength={120} /></Field>
+              <Field label="Award date"><input type="date" style={{ ...ui.input, colorScheme: "dark" }} value={awardDate} onChange={(e) => setAwardDate(e.target.value)} /></Field>
+            </div>
+            <div style={{ color: "#888", fontSize: 12 }}>The award is given when you save. You can also give it to more members later with “Give”.</div>
+          </div>
           <Field label="Given automatically when">
             <select style={ui.input} value={form.criteria} onChange={(e) => setForm({ ...form, criteria: e.target.value, criteria_value: "" })}>
               {criteria.map((c) => <option key={c.value} value={c.value}>{c.value === "manual" ? "Never automatically: an admin gives it" : c.label}</option>)}
@@ -82,7 +105,7 @@ function AwardEditor({ initial, criteria, onClose, onSaved }) {
         </div>
         <div style={{ position: "sticky", top: 0 }}>
           <div style={ui.label}>Preview</div>
-          <AwardPreview award={sample(form)} width={900} />
+          <AwardPreview award={sample(form, { recipientName: recipientName.trim() || "Member Name", date: awardDate })} width={900} />
           <p style={{ ...ui.muted, marginTop: 10, lineHeight: 1.5 }}>Drafts are hidden from members. Published awards show on member profiles under Achievements, where members can print them.</p>
         </div>
       </div>
@@ -237,7 +260,7 @@ export default function AdminAchievementAwards() {
       {editing && (
         <AwardEditor initial={editing} criteria={criteria} onClose={() => setEditing(null)} onSaved={(saved, status) => {
           setEditing(null); load();
-          const extra = saved.granted ? ` ${saved.granted} qualifying ${saved.granted === 1 ? "member got" : "members got"} it.` : "";
+          const extra = (saved.givenTo ? ` Given to ${saved.givenTo}.` : "") + (saved.granted ? ` ${saved.granted} qualifying ${saved.granted === 1 ? "member got" : "members got"} it.` : "");
           setNotice({ type: "success", text: status === "published" ? `“${saved.title}” is published.${extra}` : `“${saved.title}” saved as a draft.` });
         }} />
       )}

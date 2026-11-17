@@ -30,12 +30,14 @@ const getStripe = () => {
   return client;
 };
 
+const fx = require('./currency');
 const cents = (n) => Math.round((Number(n) || 0) * 100);
 const dollars = (c) => Math.round(Number(c) || 0) / 100;
 const hookKinds = () => ({
   shop: require('../controllers/shopController').paymentHooks,
   membership: require('../controllers/membershipController').paymentHooks,
   submission: require('../controllers/recordController').paymentHooks,
+  pack: require('../controllers/submissionPackController').paymentHooks,
 });
 
 // Where Stripe sends the buyer back: the site they came from (if it is one of ours), else the main site.
@@ -81,12 +83,17 @@ const ensureCustomer = async (userId) => {
 const createCheckout = async ({
   req, kind, referenceId, userId = null, email = null, customerId = null, lines, mode = 'payment',
   successPath, cancelPath, metadata = {}, discountAmount = 0, discountName = null, description = null,
+  currency = 'USD', amountUsd = null,
 }) => {
   const stripe = getStripe();
-  const subtotalCents = lines.reduce((s, l) => s + cents(l.amount) * l.qty, 0);
-  const discountCents = Math.min(cents(discountAmount), subtotalCents);
+  // amounts are in `currency` (US dollars unless the member chose their own currency)
+  const cur = String(currency || 'USD').toUpperCase();
+  const minor = (a) => fx.toMinor(a, cur);
+  const major = (m) => fx.fromMinor(m, cur);
+  const subtotalCents = lines.reduce((s, l) => s + minor(l.amount) * l.qty, 0);
+  const discountCents = Math.min(minor(discountAmount), subtotalCents);
   const totalCents = subtotalCents - discountCents;
-  if (totalCents < 50) {
+  if (cur === 'USD' ? totalCents < 50 : (amountUsd !== null && amountUsd < 0.5) || totalCents <= 0) {
     const err = new Error('Card payments must be at least $0.50.');
     err.status = 400;
     throw err;
@@ -94,7 +101,7 @@ const createCheckout = async ({
 
   const { data: payment, error } = await supabase
     .from('payments')
-    .insert([{ user_id: userId, kind, reference_id: String(referenceId), amount: dollars(totalCents), description, metadata, stripe_customer_id: customerId }])
+    .insert([{ user_id: userId, kind, reference_id: String(referenceId), amount: major(totalCents), currency: cur.toLowerCase(), description, metadata: cur === 'USD' ? metadata : { ...metadata, amount_usd: amountUsd }, stripe_customer_id: customerId }])
     .select()
     .single();
   if (error) throw error;
@@ -110,7 +117,7 @@ const createCheckout = async ({
     lineItems = [{
       name: description || 'AMPEX World Records purchase',
       description: `${lines.map((l) => `${l.qty} × ${l.name}`).join(', ')}${discountName ? ` (${discountName} applied)` : ''}`,
-      amount: dollars(totalCents),
+      amount: major(totalCents),
       qty: 1,
     }];
   }
@@ -122,8 +129,8 @@ const createCheckout = async ({
     line_items: lineItems.map((l) => ({
       quantity: l.qty,
       price_data: {
-        currency: 'usd',
-        unit_amount: cents(l.amount),
+        currency: cur.toLowerCase(),
+        unit_amount: minor(l.amount),
         product_data: { name: String(l.name).slice(0, 250), ...(l.description ? { description: String(l.description).slice(0, 500) } : {}) },
         ...(l.recurring ? { recurring: { interval: l.recurring } } : {}),
       },
@@ -173,7 +180,7 @@ const markPaid = async (payment, session) => {
     stripe_payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null,
     stripe_subscription_id: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id || null,
     stripe_customer_id: (typeof session.customer === 'string' ? session.customer : session.customer?.id) || payment.stripe_customer_id || null,
-    amount: dollars(session.amount_total),
+    amount: fx.fromMinor(session.amount_total, session.currency || payment.currency),
     updated_at: new Date().toISOString(),
   };
   // A subscription's first charge belongs to its first invoice; keep it so refunds can be matched.
@@ -252,7 +259,7 @@ const onChargeRefunded = async (chargeId) => {
   if (!intentId) return;
   const { data: payment } = await supabase.from('payments').select('*').eq('stripe_payment_intent_id', intentId).order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (!payment) return;
-  const refunded = dollars(charge.amount_refunded);
+  const refunded = fx.fromMinor(charge.amount_refunded, charge.currency);
   const full = !!charge.refunded || charge.amount_refunded >= charge.amount;
   const status = full ? 'refunded' : 'partially_refunded';
   if (payment.status === status && Number(payment.amount_refunded) === refunded) return; // nothing new

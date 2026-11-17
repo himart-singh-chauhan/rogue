@@ -86,7 +86,7 @@ const checkout = async (req, res) => {
     if (productIds.length) {
       const { data: products, error: productsError } = await supabase
         .from('products')
-        .select('id, name, price, category, stock_count, sizes, requires_authorization')
+        .select('*') // includes colors
         .in('id', productIds);
       if (productsError) throw productsError;
       productsById = Object.fromEntries((products || []).map((p) => [p.id, p]));
@@ -149,6 +149,15 @@ const checkout = async (req, res) => {
         : null;
       const sizePrice = sizeRow && Number(sizeRow.price) > 0 ? Number(sizeRow.price) : null;
       const unitPrice = product ? money(sizePrice ?? product.price) : money(Math.max(0, parseFloat(item.price) || 0));
+      // A product sold in colors needs one of its colors (the name is stored as the admin wrote it)
+      const colors = product && Array.isArray(product.colors) ? product.colors.filter((c) => c && c.name && c.enabled !== false) : [];
+      if (colors.length) {
+        const pick = colors.find((c) => String(c.name).toLowerCase() === String(item.color || '').trim().toLowerCase());
+        if (!pick) return res.status(400).json({ message: `Please choose a color for ${product.name}.` });
+        item.color = pick.name;
+      } else if (product) {
+        item.color = null;
+      }
       lines.push({ item, product, qty, unitPrice });
     }
 
@@ -412,7 +421,7 @@ const fulfilOrder = async (orderId) => {
     await notifyMember({
       userId: order.user_id,
       subject: `Order ${String(order.id).slice(0, 8).toUpperCase()} confirmed`,
-      body: `Thank you! We received your payment of $${Number(order.total).toFixed(2)}.\n\n${items.map((i) => `• ${i.quantity} × ${i.product_name}${i.size ? ` (${i.size})` : ''}`).join('\n')}${ticketItems.length ? '\n\nYour spectator passes are on your account: open the event page to watch.' : ''}`,
+      body: `Thank you! We received your payment of $${Number(order.total).toFixed(2)}.\n\n${items.map((i) => `• ${i.quantity} × ${i.product_name}${i.color ? ` · ${i.color}` : ''}${i.size ? ` (${i.size})` : ''}`).join('\n')}${ticketItems.length ? '\n\nYour spectator passes are on your account: open the event page to watch.' : ''}`,
     });
   }
 };

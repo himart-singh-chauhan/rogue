@@ -78,9 +78,9 @@ const Footer = () => {
         {/* Large Branding Image - Positioned at bottom right, partially off-screen for cool effect */}
         <img loading="lazy" decoding="async" 
           className="footer-hero-img"
-          src="/images/footer-record-holder.webp"
+          src="/images/footer-record-holder-2.webp"
           alt="AMPEX World Record holder with his certificate and medal"
-          width={711}
+          width={781}
           height={800}
           style={{
             position: 'absolute', 
@@ -90,11 +90,8 @@ const Footer = () => {
             height: '350px', 
             pointerEvents: 'none',
             zIndex: 1,
-            borderRadius: '12px',
-            opacity: 1,
-            // the photo has a black background: fade its edges into the footer colour (not mirrored, so the certificate text reads correctly)
-            maskImage: 'radial-gradient(ellipse 72% 80% at 55% 58%, #000 62%, transparent 100%)',
-            WebkitMaskImage: 'radial-gradient(ellipse 72% 80% at 55% 58%, #000 62%, transparent 100%)'
+            opacity: 1
+            // transparent cut-out photo (no background box); the links keep clear of it (index.css .footer-hero-img)
           }} 
         />
 

@@ -268,6 +268,12 @@ const Home = () => {
   const [showAllCats, setShowAllCats] = useState(false);
   // Record categories from Admin → Categories (Talent, Funny Talent, ...)
   const { tree: categoryTree } = useCategories();
+  // Homepage numbers from the real data (verified records, countries, categories)
+  const [siteStats, setSiteStats] = useState(null);
+  useEffect(() => {
+    apiCall("/stats/public", "GET").then(setSiteStats).catch(() => {});
+  }, []);
+  const compact = (n) => (n >= 1000 ? { value: Math.floor(n / 100) / 10, suffix: "k" } : { value: n, suffix: "" });
   const [showCats, setShowCats] = useState(true);
   const [homeSearchQuery, setHomeSearchQuery] = useState("");
   const [featuredStream, setFeaturedStream] = useState(null);
@@ -845,9 +851,9 @@ const Home = () => {
           {/* Right: Stats Boxes */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             {[
-              { label: "Records Set", value: 1, suffix: " k+", icon: <Trophy style={{ width: 16, height: 16 }} />, bg: "/assets/stats/records_set_bg.webp" },
-              { label: "Countries", value: 1, suffix: "+", icon: <Target style={{ width: 16, height: 16 }} />, bg: "/assets/stats/countries_bg.webp" },
-              { label: "Categories", value: 20, suffix: "+", icon: <Zap style={{ width: 16, height: 16 }} />, bg: "/assets/stats/categories_bg.webp" }
+              { label: "Records Set", ...compact(siteStats?.recordsSet ?? 0), icon: <Trophy style={{ width: 16, height: 16 }} />, bg: "/assets/stats/records_set_bg.webp" },
+              { label: siteStats?.countries === 1 ? "Country" : "Countries", ...compact(siteStats?.countries ?? 0), icon: <Target style={{ width: 16, height: 16 }} />, bg: "/assets/stats/countries_bg.webp" },
+              { label: "Categories", ...compact(siteStats?.categories ?? 0), icon: <Zap style={{ width: 16, height: 16 }} />, bg: "/assets/stats/categories_bg.webp" }
             ].map((stat, idx) => (
               <div key={idx} style={{
                 background: "#222",
@@ -1156,7 +1162,7 @@ const Home = () => {
                 Think you have<br />what it takes?
               </h2>
               <p style={{ color: "#999", fontSize: 17, lineHeight: 1.7, maxWidth: 380, marginBottom: 36 }}>
-                <ScrollReveal>Browse our current active records across 20+ categories. Find your niche, submit your evidence, and claim your place in history.</ScrollReveal>
+                <ScrollReveal>{`Browse our current active records across ${siteStats?.categories || "all our"} categories. Find your niche, submit your evidence, and claim your place in history.`}</ScrollReveal>
               </p>
               <Link to="/verify" style={{ textDecoration: "none" }}>
                 <button className="btn btn-primary" style={{ fontSize: 15, padding: "16px 32px" }}>

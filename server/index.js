@@ -107,6 +107,16 @@ app.use('/api/rewards', require('./routes/rewardRoutes'));
 // Public: a member's achievement awards; unsubscribe link in promotional emails
 app.get('/api/awards/user/:userId', require('./controllers/awardController').awardsForUser);
 app.get('/api/awards/catalog', require('./controllers/awardController').catalog);
+// Submissions per month and extra submission packs
+{
+  const packs = require('./controllers/submissionPackController');
+  const { protect } = require('./middleware/authMiddleware');
+  app.get('/api/submissions/packs', packs.listPacks);
+  app.get('/api/submissions/allowance', protect, packs.myAllowance);
+  app.post('/api/submissions/packs/checkout', protect, packs.buyPack);
+}
+// Public: homepage numbers (verified records, countries, categories)
+app.get('/api/stats/public', require('./controllers/statsController').publicStats);
 app.get('/api/email/unsubscribe', require('./controllers/emailController').unsubscribe);
 app.post('/api/email/unsubscribe', express.urlencoded({ extended: false }), require('./controllers/emailController').unsubscribe);
 app.get('/api/email/preferences', require('./middleware/authMiddleware').protect, require('./controllers/emailController').getPreferences);
