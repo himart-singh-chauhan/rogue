@@ -560,9 +560,15 @@ const Events = () => {
     setIsModalOpen(true);
   };
 
+  // One save at a time: a double click must not create the same event twice
+  const savingEvent = React.useRef(false);
+  const [isSavingEvent, setIsSavingEvent] = useState(false);
   const handleSaveEvent = async (e) => {
     e.preventDefault();
     if (!user || !user.token) return;
+    if (savingEvent.current) return;
+    savingEvent.current = true;
+    setIsSavingEvent(true);
 
     try {
       const payload = {
@@ -601,6 +607,9 @@ const Events = () => {
       }
     } catch (err) {
       showToast(`Error: ${err.message || "Failed to save event"}`);
+    } finally {
+      savingEvent.current = false;
+      setIsSavingEvent(false);
     }
   };
 
@@ -898,9 +907,10 @@ const Events = () => {
                 <div style={{ display: "flex", gap: "16px", marginTop: "16px" }}>
                   <button
                     type="submit"
-                    style={{ flex: 1, background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}
+                    disabled={isSavingEvent}
+                    style={{ flex: 1, background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 36px", fontSize: "13px", fontWeight: "900", textTransform: "uppercase", cursor: isSavingEvent ? "wait" : "pointer", opacity: isSavingEvent ? 0.7 : 1 }}
                   >
-                    ⚡ SAVE CONFIGURATION
+                    {isSavingEvent ? "SAVING…" : "⚡ SAVE CONFIGURATION"}
                   </button>
                   <button
                     type="button"

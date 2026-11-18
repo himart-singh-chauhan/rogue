@@ -462,7 +462,8 @@ const Home = () => {
     .filter((e) => isRealEventId(e.id) && !["completed", "past", "cancelled"].includes(String(e.status || "").toLowerCase()) && (e.isLive || new Date(e.date) > new Date(Date.now() - 6 * 3600e3)))
     .sort((x, y) => (Number(!!y.isLive) - Number(!!x.isLive)) || (new Date(x.date) - new Date(y.date)))
     .slice(0, 3)
-    .map((e) => ({ eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : "", badge: e.isLive ? "LIVE" : "UPCOMING" }));
+    // events without a picture get a stock sports photo (a different one per card) instead of a black box
+    .map((e, i) => ({ eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : STATIC_FEATURED[(i + 3) % STATIC_FEATURED.length].img, badge: e.isLive ? "LIVE" : "UPCOMING" }));
 
   const handleHomeSearch = (e) => {
     e.preventDefault();
