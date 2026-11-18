@@ -56,6 +56,10 @@ const getEvents = async (req, res) => {
       hasMuxStream: !!e.mux_playback_id,
       muxStatus: e.mux_status || null,
       hasRecording: !!e.mux_recording_playback_id,
+      chatEnabled: e.chat_enabled !== false,
+      replayEnabled: e.replay_enabled !== false,
+      startedAt: e.started_at || null,
+      endedAt: e.ended_at || null,
       createdAt: e.created_at,
       updatedAt: e.updated_at
     }, e, req.user, tickets));
@@ -110,6 +114,10 @@ const getEventById = async (req, res) => {
       hasMuxStream: !!event.mux_playback_id,
       muxStatus: event.mux_status || null,
       hasRecording: !!event.mux_recording_playback_id,
+      chatEnabled: event.chat_enabled !== false,
+      replayEnabled: event.replay_enabled !== false,
+      startedAt: event.started_at || null,
+      endedAt: event.ended_at || null,
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
@@ -187,6 +195,10 @@ const createEvent = async (req, res) => {
       hasMuxStream: !!event.mux_playback_id,
       muxStatus: event.mux_status || null,
       hasRecording: !!event.mux_recording_playback_id,
+      chatEnabled: event.chat_enabled !== false,
+      replayEnabled: event.replay_enabled !== false,
+      startedAt: event.started_at || null,
+      endedAt: event.ended_at || null,
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
@@ -275,6 +287,10 @@ const updateEvent = async (req, res) => {
       hasMuxStream: !!event.mux_playback_id,
       muxStatus: event.mux_status || null,
       hasRecording: !!event.mux_recording_playback_id,
+      chatEnabled: event.chat_enabled !== false,
+      replayEnabled: event.replay_enabled !== false,
+      startedAt: event.started_at || null,
+      endedAt: event.ended_at || null,
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
@@ -387,6 +403,11 @@ const adminStreamView = (e) => ({
   recordingPlaybackId: e.mux_recording_playback_id || null,
   status: e.mux_status || null,
   isLive: !!e.is_live,
+  eventStatus: e.status || 'upcoming',
+  chatEnabled: e.chat_enabled !== false,
+  replayEnabled: e.replay_enabled !== false,
+  startedAt: e.started_at || null,
+  endedAt: e.ended_at || null,
   rtmpUrl: mux.RTMP_URL,
   streamKey: e.mux_stream_key || null,
 });
@@ -486,21 +507,22 @@ const getPlayback = async (req, res) => {
     const event = await loadEvent(req.params.id);
     if (!event) return res.status(404).json({ message: 'Event not found' });
     const tickets = await ticketedEventIds(req.user);
-    const allowed = !event.is_paid || (req.user && req.user.is_admin) || tickets.has(event.id);
-    if (!allowed) return res.status(403).json({ message: 'A spectator pass is needed to watch this event.', locked: true });
+    const live = require('./eventLiveController');
+    const access = live.accessFor(event, req.user, tickets.has(event.id));
+    if (!access.allowed) return res.status(403).json({ message: access.message, locked: access.reason === 'locked', reason: access.reason, replayUntil: access.replayUntil || null });
 
     // Live while the stream is on; afterwards the recording (if Mux has finished it), else the live id.
-    const live = !!event.mux_playback_id && (event.mux_status === 'active' || (event.is_live && !event.mux_status));
-    const playbackId = live ? event.mux_playback_id : event.mux_recording_playback_id;
+    const isLiveNow = !!event.mux_playback_id && (event.mux_status === 'active' || (event.is_live && !event.mux_status));
+    const playbackId = isLiveNow ? event.mux_playback_id : (event.replay_enabled === false && !req.user?.is_admin ? null : event.mux_recording_playback_id);
     if (!playbackId && event.mux_playback_id) {
       // A Mux stream is set up but not broadcasting yet (and there is no replay): the player waits.
-      return res.json({ source: 'mux', waiting: true, isLive: false, status: event.mux_status || 'idle' });
+      return res.json({ source: 'mux', waiting: true, isLive: false, ended: live.isEnded(event), status: event.mux_status || 'idle' });
     }
     if (!playbackId) {
-      return res.json({ source: 'external', streamUrl: event.stream_url || '', videoUrl: event.video_url || '', isLive: !!event.is_live });
+      return res.json({ source: 'external', streamUrl: event.stream_url || '', videoUrl: event.video_url || '', isLive: !!event.is_live, ended: live.isEnded(event), replayUntil: access.replayUntil || null });
     }
     const tokens = mux.playbackTokens(playbackId);
-    res.json({ source: 'mux', playbackId, tokens, isLive: live, status: event.mux_status || null, title: event.title });
+    res.json({ source: 'mux', playbackId, tokens, isLive: isLiveNow, ended: live.isEnded(event), replayUntil: access.replayUntil || null, status: event.mux_status || null, title: event.title });
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Could not load the stream' });
   }

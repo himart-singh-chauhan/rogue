@@ -151,6 +151,57 @@ const uniqueSlug = async (title) => {
   return `${base}-${Date.now().toString(36)}`;
 };
 
+// GET /api/records/:id/history  (public)
+// The record's line of holders: the current record, the records it replaced (previous records) and every
+// challenge attempt against any record in that line (pending review / failed). Used under challenge videos.
+const recordHistory = async (req, res) => {
+  if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Record not found' });
+  try {
+    const COLS = `id, title, value, unit, status, record_type, evidence_url, video_url, thumbnail_url, created_at, verified_at, beaten_at, challenged_record_id, beaten_by_record_id, ${PUBLIC_USER_EMBED}`;
+    const byId = new Map();
+    const fetchOne = async (id) => {
+      if (!id || byId.has(id)) return byId.get(id) || null;
+      const { data } = await supabase.from('records').select(COLS).eq('id', id).maybeSingle();
+      if (data) byId.set(id, data);
+      return data || null;
+    };
+    let start = await fetchOne(req.params.id);
+    if (!start) return res.status(404).json({ message: 'Record not found' });
+    // forward to the record that holds the title now
+    let current = start;
+    for (let i = 0; i < 50 && current.beaten_by_record_id; i += 1) {
+      const next = await fetchOne(current.beaten_by_record_id);
+      if (!next) break;
+      current = next;
+    }
+    // back through the records each one replaced
+    const line = [current];
+    for (let r = current, i = 0; i < 50 && r.challenged_record_id; i += 1) {
+      const prev = await fetchOne(r.challenged_record_id);
+      if (!prev || prev.beaten_by_record_id !== r.id) break;
+      line.push(prev);
+      r = prev;
+    }
+    const lineIds = line.map((r) => r.id);
+    const { data: tries } = await supabase.from('records').select(COLS).in('challenged_record_id', lineIds).neq('status', 'draft').order('created_at', { ascending: false }).limit(200);
+    const shape = (r, label) => ({
+      id: r.id, label, title: r.title, value: r.value, unit: r.unit, status: r.status,
+      date: r.verified_at || r.created_at, beatenAt: r.beaten_at,
+      videoUrl: r.evidence_url || r.video_url || null, thumbnail: r.thumbnail_url && r.thumbnail_url !== 'pending_upload' ? r.thumbnail_url : null,
+      holder: { id: r.user?.id, name: r.user?.name || 'Athlete', username: r.user?.username || null, image: r.user?.profile_image || null, country: r.user?.country || null },
+    });
+    const attempts = (tries || []).filter((t) => !lineIds.includes(t.id)).map((t) => shape(t,
+      t.status === 'verified' ? 'PREVIOUS RECORD' : ['rejected', 'disqualified', 'failed'].includes(String(t.status).toLowerCase()) ? 'FAILED ATTEMPT' : 'PENDING REVIEW'));
+    res.json({
+      current: shape(current, 'CURRENT RECORD'),
+      previous: line.slice(1).map((r) => shape(r, 'PREVIOUS RECORD')),
+      attempts,
+    });
+  } catch (e) {
+    res.status(500).json({ message: 'Could not load the record history', error: e.message });
+  }
+};
+
 // @desc    Create a record submission
 // @route   POST /api/records
 // @access  Private
@@ -592,6 +643,7 @@ module.exports = {
   adjudicateRecord,
   processCheckout,
   feeQuote,
+  recordHistory,
   paymentHooks,
   toggleRecordFeatured,
   PUBLIC_RECORD_COLUMNS,

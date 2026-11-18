@@ -142,7 +142,10 @@ export default function ExploreRecords() {
   }, [searchQuery]);
 
   let filteredRecords = records.filter(r => {
-    const matchesSearch = !searchQuery || (r.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || (r.user?.display_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+    // same fields the server searches (title, category, athlete) plus the athlete's name, so a search for
+    // "strength" keeps the Strength records the server sent back
+    const sq = searchQuery.trim().toLowerCase();
+    const matchesSearch = !sq || [r.title, r.category, r.category_name, r.athlete_id, r.user?.display_name, r.user?.name, r.user?.username].some((v) => String(v || '').toLowerCase().includes(sq));
     const matchesCategory = activeCategory === 'All' || activeNames.includes((r.category || '').toLowerCase()) || activeNames.includes((r.category_name || '').toLowerCase());
 
     // Featured status is managed by admin / backend, with local fallback for legacy stats.

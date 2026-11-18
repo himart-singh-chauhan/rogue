@@ -115,6 +115,8 @@ app.get('/api/awards/catalog', require('./controllers/awardController').catalog)
   app.get('/api/submissions/allowance', protect, packs.myAllowance);
   app.post('/api/submissions/packs/checkout', protect, packs.buyPack);
 }
+// Public: the homepage big video (set in Admin → Homepage Control)
+app.get('/api/settings/homepage-hero', require('./controllers/heroController').getHero);
 // Public: homepage numbers (verified records, countries, categories)
 app.get('/api/stats/public', require('./controllers/statsController').publicStats);
 app.get('/api/email/unsubscribe', require('./controllers/emailController').unsubscribe);

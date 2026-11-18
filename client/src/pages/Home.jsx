@@ -4,6 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Play, Check, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Menu, X, Zap, Target, Infinity, Trophy, LayoutGrid, Activity, Settings, Gamepad, Search, Eye, Volume2, Maximize, Globe } from "lucide-react";
 import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
+import StreamPlayer from "../components/StreamPlayer";
+import { embedUrlFor } from "../components/EvidencePreview";
+import { isRealEventId } from "../utils/ticketCart";
+import { useAuth } from "../context/AuthContext";
 import { useCategories, categoryMeta } from "../utils/categoryMeta";
 import InfiniteSlider from "../components/InfiniteSlider";
 import FlowingMenu from "../components/FlowingMenu";
@@ -268,6 +272,7 @@ const Home = () => {
   const [showAllCats, setShowAllCats] = useState(false);
   // Record categories from Admin → Categories (Talent, Funny Talent, ...)
   const { tree: categoryTree } = useCategories();
+  const { user } = useAuth();
   // Homepage numbers from the real data (verified records, countries, categories)
   const [siteStats, setSiteStats] = useState(null);
   useEffect(() => {
@@ -277,6 +282,10 @@ const Home = () => {
   const [showCats, setShowCats] = useState(true);
   const [homeSearchQuery, setHomeSearchQuery] = useState("");
   const [featuredStream, setFeaturedStream] = useState(null);
+  const [heroSetting, setHeroSetting] = useState(null);
+  const [allEvents, setAllEvents] = useState([]);
+  const [heroSound, setHeroSound] = useState(false);
+  useEffect(() => { apiCall("/settings/homepage-hero", "GET").then(setHeroSetting).catch(() => {}); }, []);
 
   // Live homepage data from admin controls
   const [newestRecords, setNewestRecords] = useState(STATIC_NEWEST);
@@ -415,6 +424,7 @@ const Home = () => {
     const fetchFeaturedStream = async () => {
       try {
         const events = await apiCall("/events", "GET");
+        if (Array.isArray(events)) setAllEvents(events);
         if (events && events.length > 0) {
           const featured = events.find(e => e.isLive && e.isFeatured);
           const fallbackFeatured = featured || events.find(e => e.isFeatured);
@@ -431,6 +441,28 @@ const Home = () => {
     fetchFeaturedVideos(); // public list (route order fixed on the server)
     fetchFeaturedStream();
   }, []);
+
+  // Big video: the admin's choice, or the featured event
+  const KIND_LABEL = { advertisement: "ADVERTISEMENT", commercial: "COMMERCIAL", advertiser: "SPONSORED", live: "LIVE NOW" };
+  const heroIsVideo = heroSetting?.mode === "video" && heroSetting?.videoUrl;
+  const heroEvent = heroSetting?.mode === "event" && heroSetting?.eventId ? (allEvents.find((e) => e.id === heroSetting.eventId) || null) : featuredStream;
+  const heroLink = heroIsVideo ? heroSetting.videoUrl : (heroEvent?.videoUrl || "");
+  const heroEmbed = heroLink ? embedUrlFor(heroLink) : null;
+  const heroFile = heroLink && !heroEmbed && /\.(mp4|webm|mov|m3u8)(\?|$)/i.test(heroLink) ? formatProductImage(heroLink) : null;
+  const heroLive = !heroIsVideo && !!heroEvent && !!heroEvent.isLive && !heroEvent.isPaid && isRealEventId(heroEvent.id);
+  const heroTitle = heroIsVideo ? (heroSetting.title || "") : (heroEvent?.title || "");
+  const heroSubtitle = heroIsVideo ? (heroSetting.subtitle || "") : (heroEvent?.description || "");
+  const heroPoster = heroIsVideo ? (heroSetting.posterUrl ? formatProductImage(heroSetting.posterUrl) : "") : (heroEvent?.imageUrl || heroEvent?.image || "");
+  const heroKind = heroIsVideo ? (KIND_LABEL[heroSetting.kind] || "FEATURED") : heroEvent?.isLive ? "LIVE NOW" : heroEvent ? "FEATURED EVENT" : "FEATURED";
+  const heroCta = heroIsVideo
+    ? (heroSetting.linkUrl ? { to: heroSetting.linkUrl, label: heroSetting.linkText || "Learn more", external: /^https?:/i.test(heroSetting.linkUrl) } : null)
+    : heroEvent ? { to: `/stream/${heroEvent.id || heroEvent._id}`, label: heroEvent.isLive ? "Watch live stream" : "View event" } : { to: "/verify", label: "Submit a record" };
+  // Sidebar: up to three live / upcoming streams
+  const sidebarStreams = allEvents
+    .filter((e) => isRealEventId(e.id) && !["completed", "past", "cancelled"].includes(String(e.status || "").toLowerCase()) && (e.isLive || new Date(e.date) > new Date(Date.now() - 6 * 3600e3)))
+    .sort((x, y) => (Number(!!y.isLive) - Number(!!x.isLive)) || (new Date(x.date) - new Date(y.date)))
+    .slice(0, 3)
+    .map((e) => ({ eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : "", badge: e.isLive ? "LIVE" : "UPCOMING" }));
 
   const handleHomeSearch = (e) => {
     e.preventDefault();
@@ -515,7 +547,7 @@ const Home = () => {
   };
 
   return (
-    <div style={{ background: "#FFF8F5", color: "#111", fontFamily: "'Inter', sans-serif", paddingTop: "80px" }}>
+    <div style={{ background: "#EEEAE6", color: "#111", fontFamily: "'Inter', sans-serif", paddingTop: "80px" }}>
 
       {/* ══════════════════ NAVBAR ══════════════════ */}
       <Navbar />
@@ -656,91 +688,78 @@ const Home = () => {
               </h1>
             </div>
 
-            {/* Middle: Video Frame */}
+            {/* Middle: Video Frame — admin's choice (Admin → Homepage Control → Big video) */}
             <article ref={videoContainerRef} style={{ width: "100%", height: "550px", marginBottom: "32px", position: "relative", borderRadius: "20px", overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)", background: "#000" }}>
-              <video preload="none"
-                ref={videoRef}
-                src="https://www.w3schools.com/html/mov_bbb.mp4"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer", opacity: isPlaying ? 1 : 0, transition: "opacity 0.3s ease" }}
-                onTimeUpdate={handleTimeUpdate}
-                onClick={togglePlay}
-                loop
-                playsInline
-              />
-
-              {!isPlaying && (
-                <img loading="lazy" decoding="async"
-                  src={featuredStream ? (featuredStream.imageUrl || featuredStream.image || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80") : "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"}
-                  alt="Video Thumbnail"
+              {heroFile && (
+                <video preload="metadata"
+                  ref={videoRef}
+                  src={heroFile}
+                  poster={heroPoster || undefined}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer", opacity: isPlaying ? 1 : 0, transition: "opacity 0.3s ease" }}
+                  onTimeUpdate={handleTimeUpdate}
                   onClick={togglePlay}
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", cursor: "pointer", zIndex: 1 }}
+                  loop
+                  muted={isMuted}
+                  playsInline
                 />
               )}
-
-              {/* Left gradient for text readability */}
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 50%, transparent 100%)", pointerEvents: "none", zIndex: 2 }} />
-              {/* Bottom gradient for controls */}
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "30%", background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)", pointerEvents: "none", zIndex: 2 }} />
-
-              {/* LIVE badge + viewers — top left */}
-              <div style={{ position: "absolute", top: 20, left: 20, display: "flex", gap: 12, alignItems: "center", zIndex: 3 }}>
-                <div style={{ background: featuredStream && featuredStream.isLive ? "#ef4444" : "#FF6A00", color: "white", padding: "5px 12px", borderRadius: "6px", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.08em", boxShadow: "0 2px 12px rgba(239,68,68,0.5)" }}>
-                  <Play size={10} fill="white" /> {featuredStream && featuredStream.isLive ? "LIVE NOW" : "FEATURED EVENT"}
+              {heroLive && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1 }}>
+                  <StreamPlayer eventId={heroEvent.id} token={user?.token} title={heroEvent.title} poster={heroPoster} />
                 </div>
-                <div style={{ color: "white", display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
-                  <Eye size={15} /> {featuredStream && featuredStream.isLive ? "34.2K VIEWERS" : "SPECTATORS ACTIVE"}
-                </div>
-              </div>
-
-              {/* Text + Buttons overlay — left center */}
-              <div style={{ position: "absolute", left: 48, top: "50%", transform: "translateY(-50%)", maxWidth: 500, textAlign: "left", zIndex: 3 }}>
-                <h2 style={{ fontSize: "clamp(30px, 4.5vw, 64px)", fontWeight: 900, lineHeight: 0.95, letterSpacing: "-0.03em", color: "white", marginBottom: 20, textTransform: "uppercase" }}>
-                  {featuredStream ? featuredStream.title : (
-                    <>
-                      Break Limits.<br />
-                      <span style={{ color: "#FF6A00" }}>Make History.</span>
-                    </>
-                  )}
-                </h2>
-                <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, lineHeight: 1.65, marginBottom: 36 }}>
-                  {featuredStream ? featuredStream.description : "The ultimate platform for record breakers, champions, and legends."}
-                </p>
-                <div style={{ display: "flex", gap: 14 }}>
-                  {featuredStream ? (
-                    <Link to={`/stream/${featuredStream.id || featuredStream._id}`} style={{ textDecoration: "none" }}>
-                      <button
-                        style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "12px", padding: "15px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 20px rgba(255,106,0,0.4)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(255,106,0,0.5)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(255,106,0,0.4)"; }}
-                      >
-                        <Play size={16} fill="white" /> WATCH LIVE STREAM
-                      </button>
-                    </Link>
-                  ) : (
-                    <Link to="/verify" style={{ textDecoration: "none" }}>
-                      <button
-                        style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "12px", padding: "15px 32px", fontSize: 16, fontWeight: 700, cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s", boxShadow: "0 4px 20px rgba(255,106,0,0.4)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(255,106,0,0.5)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(255,106,0,0.4)"; }}
-                      >
-                        Submit Record
-                      </button>
-                    </Link>
-                  )}
-                  <Link to="/explore" style={{ textDecoration: "none" }}>
-                    <button
-                      style={{ background: "transparent", color: "white", border: "1.5px solid rgba(255,255,255,0.4)", borderRadius: "12px", padding: "15px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, backdropFilter: "blur(6px)", transition: "all 0.2s" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.12)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.7)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.4)"; }}
-                    >
-                      <Search size={17} /> Explore Records
+              )}
+              {heroEmbed && !heroLive && (
+                <>
+                  <iframe key={heroSound ? "sound" : "muted"} title={heroTitle || "Featured video"} src={heroSound ? heroEmbed.replace("mute=1&", "mute=0&").replace("muted=1&", "muted=0&") : heroEmbed}
+                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, zIndex: 1 }} />
+                  {!heroSound && (
+                    <button type="button" onClick={() => setHeroSound(true)} style={{ position: "absolute", right: 16, bottom: 16, zIndex: 4, background: "rgba(0,0,0,0.7)", color: "white", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 100, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Volume2 size={14} /> Sound on
                     </button>
-                  </Link>
+                  )}
+                </>
+              )}
+
+              {!isPlaying && !heroEmbed && !heroLive && (
+                <img loading="lazy" decoding="async"
+                  src={heroPoster || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"}
+                  alt={heroTitle || "Featured"}
+                  onClick={heroFile ? togglePlay : undefined}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", cursor: heroFile ? "pointer" : "default", zIndex: 1 }}
+                />
+              )}
+              {heroFile && !isPlaying && (
+                <button type="button" onClick={togglePlay} aria-label="Play video" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 3, width: 64, height: 64, borderRadius: "50%", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                  <Play size={24} fill="white" color="white" style={{ marginLeft: 3 }} />
+                </button>
+              )}
+
+              {/* Bottom gradient for the title and controls */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40%", background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)", pointerEvents: "none", zIndex: 2 }} />
+
+              {/* What it is — top left */}
+              <div style={{ position: "absolute", top: 20, left: 20, display: "flex", gap: 12, alignItems: "center", zIndex: 3, pointerEvents: "none" }}>
+                <div style={{ background: heroKind === "LIVE NOW" ? "#ef4444" : "#FF6A00", color: "white", padding: "5px 12px", borderRadius: "6px", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.08em" }}>
+                  <Play size={10} fill="white" /> {heroKind}
                 </div>
               </div>
 
-              {/* Bottom Video Controls Bar */}
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "18px 28px", display: "flex", alignItems: "center", gap: 20, color: "white", zIndex: 10 }}>
+              {/* Title — small, bottom left, never across the video */}
+              <div style={{ position: "absolute", left: 24, bottom: heroFile ? 64 : 24, maxWidth: "min(460px, 70%)", textAlign: "left", zIndex: 3 }}>
+                {heroTitle && <h2 style={{ fontSize: "clamp(16px, 1.7vw, 22px)", fontWeight: 900, lineHeight: 1.2, color: "white", margin: "0 0 6px", textTransform: "uppercase", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>{heroTitle}</h2>}
+                {heroSubtitle && <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 1.45, margin: "0 0 12px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{heroSubtitle}</p>}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {heroCta && (
+                    heroCta.external
+                      ? <a href={heroCta.to} target="_blank" rel="noopener noreferrer sponsored" style={{ textDecoration: "none" }}><span style={{ background: "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></a>
+                      : <Link to={heroCta.to} style={{ textDecoration: "none" }}><span style={{ background: "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></Link>
+                  )}
+                  <Link to="/explore" style={{ textDecoration: "none" }}><span style={{ background: "rgba(0,0,0,0.35)", color: "white", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px", padding: "9px 16px", fontSize: 13, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} /> Explore Records</span></Link>
+                </div>
+              </div>
+
+              {/* Bottom Video Controls Bar (uploaded videos) */}
+              {heroFile && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 24px", display: "flex", alignItems: "center", gap: 20, color: "white", zIndex: 10 }}>
                 <div onClick={togglePlay} style={{ cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }}>
                   {isPlaying ? (
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
@@ -772,7 +791,7 @@ const Home = () => {
                 </div>
 
                 <Maximize onClick={toggleFullscreen} size={18} style={{ cursor: "pointer", opacity: 0.9, flexShrink: 0 }} />
-              </div>
+              </div>}
             </article>
 
           </main>
@@ -785,39 +804,24 @@ const Home = () => {
               </Link>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "15px", flex: 1 }}>
-              {sidebarVideos.map((video, idx) => {
-                const recordSlug = video.slug || "deadlifts";
+              {(sidebarStreams.length ? sidebarStreams : sidebarVideos.slice(0, 3)).map((video, idx) => {
+                const to = video.eventId ? `/stream/${video.eventId}` : `/record/${video.slug || ""}`;
                 return (
                   <Link
-                    to={`/record/${recordSlug}`}
-                    key={video.slug || idx}
-                    onClick={(e) => {
-                      if (video.isAdminVideo) {
-                        e.preventDefault();
-                        setPlayingVideo(video);
-                      }
-                    }}
+                    to={to}
+                    key={video.eventId || video.slug || idx}
+                    onClick={(e) => { if (video.isAdminVideo) { e.preventDefault(); setPlayingVideo(video); } }}
                     style={{ textDecoration: "none" }}
                   >
-                    <div
-                      style={{ position: "relative", borderRadius: "12px", overflow: "hidden", height: "78px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", cursor: "pointer", flexShrink: 0, transition: "all 0.3s ease" }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                        e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,106,0,0.4)";
-                        const overlay = e.currentTarget.querySelector('.video-overlay');
-                        if(overlay) overlay.style.background = "rgba(0,0,0,0.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "none";
-                        e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-                        const overlay = e.currentTarget.querySelector('.video-overlay');
-                        if(overlay) overlay.style.background = "rgba(0,0,0,0.3)";
-                      }}
-                    >
-                      <img loading="lazy" decoding="async" src={video.img} alt={video.title || "Live Stream"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                      <div className="video-overlay" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", transition: "background 0.3s ease" }} />
-                      <div style={{ position: "absolute", bottom: "8px", left: "12px", color: "white", fontSize: "12px", fontWeight: "700" }}>{video.time}</div>
-                      <Play style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#FF6A00", fill: "#FF6A00", width: 40, height: 40, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }} />
+                    <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", height: "96px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", cursor: "pointer", background: "#111" }}>
+                      {video.img && <img loading="lazy" decoding="async" src={video.img} alt={video.title || "Live stream"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+                      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.1))" }} />
+                      {video.badge && <div style={{ position: "absolute", top: 6, left: 8, background: video.badge === "LIVE" ? "#ef4444" : "#FF6A00", color: "white", fontSize: 9, fontWeight: 900, padding: "2px 7px", borderRadius: 4 }}>{video.badge}</div>}
+                      <div style={{ position: "absolute", bottom: 6, left: 8, right: 40, color: "white", fontSize: 11, fontWeight: 800, lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{video.title}</div>
+                      {/* small play button */}
+                      <div style={{ position: "absolute", right: 8, bottom: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Play size={11} fill="white" color="white" style={{ marginLeft: 1 }} />
+                      </div>
                     </div>
                   </Link>
                 );
@@ -1145,7 +1149,7 @@ const Home = () => {
       <StackingSteps />
 
       {/* ══════════════════ DARK CTA ══════════════════ */}
-      <section className="section" style={{ background: "#FFF8F5" }}>
+      <section className="section" style={{ background: "#EEEAE6" }}>
         <div className="container">
           <div className="dark-cta">
             <div className="dark-cta-bg">

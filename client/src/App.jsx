@@ -33,6 +33,7 @@ const Categories = lazy(() => import('./pages/Categories'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Rules = lazy(() => import('./pages/Rules'))
 const Unsubscribe = lazy(() => import('./pages/Unsubscribe'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 const Appeals = lazy(() => import('./pages/Appeals'))
 const SubmitEvidenceLearnMore = lazy(() => import('./pages/SubmitEvidenceLearnMore'))
 const GlobalRecognitionLearnMore = lazy(() => import('./pages/GlobalRecognitionLearnMore'))
@@ -138,6 +139,7 @@ function App() {
             <Route path="/appeals" element={<Appeals />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/cookies" element={<Cookies />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
         </BrowserRouter>

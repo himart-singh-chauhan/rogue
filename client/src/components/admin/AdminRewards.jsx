@@ -193,6 +193,9 @@ function Settings({ api }) {
   const setP = (k, v) => setS({ ...s, purchase: { ...s.purchase, [k]: v } });
   const setD = (k, v) => setS({ ...s, discount: { ...s.discount, [k]: v } });
   const setPromo = (k, v) => setS({ ...s, promotion: { ...s.promotion, [k]: v } });
+  const red = s.redemption || { enabled: false, pointsPerDollar: 600, minPoints: 0, maxPercent: 100, excludedCategories: ["Tickets"], excludedProductIds: [] };
+  const setR = (k, v) => setS({ ...s, redemption: { ...red, [k]: v } });
+  const ppd = Number(red.pointsPerDollar) || 0;
   const rates = Object.entries(s.purchase.categoryRates || {});
 
   const save = async () => {
@@ -232,11 +235,20 @@ function Settings({ api }) {
       </div>
 
       <div style={ui.card}>
+        <div style={{ ...ui.h3, marginBottom: 12 }}>Points for records</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <Field label="Points for a record submission" hint="Given when the record is verified (so rejected or fake submissions earn nothing). 0 = none."><input type="number" min="0" style={ui.input} value={s.submissionPoints ?? 0} onChange={(e) => setS({ ...s, submissionPoints: e.target.value })} /></Field>
+          <Field label="Points for winning a record challenge" hint="Given when a challenge is verified and beats the record it challenged. Added on top of the submission points."><input type="number" min="0" style={ui.input} value={s.challengeWinPoints ?? 0} onChange={(e) => setS({ ...s, challengeWinPoints: e.target.value })} /></Field>
+        </div>
+        <div style={{ ...ui.muted, marginTop: 8 }}>If a record stops being verified, these points are taken back.</div>
+      </div>
+
+      <div style={ui.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
           <div style={ui.h3}>Reward levels</div>
           <button type="button" style={ui.btnGhost} onClick={() => setS({ ...s, levels: [...s.levels, { name: "New level", minPoints: (s.levels[s.levels.length - 1]?.minPoints || 0) + 500, discountPercent: 0 }] })}><Plus size={14} /> Add level</button>
         </div>
-        <div style={ui.muted}>Separate from paid membership plans. A member's level comes from their points (refunds and reversals are subtracted). The top level is the AMPEX Ambassador badge.</div>
+        <div style={ui.muted}>Separate from paid membership plans. A member's level comes from the points they have earned (refunds and reversals are subtracted). Spending points in the shop does not lower their level. The top level is the AMPEX Ambassador badge.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
           {s.levels.map((l, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto", gap: 8, alignItems: "end" }}>
@@ -267,7 +279,7 @@ function Settings({ api }) {
           <option value="">+ Add a section rate…</option>
           {SHOP_CATEGORIES.filter((c) => !(c in (s.purchase.categoryRates || {}))).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <div style={{ ...ui.label, marginTop: 16 }}>Fixed points for a product (replaces the per-dollar rate for that product)</div>
+        <div style={{ ...ui.label, marginTop: 16 }}>Fixed points for a product (replaces the per-dollar rate for that product, e.g. sweatsuit 20, hat 5, belt 100, gold medal 75, trophy 150)</div>
         {Object.entries(s.purchase.productPoints || {}).map(([pid, pts]) => (
           <div key={pid} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
             <span style={{ color: "white", minWidth: 200, flex: "1 1 200px" }}>{products.find((p) => p.id === pid)?.name || pid}</span>
@@ -309,6 +321,33 @@ function Settings({ api }) {
       </div>
 
       <div style={ui.card}>
+        <div style={{ ...ui.h3, marginBottom: 12 }}>Spending points in the shop</div>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, color: "white", fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
+          <input type="checkbox" checked={!!red.enabled} onChange={(e) => setR("enabled", e.target.checked)} style={{ width: 18, height: 18 }} /> Members can pay with points in the cart
+        </label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+          <Field label="Points for $1 off" hint={ppd > 0 ? `So 3,000 points = $${(3000 / ppd).toFixed(2)} and $5 = ${(5 * ppd).toLocaleString()} points.` : ""}><input type="number" min="1" style={ui.input} value={red.pointsPerDollar} onChange={(e) => setR("pointsPerDollar", e.target.value)} /></Field>
+          <Field label="Smallest number of points a member can use" hint="0 = any amount."><input type="number" min="0" style={ui.input} value={red.minPoints} onChange={(e) => setR("minPoints", e.target.value)} /></Field>
+          <Field label="Most of an item's price points can pay (%)" hint="100 = items can be completely free with points."><input type="number" min="1" max="100" style={ui.input} value={red.maxPercent} onChange={(e) => setR("maxPercent", e.target.value)} /></Field>
+          <Field label="Sections that can't be paid with points" hint="Comma separated, e.g. Tickets, Championship Belts"><input style={ui.input} value={csv(red.excludedCategories)} onChange={(e) => setR("excludedCategories", fromCsv(e.target.value))} /></Field>
+        </div>
+        <div style={{ ...ui.label, marginTop: 14 }}>Products that can't be paid with points</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+          {(red.excludedProductIds || []).map((pid) => (
+            <span key={pid} style={{ ...pill("#aaa"), display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {products.find((p) => p.id === pid)?.name || pid}
+              <button type="button" aria-label="Remove" onClick={() => setR("excludedProductIds", red.excludedProductIds.filter((x) => x !== pid))} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", padding: 0 }}>×</button>
+            </span>
+          ))}
+        </div>
+        <select style={{ ...ui.input, maxWidth: 360 }} value="" onChange={(e) => e.target.value && setR("excludedProductIds", [...(red.excludedProductIds || []), e.target.value])}>
+          <option value="">+ Exclude a product…</option>
+          {products.filter((p) => !(red.excludedProductIds || []).includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <div style={{ ...ui.muted, marginTop: 8 }}>Points are taken when the member goes to payment and are given back if the payment doesn't go through, or the order is cancelled or refunded.</div>
+      </div>
+
+      <div style={ui.card}>
         <div style={{ ...ui.h3, marginBottom: 12 }}>Promotion</div>
         <label style={{ display: "flex", alignItems: "center", gap: 10, color: "white", fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
           <input type="checkbox" checked={!!s.promotion.active} onChange={(e) => setPromo("active", e.target.checked)} style={{ width: 18, height: 18 }} /> Multiply purchase points during a promotion
@@ -336,7 +375,7 @@ export default function AdminRewards() {
       <SectionHeader
         eyebrow="Loyalty"
         title="Rewards & Referrals"
-        desc="Members earn reward points for referrals and purchases. Levels unlock shop discounts automatically and points are never spent. These points are separate from competition ranking points."
+        desc="Members earn reward points for referrals, verified records, won challenges and purchases. Levels unlock shop discounts automatically, and members can spend points in the shop if you turn it on. These points are separate from competition ranking points."
         actions={<button type="button" style={ui.btnGhost} onClick={() => setNonce((n) => n + 1)}><RefreshCw size={14} /> Refresh</button>}
       />
       <Tabs tabs={[{ id: "overview", label: "Overview" }, { id: "members", label: "Members" }, { id: "referrals", label: "Referrals" }, { id: "ledger", label: "Points ledger" }, { id: "settings", label: "Settings" }]} value={tab} onChange={setTab} />

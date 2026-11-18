@@ -70,6 +70,10 @@ const apiBase = (req) => {
 const unsubscribeUrl = (req, userId) => `${apiBase(req)}/api/email/unsubscribe?u=${encodeURIComponent(userId)}&t=${unsubscribeToken(userId)}`;
 // The link people see in the email opens a page on the AMPEX website (not the API address)
 const unsubscribePageUrl = (userId) => `${siteUrl()}/unsubscribe?u=${encodeURIComponent(userId)}&t=${unsubscribeToken(userId)}`;
+// People outside the community are identified by their email address
+const emailKey = (address) => `e:${String(address || '').trim().toLowerCase()}`;
+const outsideUnsubscribePageUrl = (address) => `${siteUrl()}/unsubscribe?e=${encodeURIComponent(String(address).trim().toLowerCase())}&t=${unsubscribeToken(emailKey(address))}`;
+const outsideUnsubscribeUrl = (req, address) => `${apiBase(req)}/api/email/unsubscribe?e=${encodeURIComponent(String(address).trim().toLowerCase())}&t=${unsubscribeToken(emailKey(address))}`;
 
 // ---------- the email itself ----------
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -106,7 +110,7 @@ const personalise = (text, member) => String(text || '').replace(/\{\{\s*name\s*
  */
 const FONT = "Arial,Helvetica,sans-serif";
 const fullName = (member) => String(member?.name || '').trim() || 'Member';
-const buildEmail = ({ subject, body, imageUrl, buttonText, buttonUrl, member, kind, unsubscribe }) => {
+const buildEmail = ({ subject, body, imageUrl, buttonText, buttonUrl, member, kind, unsubscribe, outside = false }) => {
   const text = personalise(body, member);
   const img = safeLink(imageUrl);
   const btnUrl = safeLink(buttonUrl);
@@ -140,7 +144,7 @@ ${p('Official World Record Verification &amp; Recognition', 'margin:2px 0 0;')}
 <tr><td><img src="${asset('footer.jpg')}" alt="Dare to be extraordinary · ${esc(host)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;"></td></tr>
 <tr><td style="padding:6px 16px 22px;text-align:center;font-family:${FONT};font-size:12px;line-height:1.6;color:#9a9a9a;">
 <a href="${esc(site)}" style="color:#d9aa3c;text-decoration:none;">${esc(host)}</a><br>
-${kind === 'marketing' && unsubscribe ? `You get these emails because you are an Ampex World Records member. <a href="${esc(unsubscribe)}" style="color:#9a9a9a;">Unsubscribe from promotional emails</a>.` : 'This message is about your Ampex World Records account.'}
+${outside && unsubscribe ? `You received this email from Ampex World Records. <a href="${esc(unsubscribe)}" style="color:#9a9a9a;">Unsubscribe</a>.` : kind === 'marketing' && unsubscribe ? `You get these emails because you are an Ampex World Records member. <a href="${esc(unsubscribe)}" style="color:#9a9a9a;">Unsubscribe from promotional emails</a>.` : 'This message is about your Ampex World Records account.'}
 </td></tr>
 </table></td></tr></table></body></html>`;
   const plain = `Dear ${fullName(member)},
@@ -159,11 +163,11 @@ Sincerely,
 Ampex World Records Team
 Official World Record Verification & Recognition
 
-${host}${kind === 'marketing' && unsubscribe ? `\nUnsubscribe from promotional emails: ${unsubscribe}` : ''}`;
+${host}${(outside || kind === 'marketing') && unsubscribe ? `\nUnsubscribe: ${unsubscribe}` : ''}`;
   return { subject: personalise(subject, member), html, text: plain };
 };
 
 module.exports = {
   emailEnabled, emailMode: mode, senderAddress, send, buildEmail, outbox,
-  unsubscribeToken, checkUnsubscribeToken, unsubscribeUrl, unsubscribePageUrl, safeLink,
+  unsubscribeToken, checkUnsubscribeToken, unsubscribeUrl, unsubscribePageUrl, safeLink, emailKey, outsideUnsubscribePageUrl, outsideUnsubscribeUrl,
 };

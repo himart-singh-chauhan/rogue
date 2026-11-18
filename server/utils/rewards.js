@@ -8,6 +8,8 @@ const supabase = require('../config/supabase');
 const DEFAULT_SETTINGS = {
   enabled: true,
   referralPoints: 10,
+  submissionPoints: 0, // when one of the member's records is verified
+  challengeWinPoints: 0, // when the member's challenge beats a record
   referralQualifiesOn: 'first_verified_record', // or 'signup'
   maxReferralsPerDay: 20,
   levels: [
@@ -20,8 +22,12 @@ const DEFAULT_SETTINGS = {
   purchase: { pointsPerDollar: 1, categoryRates: {}, productPoints: {}, excludedCategories: ['Tickets'], excludedProductIds: [] },
   discount: { excludedCategories: ['Tickets'], excludedProductIds: [] },
   promotion: { active: false, multiplier: 2, startsAt: null, endsAt: null, label: '' },
+  // Spending points in the shop: pointsPerDollar points take $1 off (600 = 3,000 points for $5)
+  redemption: { enabled: false, pointsPerDollar: 600, minPoints: 0, maxPercent: 100, excludedCategories: ['Tickets'], excludedProductIds: [] },
   allowCouponStacking: false,
 };
+// Spending points does not lower a member's level: levels count the points they earned
+const SPEND_TYPES = ['redemption', 'redemption_reversal'];
 
 const int = (v, d = 0) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : d; };
 const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
@@ -38,6 +44,7 @@ const normalizeSettings = (raw = {}) => {
   const p = { ...DEFAULT_SETTINGS.purchase, ...(s.purchase || {}) };
   const d = { ...DEFAULT_SETTINGS.discount, ...(s.discount || {}) };
   const promo = { ...DEFAULT_SETTINGS.promotion, ...(s.promotion || {}) };
+  const red = { ...DEFAULT_SETTINGS.redemption, ...(s.redemption || {}) };
   const rates = {};
   Object.entries(p.categoryRates || {}).forEach(([k, v]) => { if (k && Number.isFinite(Number(v))) rates[k] = Math.max(0, Number(v)); });
   const fixed = {};
@@ -46,12 +53,15 @@ const normalizeSettings = (raw = {}) => {
   return {
     enabled: s.enabled !== false,
     referralPoints: Math.max(0, int(s.referralPoints, 10)),
+    submissionPoints: Math.max(0, int(s.submissionPoints, 0)),
+    challengeWinPoints: Math.max(0, int(s.challengeWinPoints, 0)),
     referralQualifiesOn: s.referralQualifiesOn === 'signup' ? 'signup' : 'first_verified_record',
     maxReferralsPerDay: Math.max(1, int(s.maxReferralsPerDay, 20)),
     levels,
     purchase: { pointsPerDollar: Math.max(0, num(p.pointsPerDollar, 1)), categoryRates: rates, productPoints: fixed, excludedCategories: list(p.excludedCategories), excludedProductIds: list(p.excludedProductIds) },
     discount: { excludedCategories: list(d.excludedCategories), excludedProductIds: list(d.excludedProductIds) },
     promotion: { active: !!promo.active, multiplier: Math.max(1, num(promo.multiplier, 1)), startsAt: promo.startsAt || null, endsAt: promo.endsAt || null, label: String(promo.label || '').slice(0, 80) },
+    redemption: { enabled: !!red.enabled, pointsPerDollar: Math.max(1, int(red.pointsPerDollar, 600)), minPoints: Math.max(0, int(red.minPoints, 0)), maxPercent: Math.min(100, Math.max(1, num(red.maxPercent, 100))), excludedCategories: list(red.excludedCategories), excludedProductIds: list(red.excludedProductIds) },
     allowCouponStacking: !!s.allowCouponStacking,
   };
 };
@@ -90,12 +100,14 @@ const levelInfo = (points, settings) => {
 };
 
 const balanceFor = async (userId) => {
-  const { data, error } = await supabase.from('reward_transactions').select('points').eq('user_id', userId);
+  const { data, error } = await supabase.from('reward_transactions').select('points, type').eq('user_id', userId);
   if (error) throw error;
   const rows = data || [];
   const net = rows.reduce((s, r) => s + int(r.points), 0);
-  const earned = rows.reduce((s, r) => s + Math.max(0, int(r.points)), 0);
-  return { points: Math.max(0, net), lifetimeEarned: earned };
+  const kept = rows.filter((r) => !SPEND_TYPES.includes(r.type));
+  const earned = kept.reduce((s, r) => s + Math.max(0, int(r.points)), 0);
+  const levelPoints = Math.max(0, kept.reduce((s, r) => s + int(r.points), 0));
+  return { points: Math.max(0, net), lifetimeEarned: earned, levelPoints, spent: Math.max(0, levelPoints - Math.max(0, net)) };
 };
 
 // Insert a ledger row. Automatic awards are exactly-once (unique index): a repeat returns null.
@@ -220,8 +232,8 @@ const isExcluded = (rule, line) =>
 const quoteDiscount = async (userId, lines) => {
   const settings = await getSettings();
   if (!settings.enabled || !userId) return { percent: 0, amount: 0, level: null, eligibleSubtotal: 0, settings };
-  const { points } = await balanceFor(userId);
-  const info = levelInfo(points, settings);
+  const { points, levelPoints } = await balanceFor(userId);
+  const info = levelInfo(levelPoints, settings);
   const eligible = lines.filter((l) => !(l.isTicket && settings.discount.excludedCategories.map(lc).includes('tickets')) && !isExcluded(settings.discount, l));
   const eligibleSubtotal = money(eligible.reduce((s, l) => s + l.unitPrice * l.qty, 0));
   const amount = money(eligibleSubtotal * (info.discountPercent / 100));
@@ -256,7 +268,7 @@ const purchasePointsFor = (lines, settings, paidRatio = 1) => {
  */
 const syncOrderRewards = async (orderId) => {
   try {
-    const { data: order } = await supabase.from('orders').select('id, user_id, subtotal, total, payment_status, shipping_status').eq('id', orderId).maybeSingle();
+    const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
     if (!order || !order.user_id) return;
     const settings = await getSettings();
     const { data: txs } = await supabase.from('reward_transactions').select('type, points').eq('reference_type', 'order').eq('reference_id', String(order.id)).eq('user_id', order.user_id);
@@ -264,12 +276,21 @@ const syncOrderRewards = async (orderId) => {
     const reversed = (txs || []).some((t) => t.type === 'purchase_reversal');
     const qualifies = order.payment_status === 'paid' && order.shipping_status !== 'cancelled';
 
+    // Points spent on the order are given back when it fails, is cancelled or refunded
+    const spent = (txs || []).find((t) => t.type === 'redemption');
+    const spentBack = (txs || []).some((t) => t.type === 'redemption_reversal');
+    const dead = ['failed', 'refunded', 'cancelled'].includes(order.payment_status) || order.shipping_status === 'cancelled';
+    if (spent && !spentBack && dead && int(spent.points) < 0) {
+      await addTransaction({ user_id: order.user_id, points: Math.abs(int(spent.points)), type: 'redemption_reversal', reference_type: 'order', reference_id: order.id, reason: `Points returned: order ${String(order.id).slice(0, 8).toUpperCase()} ${order.payment_status === 'paid' ? 'cancelled' : order.payment_status}` });
+    }
+
     if (qualifies && !awarded && settings.enabled) {
       const { data: items } = await supabase.from('order_items').select('product_id, product_name, price, quantity, product:products(category)').eq('order_id', order.id);
       const lines = (items || []).map((i) => ({
         productId: i.product_id, category: i.product?.category || (String(i.product_name || '').startsWith('Ticket:') ? 'Tickets' : ''),
         unitPrice: num(i.price), qty: int(i.quantity, 1), isTicket: !i.product_id && String(i.product_name || '').startsWith('Ticket:'),
       }));
+      // points are earned on the money actually paid (not on the part paid with points or discounts)
       const ratio = num(order.subtotal) > 0 ? Math.max(0, num(order.total) / num(order.subtotal)) : 1;
       const points = purchasePointsFor(lines, settings, ratio);
       if (points > 0) {
@@ -286,11 +307,84 @@ const syncOrderRewards = async (orderId) => {
 const summaryFor = async (userId) => {
   const settings = await getSettings();
   const bal = await balanceFor(userId);
-  return { ...bal, ...levelInfo(bal.points, settings), enabled: settings.enabled };
+  const r = settings.redemption;
+  return {
+    ...bal, ...levelInfo(bal.levelPoints, settings), enabled: settings.enabled,
+    redemption: r.enabled && settings.enabled ? { pointsPerDollar: r.pointsPerDollar, minPoints: r.minPoints, worth: money(bal.points / r.pointsPerDollar) } : null,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Spending points in the shop
+// ---------------------------------------------------------------------------
+/**
+ * How much of an order the member can pay with points.
+ * lines: [{ productId, category, unitPrice, qty, isTicket }]; payable: what is left after other discounts.
+ * Returns { points, amount } (0 when not allowed). Never lets Stripe see a total under 50 cents.
+ */
+const quoteRedemption = async (userId, lines, payable, wanted) => {
+  const settings = await getSettings();
+  const r = settings.redemption;
+  const none = { points: 0, amount: 0, available: 0, pointsPerDollar: r.pointsPerDollar, enabled: false };
+  if (!userId || !settings.enabled || !r.enabled) return none;
+  const { points: available } = await balanceFor(userId);
+  const out = { ...none, available, enabled: true, minPoints: r.minPoints };
+  const ask = Math.min(available, Math.max(0, int(wanted)));
+  if (!ask || ask < r.minPoints) return out;
+  const eligible = money(lines.filter((l) => !isExcluded(r, l) && !(l.isTicket && r.excludedCategories.map(lc).includes('tickets'))).reduce((s, l) => s + l.unitPrice * l.qty, 0));
+  const cap = money(Math.min(payable, eligible * (r.maxPercent / 100)));
+  let amount = money(Math.min(cap, Math.floor((ask / r.pointsPerDollar) * 100) / 100));
+  const rest = money(payable - amount);
+  if (rest > 0 && rest < 0.5) amount = money(Math.max(0, payable - 0.5)); // card payments need at least $0.50
+  if (amount <= 0) return out;
+  return { ...out, amount, points: Math.min(ask, Math.ceil(amount * r.pointsPerDollar - 1e-9)) };
+};
+
+// Take the points when the order is created (so they can't be spent twice); syncOrderRewards gives them back on failure.
+const spendPointsForOrder = async (userId, orderId, points) => {
+  if (!(points > 0)) return true;
+  const tx = await addTransaction({ user_id: userId, points: -Math.abs(points), type: 'redemption', reference_type: 'order', reference_id: orderId, reason: `Points spent on order ${String(orderId).slice(0, 8).toUpperCase()}` });
+  if (!tx) return false;
+  const { data: rows } = await supabase.from('reward_transactions').select('points').eq('user_id', userId);
+  if ((rows || []).reduce((s, r) => s + int(r.points), 0) < 0) {
+    // two checkouts at once spent the same points: give these back
+    await addTransaction({ user_id: userId, points: Math.abs(points), type: 'redemption_reversal', reference_type: 'order', reference_id: orderId, reason: 'Not enough points' });
+    return false;
+  }
+  return true;
+};
+
+// ---------------------------------------------------------------------------
+// Records: points for a verified record and for a challenge that beats a record
+// ---------------------------------------------------------------------------
+const syncRecordRewards = async (recordId, verified) => {
+  try {
+    const settings = await getSettings();
+    const { data: rec } = await supabase.from('records').select('id, user_id, title, challenged_record_id').eq('id', recordId).maybeSingle();
+    if (!rec?.user_id) return;
+    const { data: txs } = await supabase.from('reward_transactions').select('type, points').eq('user_id', rec.user_id).eq('reference_id', String(rec.id));
+    const find = (t) => (txs || []).find((x) => x.type === t);
+    const kinds = [
+      ['submission', settings.submissionPoints, true, `Record verified: ${rec.title || ''}`.trim()],
+      ['challenge_win', settings.challengeWinPoints, !!rec.challenged_record_id, `Record challenge won: ${rec.title || ''}`.trim()],
+    ];
+    for (const [type, pts, applies, reason] of kinds) {
+      const award = find(type);
+      const back = find(`${type}_reversal`);
+      if (verified && applies && settings.enabled && !award && pts > 0) {
+        await addTransaction({ user_id: rec.user_id, points: pts, type, reference_type: 'record', reference_id: rec.id, reason });
+      } else if (!verified && award && !back && int(award.points) > 0) {
+        await addTransaction({ user_id: rec.user_id, points: -int(award.points), type: `${type}_reversal`, reference_type: 'record', reference_id: rec.id, reason: `${reason} (no longer verified)` });
+      }
+    }
+  } catch (e) {
+    console.warn('[Rewards] record points not updated:', e.message);
+  }
 };
 
 module.exports = {
   DEFAULT_SETTINGS, normalizeSettings, getSettings, saveSettings, levelInfo, balanceFor, addTransaction,
   ensureReferralCode, recordReferralAtSignup, qualifyReferral, onMemberVerified, rejectReferral,
   quoteDiscount, purchasePointsFor, syncOrderRewards, summaryFor, promotionActive,
+  quoteRedemption, spendPointsForOrder, syncRecordRewards, SPEND_TYPES,
 };

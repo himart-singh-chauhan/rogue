@@ -12,6 +12,8 @@ import SponsorBanner from "../components/SponsorBanner";
 import { addTicketToCart, isRealEventId } from "../utils/ticketCart";
 import StreamPlayer from "../components/StreamPlayer";
 import MuxStreamPanel from "../components/admin/MuxStreamPanel";
+import EventLiveControls from "../components/admin/EventLiveControls";
+import LiveChat from "../components/LiveChat";
 
 const CountdownBox = ({ value, label }) => (
   <div style={{ textAlign: "center" }}>
@@ -113,11 +115,7 @@ const StreamDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [timeLeft, setTimeLeft] = React.useState({
-    hours: "02",
-    minutes: "45",
-    seconds: "12"
-  });
+  const [timeLeft, setTimeLeft] = React.useState(null); // null = no countdown (no start time, or already started)
 
   // Dynamic ticket spectator passes and stream access
   const [hasTicket, setHasTicket] = React.useState(false);
@@ -129,6 +127,11 @@ const StreamDetail = () => {
   const [loading, setLoading] = React.useState(true);
   const [ticketPrice, setTicketPrice] = React.useState(49);
   const [eventIsPaid, setEventIsPaid] = React.useState(false);
+
+  // The player is on the page whenever this viewer may watch (it waits by itself until the broadcast starts)
+  React.useEffect(() => {
+    if (canWatch && isRealEventId(event?.id || event?._id || id)) setIsPlaying(true);
+  }, [canWatch, event?.id, event?._id, id]);
 
   // Admin controls hooks
   const [isAdminEditing, setIsAdminEditing] = React.useState(false);
@@ -238,12 +241,8 @@ const StreamDetail = () => {
       return;
     }
 
+    // No message here: the player says when the stream has really loaded (see onReady below)
     setIsPlaying(prev => !prev);
-    if (!isPlaying) {
-      showToast(currentEvent.status === "PAST" ? "▶️ Playing completed event playback!" : "🔴 Live HD Stream Loaded Successfully!");
-    } else {
-      showToast(isPlaying ? "🔴 Stream paused." : "");
-    }
   };
 
   const purchaseTicket = async () => {
@@ -343,28 +342,21 @@ const StreamDetail = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    const timer = setInterval(() => {
-      const now = new Date();
-      const target = new Date();
-      target.setHours(23, 59, 59);
-
-      const diff = target - now;
-
-      if (diff > 0) {
-        const h = Math.floor(diff / (1000 * 60 * 60));
-        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((diff % (1000 * 60)) / 1000);
-
-        setTimeLeft({
-          hours: h.toString().padStart(2, "0"),
-          minutes: m.toString().padStart(2, "0"),
-          seconds: s.toString().padStart(2, "0")
-        });
-      }
-    }, 1000);
-
+    const tick = () => {
+      const start = event?.date ? new Date(event.date) : null;
+      const diff = start ? start - new Date() : 0;
+      if (!start || diff <= 0) { setTimeLeft(null); return; }
+      setTimeLeft({
+        days: Math.floor(diff / 86400000).toString(),
+        hours: Math.floor((diff % 86400000) / 3600000).toString().padStart(2, "0"),
+        minutes: Math.floor((diff % 3600000) / 60000).toString().padStart(2, "0"),
+        seconds: Math.floor((diff % 60000) / 1000).toString().padStart(2, "0"),
+      });
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [event?.date]);
 
   return (
     <PageTransition>
@@ -693,6 +685,7 @@ const StreamDetail = () => {
                     title={currentEvent.title}
                     poster={currentEvent.imageUrl || currentEvent.image || currentEvent.img}
                     onLocked={() => { setCanWatch(false); setIsPlaying(false); }}
+                    onReady={(p) => { if (eventIsPaid && hasTicket) showToast(p?.isLive ? "✅ Your spectator pass is active. Enjoy the live stream!" : "✅ Your spectator pass is active. Enjoy the replay!"); }}
                   />
                 </div>
               ) : isPlaying ? (
@@ -741,72 +734,16 @@ const StreamDetail = () => {
                   <div style={{ width: "6px", height: "6px", background: "white", borderRadius: "50%" }}></div> {!eventIsPaid ? "FREE STREAM" : isPlaying ? "LIVE FEED" : "LIVE"}
                 </div>
                 <div style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(10px)", padding: "6px 16px", borderRadius: "6px", fontSize: "12px", fontWeight: "900", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Eye size={14} /> 34.2K VIEWERS
+                  <Eye size={14} /> {String(event?.status || "").toLowerCase() === "live" || event?.isLive ? "LIVE NOW" : ["completed", "past"].includes(String(event?.status || "").toLowerCase()) ? "REPLAY" : timeLeft ? "STARTS SOON" : "SCHEDULED"}
                 </div>
               </div>
             </div>
 
-            {/* CHAT SIDE - Matches Video Height */}
-            <div style={{ background: "#161616", borderRadius: "24px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", overflow: "hidden", height: "600px" }}>
-              <div style={{ padding: "24px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "14px", fontWeight: "900", letterSpacing: "0.1em" }}>LIVE CHAT</span>
-                <Users size={18} color="rgba(255,255,255,0.3)" />
-              </div>
-
-              {/* Messages */}
-              <div style={{ flex: 1, padding: "24px", display: "flex", flexDirection: "column", gap: "16px", overflowY: "auto" }}>
-                {chatMessages.map((m) => (
-                  <div key={m.id} style={{ fontSize: "13px", lineHeight: "1.5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <span style={{ fontWeight: "900", color: m.color || "rgba(255,255,255,0.4)", marginRight: "8px" }}>{m.user}:</span>
-                      <span style={{ fontWeight: "500" }}>{m.msg}</span>
-                    </div>
-
-                    {/* MODERATOR CHAT ACTIONS */}
-                    {user && user.isAdmin && (
-                      <div style={{ display: "flex", gap: "8px", marginLeft: "12px" }}>
-                        <button
-                          onClick={() => handleDeleteChatMessage(m.id)}
-                          title="Delete message"
-                          style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }}
-                          onMouseEnter={e => e.currentTarget.style.color = "#EF4444"}
-                          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                        {m.userId && m.userId !== "anonymous" && !blockedUsers.includes(m.userId) && (
-                          <button
-                            onClick={() => handleBanChatter(m.userId, m.user)}
-                            title="Ban and eject user"
-                            style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }}
-                            onMouseEnter={e => e.currentTarget.style.color = "#EF4444"}
-                            onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}
-                          >
-                            <Ban size={12} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Input */}
-              <div style={{ padding: "24px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                <div style={{ position: "relative" }}>
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={handleSendChatMessage}
-                    placeholder="Send a message..."
-                    style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "none", borderRadius: "100px", padding: "14px 20px 14px 20px", color: "white", fontSize: "13px", outline: "none" }}
-                  />
-                  <button onClick={handleSendChatMessage} style={{ background: "transparent", border: "none", position: "absolute", right: "20px", top: "50%", transform: "translateY(-50%)", cursor: "pointer", color: "rgba(255,255,255,0.4)" }}>
-                    <MessageSquare size={16} />
-                  </button>
-                </div>
-              </div>
+            {/* CHAT SIDE - real live chat (Admin can switch it off in the event controls) */}
+            <div style={{ height: "600px" }}>
+              {isRealEventId(event?.id || event?._id || id)
+                ? <LiveChat eventId={event?.id || event?._id || id} height="100%" />
+                : <div style={{ color: "#888", padding: 24 }}>Live chat opens with the event.</div>}
             </div>
 
             {/* Title & Info - Below Video */}
@@ -816,7 +753,7 @@ const StreamDetail = () => {
                   <h1 style={{ fontSize: "32px", fontWeight: "950", textTransform: "uppercase", marginBottom: "8px" }}>{currentEvent.title}</h1>
                   <div style={{ display: "flex", gap: "20px", color: "rgba(255,255,255,0.4)", fontSize: "14px", fontWeight: "700" }}>
                     <span style={{ color: "#FF6A00" }}>#{currentEvent.category}</span>
-                    <span>• Tokyo Hub</span>
+                    {(event?.location || currentEvent.location) && <span>• {event?.location || currentEvent.location}</span>}
                     <span>• {currentEvent.competitors || currentEvent.athletes || "CONTESTANTS SELECTED"}</span>
                   </div>
                 </div>
@@ -832,7 +769,16 @@ const StreamDetail = () => {
                     </button>
                   )}
 
-                  <button style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", padding: "12px 24px", borderRadius: "100px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button type="button" onClick={async () => {
+                    const url = window.location.href;
+                    try {
+                      if (navigator.share) { await navigator.share({ title: currentEvent.title, url }); return; }
+                      await navigator.clipboard.writeText(url);
+                      showToast("🔗 Event link copied. Paste it anywhere to share.");
+                    } catch (err) {
+                      if (err?.name !== "AbortError") showToast(`Copy this link to share: ${url}`);
+                    }
+                  }} style={{ background: "rgba(255,255,255,0.05)", border: "none", color: "white", padding: "12px 24px", borderRadius: "100px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Share2 size={16} /> SHARE
                   </button>
 
@@ -1040,6 +986,7 @@ const StreamDetail = () => {
                         </button>
                       </div>
                     </form>
+                    {isRealEventId(event?.id || event?._id || id) && user?.token && <EventLiveControls eventId={event?.id || event?._id || id} token={user.token} onChanged={() => window.location.reload()} />}
                     {isRealEventId(event?.id || event?._id || id) && user?.token && <MuxStreamPanel eventId={event?.id || event?._id || id} token={user.token} />}
                   </motion.div>
                 )}
@@ -1086,7 +1033,7 @@ const StreamDetail = () => {
                 </p>
                 <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
                   <div style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#EF4444", padding: "6px 16px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", letterSpacing: "0.05em" }}>
-                    🔥 92% TICKETS SOLD OUT
+                    🎟️ SPECTATOR PASSES ON SALE
                   </div>
                   <div style={{ fontSize: "18px", fontWeight: "900", color: "white" }}>
                     FROM <span style={{ color: "#FF6A00" }}>${ticketPrice.toFixed(2)}</span> / PASS
@@ -1097,11 +1044,18 @@ const StreamDetail = () => {
               <div style={{ textAlign: "right", position: "relative", zIndex: 2 }}>
                 <div style={{ marginBottom: "32px" }}>
                   <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>EVENT STARTS IN</div>
-                  <div style={{ display: "flex", gap: "16px", justifyContent: "flex-end" }}>
-                    <CountdownBox value={timeLeft.hours} label="HOURS" />
-                    <CountdownBox value={timeLeft.minutes} label="MINS" />
-                    <CountdownBox value={timeLeft.seconds} label="SECS" />
-                  </div>
+                  {timeLeft ? (
+                    <div style={{ display: "flex", gap: "16px", justifyContent: "flex-end" }}>
+                      {Number(timeLeft.days) > 0 && <CountdownBox value={timeLeft.days} label="DAYS" />}
+                      <CountdownBox value={timeLeft.hours} label="HOURS" />
+                      <CountdownBox value={timeLeft.minutes} label="MINS" />
+                      <CountdownBox value={timeLeft.seconds} label="SECS" />
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "28px", fontWeight: 950, color: event?.isLive || String(event?.status || "").toLowerCase() === "live" ? "#EF4444" : "white" }}>
+                      {event?.isLive || String(event?.status || "").toLowerCase() === "live" ? "🔴 LIVE NOW" : ["completed", "past"].includes(String(event?.status || "").toLowerCase()) ? "EVENT ENDED" : "STARTING SOON"}
+                    </div>
+                  )}
                 </div>
 
                 <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{

@@ -79,7 +79,7 @@ const Navbar = () => {
 
   return (
     <nav className="navbar" style={{
-      background: location.pathname === "/" ? "rgba(255, 248, 245, 0.85)" : "#000",
+      background: location.pathname === "/" ? "rgba(238, 234, 230, 0.9)" : "#000",
       borderColor: location.pathname === "/" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)",
     }}>
       <div className="navbar-inner">
@@ -239,7 +239,7 @@ const Navbar = () => {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="mobile-menu" data-lenis-prevent="true" style={{ background: location.pathname === "/" ? "#FFF8F5" : "#0A0A0A" }}>
+        <div className="mobile-menu" data-lenis-prevent="true" style={{ background: location.pathname === "/" ? "#EEEAE6" : "#0A0A0A" }}>
           {navLinks.map(l => (
             <Link
               key={l.label}

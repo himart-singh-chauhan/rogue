@@ -33,6 +33,7 @@ import AdminSubmissionPacksCard from "../components/admin/AdminSubmissionPacksCa
 import { Modal as AdminModal } from "../components/admin/adminUi";
 import BodyUnitsFields from "../components/admin/BodyUnitsFields";
 import ProductColorManager from "../components/admin/ProductColorManager";
+import AdminHomepageHero from "../components/admin/AdminHomepageHero";
 import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
 
 // Recommended artwork size for each sponsor placement (shown in the sponsor form)
@@ -6719,7 +6720,7 @@ const Admin = () => {
             });
 
             const openAddForm = () => {
-              setSponsorForm({ company_name: "", link_url: "", placement: "homepage", package_type: "standard", active_status: true, start_date: "", end_date: "", description: "", notes: "" });
+              setSponsorForm({ company_name: "", link_url: "", placement: "homepage", package_type: "standard", active_status: true, start_date: "", end_date: "", description: "", notes: "", content_type: "banner" });
               setSponsorFormMode("add");
               setSelectedSponsor(null);
               setSponsorSaveStatus(null);
@@ -6747,7 +6748,8 @@ const Admin = () => {
                     k === "end_date" ? "endDate" :
                     k === "image_fit" ? "imageFit" :
                     k === "image_position" ? "imagePosition" :
-                    k === "video_url" ? "videoUrl" : k,
+                    k === "video_url" ? "videoUrl" :
+                    k === "content_type" ? "contentType" : k,
                     v
                   );
                 });
@@ -6920,7 +6922,17 @@ const Admin = () => {
                         {sponsorForm.logo_url && <img loading="lazy" decoding="async" src={sponsorForm.logo_url} alt="Logo Preview" style={{ marginTop: "8px", maxHeight: "50px", borderRadius: "6px", objectFit: "contain", background: "rgba(255,255,255,0.05)", padding: "6px" }} />}
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <label style={labelStyle}>Sponsor video (optional)</label>
+                        <label style={labelStyle}>What to show in the sponsor spot</label>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          {[["banner", "Banner picture"], ["video", "Video commercial"], ["both", "Banner + video side by side"]].map(([v, l]) => {
+                            const on = (sponsorForm.content_type || (sponsorForm.video_url && !sponsorForm.banner_url ? "video" : sponsorForm.video_url ? "both" : "banner")) === v;
+                            return <button key={v} type="button" onClick={() => setSponsorForm(p => ({ ...p, content_type: v }))} style={{ ...inputStyle, width: "auto", cursor: "pointer", fontWeight: 800, borderColor: on ? "#FF5500" : undefined, color: on ? "#FF5500" : "white" }}>{l}</button>;
+                          })}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#888", marginTop: "6px" }}>Video commercials play across the whole sponsor spot with a Sound on button, and the next sponsor shows when the video ends.</div>
+                      </div>
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <label style={labelStyle}>Sponsor video {sponsorForm.content_type === "video" || sponsorForm.content_type === "both" ? "" : "(optional)"}</label>
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                           <input type="url" value={sponsorForm.video_url || ""} onChange={e => setSponsorForm(p => ({ ...p, video_url: e.target.value }))} placeholder="Paste a YouTube / Vimeo link, or upload an MP4" style={{ ...inputStyle, flex: "1 1 260px" }} />
                           <label style={{ ...inputStyle, flex: "0 0 auto", width: "auto", cursor: "pointer", textAlign: "center", fontWeight: 800 }}>
@@ -6940,7 +6952,7 @@ const Admin = () => {
                           </label>
                           {sponsorForm.video_url && <button type="button" onClick={() => setSponsorForm(p => ({ ...p, video_url: "" }))} style={{ ...inputStyle, width: "auto", color: "#ef4444", cursor: "pointer", fontWeight: 800 }}>Remove</button>}
                         </div>
-                        <div style={{ fontSize: "11px", color: "#888", marginTop: "6px" }}>Plays muted on a loop beside the banner (below it on phones). MP4 up to 50 MB, or any YouTube / Vimeo link.</div>
+                        <div style={{ fontSize: "11px", color: "#888", marginTop: "6px" }}>Starts muted (browsers require it) with a Sound on button. Upload an MP4 / MOV / WEBM, or paste any YouTube / Vimeo link.</div>
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
                         <label style={labelStyle}>Description</label>
@@ -7186,6 +7198,7 @@ const Admin = () => {
           {/* ==================== HOMEPAGE CONTROL ==================== */}
           {activeTab === "homepageControl" && (
             <div>
+              <AdminHomepageHero />
               <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <h1 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0" }}>HOMEPAGE CONTROL</h1>

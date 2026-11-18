@@ -30,7 +30,7 @@ export default function MyRewards({ token }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
       <div>
         <h2 style={{ fontSize: "22px", fontWeight: 900, margin: 0, color: "white" }}>MY REWARDS</h2>
-        <p style={{ color: "#777", fontSize: "13px", margin: "4px 0 0 0" }}>Earn points by inviting members and shopping. Higher levels unlock bigger shop discounts. Points are never spent.</p>
+        <p style={{ color: "#777", fontSize: "13px", margin: "4px 0 0 0" }}>Earn points by inviting members, getting records verified{data.challengeWinPoints > 0 ? ", winning record challenges" : ""} and shopping. Higher levels unlock bigger shop discounts.{data.redemption ? ` You can also spend points in the cart: ${Number(data.redemption.pointsPerDollar).toLocaleString()} points = $1 off. Spending points does not lower your level.` : ""}</p>
       </div>
 
       {/* Level + progress */}
@@ -46,7 +46,7 @@ export default function MyRewards({ token }) {
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(110px, 1fr))", gap: "10px" }}>
-            <div><div style={label}>Current points</div><div style={{ color: "white", fontSize: "26px", fontWeight: 950 }}>{data.points}</div></div>
+            <div><div style={label}>Current points</div><div style={{ color: "white", fontSize: "26px", fontWeight: 950 }}>{data.points}</div>{data.redemption && data.points > 0 && <div style={{ color: "#22c55e", fontSize: "12px", fontWeight: 800 }}>worth ${Number(data.redemption.worth).toFixed(2)} in the shop</div>}</div>
             <div><div style={label}>Lifetime earned</div><div style={{ color: "white", fontSize: "26px", fontWeight: 950 }}>{data.lifetimeEarned}</div></div>
           </div>
         </div>

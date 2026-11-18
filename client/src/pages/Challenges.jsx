@@ -8,6 +8,7 @@ import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall } from "../utils/api";
 import WatchToUnlockVideo from "../components/WatchToUnlockVideo";
+import { embedUrlFor } from "../components/EvidencePreview";
 
 // Official score = the verified value and unit saved on the record
 const officialScore = (record) => {
@@ -104,37 +105,30 @@ const Challenges = () => {
     : challengeCards.filter(c => c.cat === activeTab);
 
 
-  const getMockAttempts = (challenge) => {
-    const attempts = [
-      { id: 1, name: "James Walker", value: "35 Bounces", date: "May 16, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4" },
-      { id: 2, name: "Alex Rodriguez", value: "34 Bounces", date: "May 15, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4" },
-      { id: 3, name: "Liam Thompson", value: "35 Bounces", date: "May 14, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4" },
-      { id: 4, name: "Daniel Kim", value: "36 Bounces", date: "May 12, 2026", status: "PENDING REVIEW", img: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=400&q=80", color: "#F59E0B", bg: "rgba(245, 158, 11, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" },
-      { id: 5, name: challenge ? challenge.holder : "Pavol Durdik", value: challenge ? challenge.score : "36 Bounces", date: "May 12, 2026", status: "CURRENT RECORD", img: challenge ? challenge.img : "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=400&q=80", color: "#10B981", bg: "rgba(16, 185, 129, 0.1)", videoUrl: challenge ? challenge.videoUrl : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" },
-      { id: 6, name: "Ethan Hunt", value: "32 Bounces", date: "May 18, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" },
-      { id: 7, name: "Sarah Connor", value: "30 Bounces", date: "May 19, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" },
-      { id: 8, name: "Marcus Johnson", value: "31 Bounces", date: "May 20, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4" },
-      { id: 9, name: "David Chen", value: "Disqualified", date: "May 21, 2026", status: "FAILED ATTEMPT", img: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=400&q=80", color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)", videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4" }
-    ];
-
-    const getStatusPriority = (status) => {
-      if (!status) return 99;
-      const s = status.toUpperCase();
-      if (s.includes("CURRENT")) return 1;
-      if (s.includes("PENDING")) return 2;
-      if (s.includes("APPROVED") || s.includes("BROKEN")) return 3;
-      if (s.includes("FAILED")) return 4;
-      return 99;
-    };
-
-    return attempts.sort((a, b) => {
-      const pA = getStatusPriority(a.status);
-      const pB = getStatusPriority(b.status);
-      if (pA !== pB) return pA - pB;
-      const dA = new Date(a.date).getTime() || 0;
-      const dB = new Date(b.date).getTime() || 0;
-      return dB - dA;
-    });
+  // Real record history (GET /records/:id/history): current record, the records it replaced, and attempts
+  const [history, setHistory] = useState(null);
+  useEffect(() => {
+    if (!selectedChallenge?.id || String(selectedChallenge.id).length < 30) return undefined;
+    let alive = true;
+    apiCall(`/records/${selectedChallenge.id}/history`, "GET").then((h) => { if (alive) setHistory(h); }).catch(() => { if (alive) setHistory({ current: null, previous: [], attempts: [] }); });
+    return () => { alive = false; setHistory(null); };
+  }, [selectedChallenge?.id]);
+  const STATUS_STYLE = {
+    "CURRENT RECORD": { color: "#10B981", bg: "rgba(16, 185, 129, 0.1)" },
+    "PREVIOUS RECORD": { color: "#38BDF8", bg: "rgba(56, 189, 248, 0.1)" },
+    "PENDING REVIEW": { color: "#F59E0B", bg: "rgba(245, 158, 11, 0.1)" },
+    "FAILED ATTEMPT": { color: "#EF4444", bg: "rgba(239, 68, 68, 0.1)" },
+  };
+  const toCard = (h) => h && ({
+    id: h.id, name: h.holder?.name || "Athlete", username: h.holder?.username, value: [h.value, h.unit].filter(Boolean).join(" ") || "—",
+    date: h.date ? new Date(h.date).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "",
+    status: h.label, img: h.thumbnail || selectedChallenge?.img, videoUrl: h.videoUrl, ...STATUS_STYLE[h.label],
+  });
+  const getAttempts = () => {
+    if (!history) return [];
+    const order = { "CURRENT RECORD": 1, "PREVIOUS RECORD": 2, "PENDING REVIEW": 3, "FAILED ATTEMPT": 4 };
+    return [history.current, ...(history.previous || []), ...(history.attempts || [])].filter(Boolean).map(toCard)
+      .sort((x, y) => (order[x.status] - order[y.status]) || (new Date(y.date) - new Date(x.date)));
   };
 
   return (
@@ -450,7 +444,7 @@ const Challenges = () => {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "16px" }}>
                 <div>
                   <h3 style={{ fontSize: "14px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px" }}>ATTEMPT HISTORY</h3>
-                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>See how other members have attempted to break this record.</p>
+                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>The current record, the records it replaced, and every attempt to break it.</p>
                 </div>
                 <button 
                   type="button"
@@ -460,6 +454,21 @@ const Challenges = () => {
                 </button>
               </div>
 
+              {/* Under the video: who holds it now, who held it before, and how many have tried */}
+              {history && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginBottom: "16px" }}>
+                  {[
+                    ["CURRENT RECORD", history.current ? `${[history.current.value, history.current.unit].filter(Boolean).join(" ")} · ${history.current.holder?.name || ""}` : "—", "#10B981"],
+                    ["PREVIOUS RECORD HOLDER", history.previous?.[0] ? `${history.previous[0].holder?.name || ""} · ${[history.previous[0].value, history.previous[0].unit].filter(Boolean).join(" ")}` : "None yet: this is the first record", "#38BDF8"],
+                    ["ATTEMPTED RECORDS", `${(history.attempts || []).length} attempt${(history.attempts || []).length === 1 ? "" : "s"} (${(history.attempts || []).filter((x) => x.label === "PENDING REVIEW").length} in review)`, "#F59E0B"],
+                  ].map(([k, v, c]) => (
+                    <div key={k} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "10px 14px" }}>
+                      <div style={{ fontSize: "9px", fontWeight: 900, letterSpacing: "0.1em", color: c }}>{k}</div>
+                      <div style={{ fontSize: "13px", fontWeight: 800, color: "white", marginTop: "4px", overflowWrap: "anywhere" }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="attempt-history-container">
                 <style>{`
                   .attempt-history-scroll::-webkit-scrollbar {
@@ -561,7 +570,7 @@ const Challenges = () => {
                   }}
                 >
                   
-                  {getMockAttempts(selectedChallenge).map(attempt => {
+                  {getAttempts().map(attempt => {
                     const isSelected = selectedAttempt?.id === attempt.id;
                     return (
                       <div key={attempt.id} 
@@ -653,7 +662,7 @@ const Challenges = () => {
               <p style={{ fontSize: "16px", color: "rgba(255,255,255,0.5)", marginBottom: "40px" }}>Browse all verification attempts submitted by members for this specific record.</p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "32px" }}>
-                {getMockAttempts(selectedChallenge).map(attempt => (
+                {getAttempts().map(attempt => (
                   <div key={attempt.id} 
                     onClick={(e) => { e.stopPropagation(); setSelectedAttempt(attempt); }}
                     style={{ 
@@ -757,6 +766,9 @@ const Challenges = () => {
               >✕</button>
               <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
                 <div style={{ flex: "1.2", background: "black", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", overflow: "hidden" }}>
+                  {embedUrlFor(selectedAttempt.videoUrl || "") ? (
+                    <iframe key={selectedAttempt.id} title={selectedAttempt.name} src={embedUrlFor(selectedAttempt.videoUrl, { autoplay: false })} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} />
+                  ) : (
                   <video
                     key={selectedAttempt.id}
                     src={selectedAttempt.videoUrl}
@@ -764,6 +776,7 @@ const Challenges = () => {
                     autoPlay
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
+                  )}
                 </div>
                 <div data-lenis-prevent="true" style={{ flex: "1", overflowY: "auto", height: "100%", background: "#161616" }}>
                   <div style={{ padding: "40px 50px", display: "flex", flexDirection: "column", gap: "28px", textAlign: "left" }}>

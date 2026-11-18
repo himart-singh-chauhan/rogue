@@ -29,66 +29,34 @@ import ScrollReveal from "../components/ScrollReveal";
 import { useAuth } from "../context/AuthContext";
 import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
+import StreamPlayer from "../components/StreamPlayer";
+import LiveChat from "../components/LiveChat";
 import { addTicketToCart, isTicketOnSale, isRealEventId, ticketPriceOf } from "../utils/ticketCart";
 
 const Countdown = ({ targetDate, status }) => {
-  const [timeLeft, setTimeLeft] = useState("");
-
+  const st = String(status || "").toUpperCase();
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (status === "CANCELLED" || status?.toUpperCase() === "CANCELLED") {
-      setTimeLeft("EVENT CANCELLED");
-      return;
-    }
-    if (status === "LIVE" || status?.toUpperCase() === "LIVE") {
-      setTimeLeft("EVENT IS LIVE NOW!");
-      return;
-    }
-    if (status === "PAST" || status?.toUpperCase() === "PAST" || status?.toUpperCase() === "COMPLETED") {
-      setTimeLeft("EVENT COMPLETED");
-      return;
-    }
-
-    const calculate = () => {
-      const difference = new Date(targetDate) - new Date();
-      if (difference <= 0) {
-        setTimeLeft("EVENT HAS STARTED!");
-        return;
-      }
-
-      const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
-      const minutes = Math.floor((difference / 1000 / 60) % 60);
-      const seconds = Math.floor((difference / 1000) % 60);
-
-      let str = "";
-      if (days > 0) str += `${days}D `;
-      str += `${hours.toString().padStart(2, '0')}H ${minutes.toString().padStart(2, '0')}M ${seconds.toString().padStart(2, '0')}S`;
-      setTimeLeft(str);
-    };
-
-    calculate();
-    const interval = setInterval(calculate, 1000);
-    return () => clearInterval(interval);
-  }, [targetDate, status]);
-
-  return (
-    <div style={{
-      background: "rgba(255, 106, 0, 0.08)",
-      border: "1px solid rgba(255, 106, 0, 0.3)",
-      padding: "16px 28px",
-      borderRadius: "16px",
-      display: "inline-flex",
-      flexDirection: "column",
-      gap: "4px",
-      alignItems: "center",
-      boxShadow: "0 0 20px rgba(255,106,0,0.15)",
-      width: "100%",
-      maxWidth: "340px"
-    }}>
-      <div style={{ fontSize: "9px", fontWeight: "950", color: "#FF6A00", letterSpacing: "1px", textTransform: "uppercase" }}>COUNTDOWN TO START</div>
-      <div style={{ fontSize: "28px", fontWeight: "950", color: "white", fontFamily: "monospace", letterSpacing: "1px" }}>{timeLeft}</div>
+    if (st !== "UPCOMING" || !targetDate) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [st, targetDate]);
+  const box = (label, value, color = "white") => (
+    <div style={{ background: "rgba(255, 106, 0, 0.08)", border: "1px solid rgba(255, 106, 0, 0.3)", padding: "16px 28px", borderRadius: "16px", display: "inline-flex", flexDirection: "column", gap: "4px", alignItems: "center", boxShadow: "0 0 20px rgba(255,106,0,0.15)", width: "100%", maxWidth: "340px" }}>
+      <div style={{ fontSize: "9px", fontWeight: "950", color: "#FF6A00", letterSpacing: "1px", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: "28px", fontWeight: "950", color, fontFamily: "monospace", letterSpacing: "1px" }}>{value}</div>
     </div>
   );
+  if (st === "LIVE") return box("NOW PLAYING", "🔴 LIVE", "#EF4444");
+  if (st !== "UPCOMING" || !targetDate) return null; // no countdown without an upcoming scheduled event
+  const diff = new Date(targetDate).getTime() - now;
+  if (Number.isNaN(diff)) return null;
+  if (diff <= 0) return box("STARTING", "STARTING SOON");
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff / 3600000) % 24);
+  const minutes = Math.floor((diff / 60000) % 60);
+  const seconds = Math.floor((diff / 1000) % 60);
+  return box("COUNTDOWN TO START", `${days > 0 ? `${days}D ` : ""}${String(hours).padStart(2, "0")}H ${String(minutes).padStart(2, "0")}M ${String(seconds).padStart(2, "0")}S`);
 };
 
 const eventsData = [
@@ -491,7 +459,6 @@ const Events = () => {
             time: status === "LIVE" ? "LIVE NOW" : new Date(item.date).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }).toUpperCase(),
             athletes: item.competitors || "CONTESTANTS SELECTED",
             judges: item.judges || "AMPEX Marshal Team",
-            viewers: "24,850+",
             img: item.imageUrl || item.image || "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?auto=format&fit=crop&w=1600&q=80",
             desc: item.description,
             isFeatured: item.isFeatured !== undefined ? item.isFeatured : true,
@@ -523,7 +490,8 @@ const Events = () => {
     }
   }, [user]);
 
-  const finalEvents = dbEvents.length > 0 ? dbEvents : eventsData;
+  // Only real events (the built-in demo events are no longer shown)
+  const finalEvents = dbEvents;
   const filteredEvents = finalEvents.filter(event => {
     if (activeTab === "LIVE") return event.status === "LIVE";
     if (activeTab === "PAST") return event.status === "PAST" || event.status === "COMPLETED";
@@ -1799,8 +1767,31 @@ const Events = () => {
             transition={{ duration: 0.4, cubicBezier: [0.16, 1, 0.3, 1] }}
             style={{ maxWidth: "1200px", margin: "0 auto 60px", width: "100%" }}
           >
+            {/* LIVE NOW: the stream itself, with live chat */}
+            {featuredEvent && featuredEvent.status === "LIVE" && isRealEventId(featuredEvent.id) && (
+              <div style={{ marginBottom: "60px" }}>
+                <div className="live-hero-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 2.2fr) minmax(260px, 1fr)", gap: "20px", alignItems: "stretch" }}>
+                  <style>{`@media (max-width: 900px) { .live-hero-grid { grid-template-columns: 1fr !important; } }`}</style>
+                  <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#000", borderRadius: "24px", overflow: "hidden", border: "1px solid rgba(255,106,0,0.35)" }}>
+                    <StreamPlayer eventId={featuredEvent.id} token={user?.token} title={featuredEvent.title} poster={featuredEvent.img} />
+                    <div style={{ position: "absolute", top: 16, left: 16, zIndex: 3, background: "#ef4444", color: "white", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 900, pointerEvents: "none" }}>● LIVE NOW</div>
+                  </div>
+                  <LiveChat eventId={featuredEvent.id} height="100%" />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginTop: "18px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "12px", fontWeight: 900, color: "#FF6A00", letterSpacing: "0.1em" }}>{featuredEvent.category}{featuredEvent.location ? ` · ${featuredEvent.location}` : ""}</div>
+                    <h2 style={{ fontSize: "clamp(22px, 3vw, 34px)", fontWeight: 950, textTransform: "uppercase", margin: "6px 0 0" }}>{featuredEvent.title}</h2>
+                  </div>
+                  <Link to={`/stream/${featuredEvent.id}`} style={{ textDecoration: "none" }}>
+                    <button type="button" style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "14px 28px", fontWeight: 900, fontSize: "13px", cursor: "pointer" }}>OPEN EVENT PAGE</button>
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {/* FEATURED EVENT */}
-            {featuredEvent && (
+            {featuredEvent && !(featuredEvent.status === "LIVE" && isRealEventId(featuredEvent.id)) && (
               <div
                 onClick={(e) => {
                   if (e.target.closest("button") || e.target.closest("a")) return;
@@ -1855,11 +1846,8 @@ const Events = () => {
 
                 {/* Top Right stats */}
                 <div style={{ position: "absolute", right: "32px", top: "32px", textAlign: "right" }}>
-                  {featuredEvent.status === "LIVE" ? (
-                    <>
-                      <div style={{ fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "4px", letterSpacing: "0.1em" }}>VIEWERS</div>
-                      <div style={{ fontSize: "20px", fontWeight: "950", color: "white" }}>{featuredEvent.viewers || "10K+"}</div>
-                    </>
+                  {featuredEvent.status === "UPCOMING" ? (
+                    <Countdown targetDate={featuredEvent.rawDate} status={featuredEvent.status} />
                   ) : (
                     <>
                       <div style={{ fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "4px", letterSpacing: "0.1em" }}>WHEN</div>

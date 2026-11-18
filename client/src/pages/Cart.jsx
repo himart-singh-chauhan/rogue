@@ -160,23 +160,28 @@ const Cart = () => {
   // Rewards program: the member's level discount (Bronze 5% … Ambassador 40%), checked again at checkout
   const [rewardQuote, setRewardQuote] = React.useState(null);
   const [paidBreakdown, setPaidBreakdown] = React.useState(null);
+  const [usePoints, setUsePoints] = React.useState(false); // pay part of the order with reward points
   const quoteKey = items.map((i) => `${i.id}:${i.qty}:${i.type || ""}`).join("|");
   React.useEffect(() => {
     if (!user?.token || !items.length) { setRewardQuote(null); return undefined; }
     let cancelled = false;
-    apiCall("/rewards/quote", "POST", { items: items.map((i) => ({ id: i.id, qty: i.qty, type: i.type || "product", eventId: i.eventId || null })) }, user.token)
-      .then((q) => { if (!cancelled) setRewardQuote(q && q.amount > 0 ? q : null); })
+    apiCall("/rewards/quote", "POST", { items: items.map((i) => ({ id: i.id, qty: i.qty, type: i.type || "product", eventId: i.eventId || null })), redeemPoints: usePoints ? 1000000000 : 0, couponDiscount: discount }, user.token)
+      .then((q) => { if (!cancelled) setRewardQuote(q || null); })
       .catch(() => { if (!cancelled) setRewardQuote(null); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quoteKey, user?.token]);
+  }, [quoteKey, user?.token, usePoints, discount]);
+  const redemption = rewardQuote?.redemption?.enabled ? rewardQuote.redemption : null;
   const rewardAmount = rewardQuote ? Number(rewardQuote.amount) || 0 : 0;
   const stacking = !!rewardQuote?.allowCouponStacking;
   const useReward = rewardAmount > 0 && (stacking || discount === 0 || rewardAmount > discount);
   const couponApplied = discount > 0 && (stacking || !useReward);
   const couponPart = couponApplied ? discount : 0;
   const rewardPart = useReward ? Math.min(rewardAmount, Math.max(0, subtotal - couponPart)) : 0;
-  const total = Math.max(0, subtotal - couponPart - rewardPart);
+  const beforePoints = Math.max(0, subtotal - couponPart - rewardPart);
+  const pointsPart = usePoints && redemption ? Math.min(Number(redemption.amount) || 0, beforePoints) : 0;
+  const pointsUsed = pointsPart > 0 ? redemption.points : 0;
+  const total = Math.max(0, beforePoints - pointsPart);
   const savings = subtotal - total;
 
   // Back from Stripe: show the receipt once the payment is confirmed, or say nothing was charged.
@@ -380,6 +385,25 @@ const Cart = () => {
                   <div style={{ display: "flex", justifyContent: "space-between", color: "#22c55e", fontSize: "14px", fontWeight: "700" }}>
                     <span>{rewardQuote.level} reward ({rewardQuote.percent}% off)</span>
                     <span>-${rewardPart.toFixed(2)}</span>
+                  </div>
+                )}
+                {redemption && redemption.available > 0 && (
+                  <label style={{ display: "flex", gap: "10px", alignItems: "flex-start", background: "rgba(255,106,0,0.06)", border: "1px solid rgba(255,106,0,0.25)", borderRadius: "12px", padding: "12px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} style={{ marginTop: "3px", width: "16px", height: "16px", accentColor: "#FF6A00" }} />
+                    <span style={{ fontSize: "13px", lineHeight: 1.45 }}>
+                      <strong style={{ color: "white" }}>Use my reward points</strong>
+                      <span style={{ display: "block", color: "rgba(255,255,255,0.55)", fontSize: "12px" }}>
+                        You have {Number(redemption.available).toLocaleString()} points ({Number(redemption.pointsPerDollar).toLocaleString()} points = $1 off).
+                        {redemption.minPoints > redemption.available ? ` You need at least ${Number(redemption.minPoints).toLocaleString()} points to use them.` : ""}
+                        {usePoints && pointsPart === 0 && redemption.minPoints <= redemption.available ? " Nothing in your bag can be paid with points." : ""}
+                      </span>
+                    </span>
+                  </label>
+                )}
+                {pointsPart > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "#22c55e", fontSize: "14px", fontWeight: "700" }}>
+                    <span>{pointsUsed.toLocaleString()} reward points</span>
+                    <span>-${pointsPart.toFixed(2)}</span>
                   </div>
                 )}
                 {discount > 0 && rewardAmount > 0 && !stacking && (
@@ -615,7 +639,8 @@ const Cart = () => {
                         discount: parseFloat(discount),
                         total: parseFloat(total),
                         userId: user?.id || null,
-                        couponCode: appliedCoupon?.code || null
+                        couponCode: appliedCoupon?.code || null,
+                        redeemPoints: pointsUsed || 0
                       };
 
                       const placed = await apiCall("/shop/checkout", "POST", payload, user?.token);
@@ -661,12 +686,16 @@ const Cart = () => {
                         </div>
                       </div>
                     ))}
-                    {discount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ fontSize: "14px", fontWeight: "800", color: "#22c55e" }}>Discount {appliedCoupon ? `(${appliedCoupon.code})` : ''}</div>
-                        <div style={{ fontSize: "14px", fontWeight: "900", color: "#22c55e" }}>-${discount.toFixed(2)}</div>
+                    {[
+                      couponPart > 0 && [`Discount${appliedCoupon ? ` (${appliedCoupon.code})` : ""}`, couponPart],
+                      rewardPart > 0 && [`${rewardQuote?.level} reward`, rewardPart],
+                      pointsPart > 0 && [`${pointsUsed.toLocaleString()} reward points`, pointsPart],
+                    ].filter(Boolean).map(([label, amt]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: "14px", fontWeight: "800", color: "#22c55e" }}>{label}</div>
+                        <div style={{ fontSize: "14px", fontWeight: "900", color: "#22c55e" }}>-${amt.toFixed(2)}</div>
                       </div>
-                    )}
+                    ))}
                     <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "12px", display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
                       <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)" }}>TOTAL DUE</div>
                       <div style={{ fontSize: "20px", fontWeight: "950", color: "#FF6A00" }}>${total.toFixed(2)}</div>

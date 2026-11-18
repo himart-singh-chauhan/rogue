@@ -9,6 +9,8 @@ const int = (v, d = 0) => { const n = parseInt(v, 10); return Number.isFinite(n)
 const TYPE_LABELS = {
   referral: 'Referral bonus', referral_reversal: 'Referral reversed', purchase: 'Purchase reward',
   purchase_reversal: 'Purchase reversed', manual: 'Adjustment by AMPEX', promotion: 'Promotion bonus', fraud_adjustment: 'Fraud adjustment',
+  submission: 'Record verified', submission_reversal: 'Record points reversed', challenge_win: 'Challenge won', challenge_win_reversal: 'Challenge points reversed',
+  redemption: 'Spent in the shop', redemption_reversal: 'Points returned',
 };
 const formatTx = (t) => ({ id: t.id, points: t.points, type: t.type, label: TYPE_LABELS[t.type] || t.type, reason: t.reason, referenceType: t.reference_type, referenceId: t.reference_id, createdAt: t.created_at, admin: t.admin?.name || null, member: t.member ? { id: t.member.id, name: t.member.name, email: t.member.email } : undefined });
 
@@ -26,6 +28,8 @@ const getMyRewards = async (req, res) => {
       ...summary,
       levels: settings.levels,
       referralPoints: settings.referralPoints,
+      submissionPoints: settings.submissionPoints,
+      challengeWinPoints: settings.challengeWinPoints,
       referralQualifiesOn: settings.referralQualifiesOn,
       allowCouponStacking: settings.allowCouponStacking,
       promotion: R.promotionActive(settings.promotion) ? settings.promotion : null,
@@ -59,7 +63,12 @@ const quote = async (req, res) => {
       return p ? { productId: p.id, category: p.category, unitPrice: Number(p.price) || 0, qty } : null;
     }).filter(Boolean);
     const q = await R.quoteDiscount(req.user.id, lines);
-    res.json({ percent: q.percent, amount: q.amount, level: q.level, eligibleSubtotal: q.eligibleSubtotal, allowCouponStacking: q.settings.allowCouponStacking });
+    const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+    const couponGuess = Math.max(0, Number(req.body.couponDiscount) || 0); // only for the preview; checkout works it out again
+    const levelOff = q.settings.allowCouponStacking || !couponGuess ? q.amount : Math.max(0, q.amount - couponGuess);
+    const payable = Math.max(0, Math.round((subtotal - Math.max(couponGuess, 0) - levelOff) * 100) / 100);
+    const pr = await R.quoteRedemption(req.user.id, lines, payable, req.body.redeemPoints);
+    res.json({ percent: q.percent, amount: q.amount, level: q.level, eligibleSubtotal: q.eligibleSubtotal, allowCouponStacking: q.settings.allowCouponStacking, redemption: pr });
   } catch (e) {
     res.status(500).json({ message: 'Could not work out your reward discount' });
   }
@@ -92,15 +101,16 @@ const listMembers = async (req, res) => {
     if (error) throw error;
     const ids = (users || []).map((u) => u.id);
     const [{ data: txs }, { data: refs }] = await Promise.all([
-      ids.length ? supabase.from('reward_transactions').select('user_id, points').in('user_id', ids) : { data: [] },
+      ids.length ? supabase.from('reward_transactions').select('user_id, points, type').in('user_id', ids) : { data: [] },
       ids.length ? supabase.from('referrals').select('referrer_id, status').in('referrer_id', ids) : { data: [] },
     ]);
     const settings = await R.getSettings();
-    const pts = {}; (txs || []).forEach((t) => { pts[t.user_id] = (pts[t.user_id] || 0) + t.points; });
+    const pts = {}; const lvl = {};
+    (txs || []).forEach((t) => { pts[t.user_id] = (pts[t.user_id] || 0) + t.points; if (!R.SPEND_TYPES.includes(t.type)) lvl[t.user_id] = (lvl[t.user_id] || 0) + t.points; });
     const refCount = {}; (refs || []).forEach((r) => { if (r.status === 'qualified') refCount[r.referrer_id] = (refCount[r.referrer_id] || 0) + 1; });
     res.json((users || []).map((u) => {
       const points = Math.max(0, pts[u.id] || 0);
-      const info = R.levelInfo(points, settings);
+      const info = R.levelInfo(Math.max(0, lvl[u.id] || 0), settings);
       return { id: u.id, name: u.name, email: u.email, username: u.username, memberNumber: u.member_number, referralCode: u.referral_code, points, level: info.level, discountPercent: info.discountPercent, isAmbassador: info.isAmbassador, referrals: refCount[u.id] || 0 };
     }));
   } catch (e) {
@@ -183,9 +193,10 @@ const report = async (req, res) => {
     ]);
     const byUser = {};
     const byType = {};
-    (txs || []).forEach((t) => { byUser[t.user_id] = (byUser[t.user_id] || 0) + t.points; byType[t.type] = (byType[t.type] || 0) + t.points; });
+    const lvl = {};
+    (txs || []).forEach((t) => { byUser[t.user_id] = (byUser[t.user_id] || 0) + t.points; byType[t.type] = (byType[t.type] || 0) + t.points; if (!R.SPEND_TYPES.includes(t.type)) lvl[t.user_id] = (lvl[t.user_id] || 0) + t.points; });
     const levelCounts = Object.fromEntries(settings.levels.map((l) => [l.name, 0]));
-    Object.values(byUser).forEach((p) => { levelCounts[R.levelInfo(Math.max(0, p), settings).level] += 1; });
+    Object.keys(byUser).forEach((id) => { levelCounts[R.levelInfo(Math.max(0, lvl[id] || 0), settings).level] += 1; });
     const refStatus = { pending: 0, qualified: 0, flagged: 0, rejected: 0 };
     const topReferrers = {};
     (refs || []).forEach((r) => { refStatus[r.status] = (refStatus[r.status] || 0) + 1; if (r.status === 'qualified') topReferrers[r.referrer_id] = (topReferrers[r.referrer_id] || 0) + 1; });

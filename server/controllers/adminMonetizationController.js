@@ -26,6 +26,9 @@ const getSponsors = async (req, res) => {
   }
 };
 
+// What the sponsor spot shows: the banner picture, the video commercial, or both side by side
+const contentTypeOf = (v) => (['banner', 'video', 'both'].includes(v) ? v : 'banner');
+
 // @desc    Create a new sponsor
 // @route   POST /api/admin/monetization/sponsors (multipart/form-data)
 const createSponsor = async (req, res) => {
@@ -75,6 +78,7 @@ const createSponsor = async (req, res) => {
         image_fit: fit,
         image_position: position,
         video_url: cleanVideoUrl(req.body.videoUrl),
+        content_type: contentTypeOf(req.body.contentType),
         views_count: 0,
         clicks_count: 0,
         created_at: new Date(),
@@ -119,6 +123,7 @@ const updateSponsor = async (req, res) => {
     if (imageFit !== undefined)     updateData.image_fit = fit;
     if (imagePosition !== undefined) updateData.image_position = position;
     if (req.body.videoUrl !== undefined) updateData.video_url = cleanVideoUrl(req.body.videoUrl);
+    if (req.body.contentType !== undefined) updateData.content_type = contentTypeOf(req.body.contentType);
 
     if (req.files) {
       if (req.files.bannerImage && req.files.bannerImage[0]) {

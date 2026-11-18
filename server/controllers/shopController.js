@@ -73,7 +73,7 @@ const couponHeldByOpenCheckouts = async (code, userId, email) => {
 
 const checkout = async (req, res) => {
   // Any "discount" sent by the browser is ignored: the discount is worked out here from the coupon.
-  const { customerName, customerEmail, shippingAddress, items, couponCode } = req.body;
+  const { customerName, customerEmail, shippingAddress, items, couponCode, redeemPoints } = req.body;
 
   if (!customerName || !customerEmail || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'Customer details and cart items are required' });
@@ -209,7 +209,16 @@ const checkout = async (req, res) => {
         if (rewardDiscount > 0) rewardLevel = rq.level;
       }
     }
-    const total = money(subtotal - discountAmount - rewardDiscount);
+    // Points the member chose to spend (Admin → Rewards sets how many points make $1)
+    let pointsRedeemed = 0;
+    let pointsDiscount = 0;
+    if (req.user && Number(redeemPoints) > 0) {
+      const quoteLines = lines.map((l) => ({ productId: l.product?.id || null, category: l.product?.category || (l.event ? 'Tickets' : ''), isTicket: !!l.event, unitPrice: l.unitPrice, qty: l.qty }));
+      const pr = await rewards.quoteRedemption(req.user.id, quoteLines, money(subtotal - discountAmount - rewardDiscount), redeemPoints);
+      pointsRedeemed = pr.points;
+      pointsDiscount = pr.amount;
+    }
+    const total = money(subtotal - discountAmount - rewardDiscount - pointsDiscount);
 
     // Claim belt approvals first, so two checkouts at the same moment can't both use one approval.
     const pendingAuths = Object.values(approvals).filter((a) => a.status === 'approved');
@@ -249,6 +258,7 @@ const checkout = async (req, res) => {
         coupon_code: discountAmount > 0 ? code : null,
         reward_discount: rewardDiscount,
         reward_level: rewardLevel,
+        ...(pointsRedeemed > 0 ? { points_redeemed: pointsRedeemed, points_discount: pointsDiscount } : {}),
         total,
         shipping_status: 'pending',
         payment_status: needsPayment ? 'pending' : 'paid',
@@ -280,17 +290,27 @@ const checkout = async (req, res) => {
     };
     if (itemsError) { await undoOrder(); throw itemsError; }
 
+    // Points are taken now so they can't be spent twice; they come back if the payment doesn't go through
+    if (pointsRedeemed > 0 && !(await rewards.spendPointsForOrder(req.user.id, order.id, pointsRedeemed))) {
+      await undoOrder();
+      return res.status(409).json({ message: 'You no longer have enough points for this. Please check your points and try again.' });
+    }
+
     // Approvals claimed above belong to this order (released again if the payment is not completed)
     if (claimed.length) {
       await supabase.from('product_authorizations').update({ order_id: order.id, updated_at: new Date() }).in('id', claimed);
     }
 
-    const breakdown = { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, total, note: rewardNote };
+    const returnPoints = async () => {
+      if (pointsRedeemed > 0) await rewards.addTransaction({ user_id: req.user.id, points: pointsRedeemed, type: 'redemption_reversal', reference_type: 'order', reference_id: order.id, reason: 'Checkout did not go through' });
+    };
+    const breakdown = { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, pointsRedeemed, pointsDiscount, total, note: rewardNote };
 
     if (!needsPayment) {
       // Nothing to charge (fully discounted): use up the coupon now and deliver the order.
       const redeem = await redeemOrderCoupon(order);
       if (redeem !== 'ok') {
+        await returnPoints();
         await undoOrder();
         return res.status(400).json({ message: COUPON_REASONS[redeem] || 'Coupon could not be applied.' });
       }
@@ -314,13 +334,14 @@ const checkout = async (req, res) => {
           amount: l.unitPrice,
           qty: l.qty,
         })),
-        discountAmount: money(discountAmount + rewardDiscount),
-        discountName: [discountAmount > 0 && code, rewardDiscount > 0 && rewardLevel].filter(Boolean).join(' + ') || null,
+        discountAmount: money(discountAmount + rewardDiscount + pointsDiscount),
+        discountName: [discountAmount > 0 && code, rewardDiscount > 0 && rewardLevel, pointsDiscount > 0 && `${pointsRedeemed.toLocaleString('en-US')} points`].filter(Boolean).join(' + ') || null,
         successPath: '/cart',
         cancelPath: '/cart',
         metadata: { order_id: order.id },
       });
     } catch (e) {
+      await returnPoints();
       await undoOrder();
       console.error('Stripe checkout could not start:', e.message);
       return res.status(e.status && e.status < 500 ? e.status : 502).json({ message: e.status && e.status < 500 ? e.message : 'Could not open the secure payment page. Please try again.' });
@@ -452,6 +473,7 @@ const paymentHooks = {
       .maybeSingle();
     if (!order) return;
     await supabase.from('product_authorizations').update({ status: 'approved', order_id: null, updated_at: new Date() }).eq('order_id', order.id).eq('status', 'fulfilled');
+    await rewards.syncOrderRewards(order.id); // points spent on it come back
   },
   onRefund: async (payment, { full, refunded }) => {
     const { data: order } = await supabase.from('orders').select('id, user_id, total').eq('id', payment.reference_id).maybeSingle();

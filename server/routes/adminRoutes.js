@@ -218,6 +218,9 @@ router.get('/emails/:id', emails.getCampaign);
 router.post('/emails/:id/continue', emails.continueCampaign);
 router.post('/emails/:id/retry', emails.retryFailed);
 
+// Homepage big video
+router.put('/homepage-hero', require('../controllers/heroController').saveHero);
+
 // Submission packs and members' extra submissions
 const packs = require('../controllers/submissionPackController');
 router.get('/submission-packs', packs.adminGetPacks);

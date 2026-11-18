@@ -21,6 +21,13 @@ router.get('/:id', optionalAuth, getEventById);
 
 // The player asks for playback here: free events for everyone, paid events for admins and ticket holders.
 router.get('/:id/playback', optionalAuth, getPlayback);
+// Live controls and chat
+const live = require('../controllers/eventLiveController');
+router.post('/:id/live', protect, admin, live.setLive);
+router.put('/:id/stream-settings', protect, admin, live.updateStreamSettings);
+router.get('/:id/chat', optionalAuth, live.listChat);
+router.post('/:id/chat', protect, live.postChat);
+router.delete('/:id/chat/:messageId', protect, admin, live.deleteChat);
 
 // Admin routes
 router.post('/', protect, admin, createEvent);

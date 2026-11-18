@@ -12,9 +12,12 @@ const MAX_RECIPIENTS = 5000;
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 
 // ---------- who gets it ----------
-const AUDIENCE_TYPES = ['member', 'selected', 'group', 'all'];
+const AUDIENCE_TYPES = ['member', 'selected', 'group', 'all', 'outside'];
+const EMAIL_RE = /^[^\s@,;<>()"]+@[^\s@,;<>()"]+\.[a-z]{2,}$/i;
+const MAX_OUTSIDE = 500;
 const labelFor = (a, count) => {
   if (a.type === 'member') return '1 member';
+  if (a.type === 'outside') return `${count} outside email${count === 1 ? '' : 's'}`;
   if (a.type === 'selected') return `${count} selected members`;
   if (a.type === 'all') return 'All members';
   const parts = [];
@@ -33,6 +36,12 @@ const normaliseAudience = (raw = {}) => {
     a.userIds = [...new Set((Array.isArray(raw.userIds) ? raw.userIds : []).filter(isUUID))].slice(0, 1000);
     if (!a.userIds.length) return null;
   }
+  if (type === 'outside') {
+    // pasted addresses: one per line, or separated by commas / spaces
+    const raw2 = Array.isArray(raw.emails) ? raw.emails.join('\n') : String(raw.emails || '');
+    a.emails = [...new Set(raw2.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter((x) => EMAIL_RE.test(x)))].slice(0, MAX_OUTSIDE);
+    if (!a.emails.length) return null;
+  }
   if (type === 'group') {
     const list = (v) => (Array.isArray(v) ? v : v ? [v] : []).map((x) => clean(x, 60)).filter(Boolean).slice(0, 20);
     a.membership = list(raw.membership);
@@ -44,6 +53,18 @@ const normaliseAudience = (raw = {}) => {
 
 // Members with an email address and an active account; marketing email skips members who opted out
 const resolveRecipients = async (audience, kind) => {
+  if (audience.type === 'outside') {
+    // people who unsubscribed are never emailed again; a member's own address keeps their promotions setting
+    const [{ data: blocked }, { data: members }] = await Promise.all([
+      supabase.from('email_suppressions').select('email').in('email', audience.emails),
+      supabase.from('users').select('id, name, email, marketing_opt_out').in('email', audience.emails),
+    ]);
+    const stop = new Set((blocked || []).map((r) => r.email));
+    const byEmail = Object.fromEntries((members || []).map((m) => [String(m.email).toLowerCase(), m]));
+    (members || []).forEach((m) => { if (kind === 'marketing' && m.marketing_opt_out) stop.add(String(m.email).toLowerCase()); });
+    const recipients = audience.emails.filter((e) => !stop.has(e)).map((e) => ({ id: byEmail[e]?.id || null, name: byEmail[e]?.name || null, email: e, outside: !byEmail[e] }));
+    return { recipients, skipped: audience.emails.length - recipients.length };
+  }
   let q = supabase.from('users').select('id, name, email, account_status, marketing_opt_out').not('email', 'is', null).limit(MAX_RECIPIENTS + 1);
   if (audience.type === 'member') q = q.eq('id', audience.userId);
   if (audience.type === 'selected') q = q.in('id', audience.userIds);
@@ -105,11 +126,16 @@ const sendBatch = async (req, campaign) => {
       const msg = email.buildEmail({
         subject: campaign.subject, body: campaign.body, imageUrl: campaign.image_url,
         buttonText: campaign.button_text, buttonUrl: campaign.button_url, member: { name: d.name },
-        kind: campaign.kind, unsubscribe: d.user_id ? email.unsubscribePageUrl(d.user_id) : null,
+        kind: campaign.kind,
+        unsubscribe: d.user_id ? email.unsubscribePageUrl(d.user_id) : email.outsideUnsubscribePageUrl(d.email),
+        outside: !d.user_id,
       });
-      const headers = campaign.kind === 'marketing' && d.user_id
-        ? { 'List-Unsubscribe': `<${email.unsubscribeUrl(req, d.user_id)}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
-        : {};
+      if (!d.user_id && !d.name) msg.html = msg.html.replace('Dear Member,', 'Dear Friend,'), msg.text = msg.text.replace('Dear Member,', 'Dear Friend,');
+      const headers = !d.user_id
+        ? { 'List-Unsubscribe': `<${email.outsideUnsubscribeUrl(req, d.email)}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+        : campaign.kind === 'marketing'
+          ? { 'List-Unsubscribe': `<${email.unsubscribeUrl(req, d.user_id)}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+          : {};
       try {
         await email.send({ to: d.name ? `"${String(d.name).replace(/"/g, '')}" <${d.email}>` : d.email, subject: msg.subject, html: msg.html, text: msg.text, headers });
         await supabase.from('email_deliveries').update({ status: 'sent', sent_at: new Date().toISOString(), error: null }).eq('id', d.id);
@@ -258,6 +284,16 @@ const page = (title, text) => `<!doctype html><html><head><meta charset="utf-8">
 const unsubscribe = async (req, res) => {
   const userId = String(req.query.u || req.body?.u || '');
   const token = String(req.query.t || req.body?.t || '');
+  const outsideEmail = String(req.query.e || req.body?.e || '').trim().toLowerCase();
+  if (outsideEmail) {
+    if (!EMAIL_RE.test(outsideEmail) || !email.checkUnsubscribeToken(email.emailKey(outsideEmail), token)) {
+      return res.status(400).type('html').send(page('This link is not valid', 'The unsubscribe link is incomplete or expired.'));
+    }
+    await supabase.from('email_suppressions').upsert({ email: outsideEmail, reason: 'unsubscribed' }, { onConflict: 'email' });
+    await supabase.from('users').update({ marketing_opt_out: true, marketing_opt_out_at: new Date().toISOString() }).eq('email', outsideEmail);
+    if (req.method === 'POST') return res.json({ ok: true });
+    return res.type('html').send(page('You are unsubscribed', 'You will not get emails from Ampex World Records at this address again.'));
+  }
   if (!isUUID(userId) || !email.checkUnsubscribeToken(userId, token)) {
     return res.status(400).type('html').send(page('This link is not valid', 'The unsubscribe link is incomplete or expired. You can switch promotional emails off on your profile under Settings.'));
   }

@@ -1,13 +1,42 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import { API_URL, apiCall, formatProductImage } from "../utils/api";
 import { embedUrlFor } from "./EvidencePreview";
 
-// Sponsor video: YouTube / Vimeo page (embedded, muted) or an uploaded MP4
-const SponsorVideo = ({ url, title }) => {
+// Sponsor video commercial: YouTube / Vimeo page (embedded) or an uploaded video.
+// Browsers only start video by itself with the sound off, so a button turns the sound on.
+const SponsorVideo = ({ url, title, loop = true, onEnded }) => {
+  const [sound, setSound] = useState(false);
+  const ref = useRef(null);
   const embed = embedUrlFor(url);
-  const box = { width: "100%", height: "100%", display: "block", border: 0, objectFit: "cover" };
-  if (embed) return <iframe src={embed} title={title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" style={box} />;
-  return <video src={formatProductImage(url)} muted autoPlay loop playsInline preload="metadata" style={box} />;
+  const box = { position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", border: 0, objectFit: "contain", background: "#000" };
+  const toggle = () => {
+    const next = !sound;
+    setSound(next);
+    if (ref.current) { ref.current.muted = !next; if (next) { ref.current.volume = 1; ref.current.play?.().catch(() => {}); } }
+  };
+  return (
+    <>
+      {embed
+        ? <iframe key={sound ? "on" : "off"} src={sound ? embed.replace("mute=1&", "mute=0&").replace("muted=1&", "muted=0&") : embed} title={title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" style={box} />
+        : <video ref={ref} src={formatProductImage(url)} muted autoPlay loop={loop} playsInline preload="metadata" onEnded={onEnded} style={box} />}
+      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggle(); }} aria-label={sound ? "Sound off" : "Sound on"}
+        style={{ position: "absolute", right: 12, bottom: 12, zIndex: 3, display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,0.7)", color: "white", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 100, padding: "8px 14px", fontSize: 12, fontWeight: 900, cursor: "pointer" }}>
+        {sound ? <VolumeX size={14} /> : <Volume2 size={14} />} {sound ? "Sound off" : "Sound on"}
+      </button>
+    </>
+  );
+};
+
+// banner | video | both (older sponsors without a choice: whatever they have)
+const modeOf = (s) => {
+  const has = { banner: !!s.banner_url, video: !!s.video_url };
+  const m = ["banner", "video", "both"].includes(s.content_type) ? s.content_type : has.video && has.banner ? "both" : has.video ? "video" : "banner";
+  if (m === "video" && !has.video) return "banner";
+  if (m === "both" && !has.video) return "banner";
+  if (m === "both" && !has.banner) return "video";
+  if (m === "banner" && !has.banner && has.video) return "video";
+  return m;
 };
 
 /**
@@ -63,12 +92,19 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
     };
   }, [key]);
 
-  // Rotate when several sponsors share the spot
+  // Rotate when several sponsors share the spot. A commercial plays to its end before the next sponsor shows.
+  const current = sponsors[index];
+  const currentMode = current ? modeOf(current) : "banner";
+  const currentIsFile = current?.video_url && !embedUrlFor(current.video_url);
+  const next = () => setIndex((i) => (i + 1) % Math.max(1, sponsors.length));
   useEffect(() => {
     if (variant === "compact" || sponsors.length < 2) return undefined;
-    const t = setInterval(() => setIndex((i) => (i + 1) % sponsors.length), 6000);
-    return () => clearInterval(t);
-  }, [sponsors.length, variant]);
+    const showsVideo = variant === "banner" && currentMode !== "banner";
+    if (showsVideo && currentIsFile) return undefined; // moves on when the video ends
+    const t = setTimeout(next, showsVideo ? 60000 : 6000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sponsors.length, variant, index, currentMode, currentIsFile]);
 
   const visible = variant === "compact" ? sponsors : sponsors.slice(index, index + 1);
   useEffect(() => {
@@ -132,8 +168,34 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
 
   const fit = fitOf(s);
   const position = positionOf(s);
-  const bannerSrc = s.banner_url ? formatProductImage(s.banner_url) : null;
-  const video = s.video_url || null;
+  const mode = modeOf(s);
+  const bannerSrc = s.banner_url && mode !== "video" ? formatProductImage(s.banner_url) : null;
+  const video = mode !== "banner" ? s.video_url : null;
+  const href = safeHref(s.link_url);
+
+  if (video) {
+    // A commercial: the video can't sit inside a link (its buttons would open the sponsor's site)
+    return (
+      <section style={{ padding: "32px 0", ...style }}>
+        <div className="container">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1.5px", color: "#888", textTransform: "uppercase" }}>Sponsored{s.company_name ? ` · ${s.company_name}` : ""}</span>
+            {href && <a {...linkProps(s)} style={{ fontSize: 12, fontWeight: 900, color: "#FF5500", textDecoration: "none" }}>Visit {s.company_name || "sponsor"} →</a>}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", borderRadius: 16, overflow: "hidden", background: "#000", boxShadow: "0 10px 30px rgba(0,0,0,0.15)" }}>
+            {bannerSrc && (
+              <a {...(href ? linkProps(s) : {})} style={{ position: "relative", flex: "1 1 50%", minWidth: "min(100%, 320px)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#111" }}>
+                <img src={bannerSrc} alt={s.company_name} loading="lazy" decoding="async" style={{ display: "block", width: "100%", height: "100%", maxHeight: "min(420px, 70vw)", objectFit: fit, objectPosition: position }} />
+              </a>
+            )}
+            <div style={{ position: "relative", flex: bannerSrc ? "1 1 46%" : "1 1 100%", minWidth: "min(100%, 280px)", aspectRatio: "16 / 9", maxHeight: bannerSrc ? "min(420px, 70vw)" : "min(620px, 56vw)" }}>
+              <SponsorVideo key={s.id} url={video} title={`${s.company_name} commercial`} loop={sponsors.length < 2} onEnded={sponsors.length > 1 ? next : undefined} />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
   return (
     <section style={{ padding: "32px 0", ...style }}>
       <div className="container">

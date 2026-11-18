@@ -67,6 +67,7 @@ export default function AdminEmailMembers() {
   const [single, setSingle] = useState(null);
   const [selected, setSelected] = useState([]);
   const [group, setGroup] = useState({ membership: [], role: [], country: "" });
+  const [outside, setOutside] = useState(""); // pasted addresses of people who are not members
   const [count, setCount] = useState(null);
   const [sending, setSending] = useState(null); // { message, remaining }
   const [notice, setNotice] = useState(null);
@@ -85,8 +86,9 @@ export default function AdminEmailMembers() {
     if (audType === "member") return single ? { type: "member", userId: single.id } : null;
     if (audType === "selected") return selected.length ? { type: "selected", userIds: selected.map((m) => m.id) } : null;
     if (audType === "group") return { type: "group", ...group };
+    if (audType === "outside") return outside.trim() ? { type: "outside", emails: outside } : null;
     return { type: "all" };
-  }, [audType, single, selected, group]);
+  }, [audType, single, selected, group, outside]);
 
   // Live count of who will get it
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function AdminEmailMembers() {
 
   const validate = () => {
     const e = {};
-    if (!audience) e.audience = audType === "member" ? "Choose a member." : "Choose at least one member.";
+    if (!audience) e.audience = audType === "member" ? "Choose a member." : audType === "outside" ? "Paste at least one email address." : "Choose at least one member.";
     if (!form.subject.trim()) e.subject = "Write a subject.";
     if (!form.body.trim()) e.body = "Write the message.";
     if (!isWebLink(form.buttonUrl)) e.buttonUrl = "Use a full web address, starting with https://";
@@ -127,7 +129,7 @@ export default function AdminEmailMembers() {
       const first = await api("/admin/emails", "POST", { ...form, audience, requestKey: keyRef.current });
       const done = await run(first);
       setNotice({ type: done.campaign.failed_count ? "error" : "success", text: first.duplicate ? "This email was already sent (it was not sent twice)." : done.message });
-      setForm(EMPTY); setSingle(null); setSelected([]); setErrors({});
+      setForm(EMPTY); setSingle(null); setSelected([]); setOutside(""); setErrors({});
       keyRef.current = newKey();
       loadHistory();
     } catch (e) {
@@ -162,7 +164,7 @@ export default function AdminEmailMembers() {
         <div style={{ ...ui.card, display: "flex", flexDirection: "column", gap: 16 }}>
           <Field label="Who gets it">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[["member", "One member"], ["selected", "Selected members"], ["group", "A group"], ["all", "All members"]].map(([v, l]) => (
+              {[["member", "One member"], ["selected", "Selected members"], ["group", "A group"], ["all", "All members"], ["outside", "Outside emails"]].map(([v, l]) => (
                 <button key={v} type="button" style={chip(audType === v)} onClick={() => setAudType(v)}>{l}</button>
               ))}
             </div>
@@ -174,6 +176,11 @@ export default function AdminEmailMembers() {
             </div>
           ) : <MemberPicker onPick={setSingle} />)}
           {audType === "selected" && <MemberPicker multiple value={selected} onChange={setSelected} placeholder="Add members…" />}
+          {audType === "outside" && (
+            <Field label="Email addresses (people outside the Ampex community)" hint="One per line, or separated by commas. Up to 500. These emails always include an unsubscribe link, and anyone who unsubscribes is never emailed again.">
+              <textarea style={{ ...ui.input, minHeight: 110, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} value={outside} onChange={(e) => setOutside(e.target.value)} placeholder={"sponsor@company.com\ncoach@gym.com"} />
+            </Field>
+          )}
           {audType === "group" && options && (
             <div style={{ display: "grid", gap: 12 }}>
               <div><span style={ui.label}>Membership plan (any)</span><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{options.memberships.map((m) => <button key={m} type="button" style={chip(group.membership.includes(m))} onClick={() => toggle("membership", m)}>{m.replace(/_/g, " ")}</button>)}</div></div>
@@ -187,7 +194,7 @@ export default function AdminEmailMembers() {
             </div>
           )}
           {err("audience")}
-          {audience && count && <div style={{ color: "#bbb", fontSize: 13 }}><strong style={{ color: "white" }}>{count.count}</strong> {count.count === 1 ? "member" : "members"} will get this{count.skipped ? ` · ${count.skipped} opted out of promotional email` : ""}.</div>}
+          {audience && count && <div style={{ color: "#bbb", fontSize: 13 }}><strong style={{ color: "white" }}>{count.count}</strong> {audType === "outside" ? (count.count === 1 ? "address" : "addresses") : count.count === 1 ? "member" : "members"} will get this{count.skipped ? ` · ${count.skipped} ${audType === "outside" ? "unsubscribed earlier" : "opted out of promotional email"}` : ""}.</div>}
 
           <Field label="Type of email">
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
