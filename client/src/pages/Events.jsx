@@ -31,7 +31,7 @@ import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
 import StreamPlayer from "../components/StreamPlayer";
 import LiveChat from "../components/LiveChat";
-import { addTicketToCart, isTicketOnSale, isRealEventId, ticketPriceOf } from "../utils/ticketCart";
+import { addTicketToCart, isTicketOnSale, isRealEventId, ticketPriceOf, eventAccessOf } from "../utils/ticketCart";
 
 const Countdown = ({ targetDate, status }) => {
   const st = String(status || "").toUpperCase();
@@ -1163,10 +1163,28 @@ const Events = () => {
                   {/* STREAM & PASS BUTTONS */}
                   <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
                     <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                      {viewingEvent.status === "LIVE" ? (
+                      {viewingEvent.isPaid && isTicketOnSale(viewingEvent) && !viewingEvent.ticketLink ? (
+                        <>
+                          <button
+                            onClick={() => handleAddTicket(viewingEvent)}
+                            style={{ flex: 1, background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase", cursor: "pointer" }}
+                          >
+                            GET A SPECTATOR PASS (${ticketPriceOf(viewingEvent).toFixed(2)})
+                          </button>
+                          {viewingEvent.status === "LIVE" && (
+                            <Link to={`/stream/${viewingEvent.id}`} style={{ textDecoration: "none" }}>
+                              <button style={{ background: "transparent", color: "white", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "100px", padding: "15px 22px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}>I have a pass</button>
+                            </Link>
+                          )}
+                        </>
+                      ) : viewingEvent.isPaid && !viewingEvent.ticketLink ? (
+                        <button disabled style={{ flex: 1, background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase" }}>
+                          {eventAccessOf(viewingEvent).label.toUpperCase()}
+                        </button>
+                      ) : viewingEvent.status === "LIVE" ? (
                         <Link to={`/stream/${viewingEvent.id}`} style={{ textDecoration: "none", flex: 1 }}>
                           <button style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: "0 10px 20px rgba(255,106,0,0.3)" }}>
-                            WATCH LIVESTREAM <Play size={14} fill="white" />
+                            WATCH LIVE <Play size={14} fill="white" />
                           </button>
                         </Link>
                       ) : viewingEvent.isPaid && !viewingEvent.ticketLink ? (
@@ -1180,7 +1198,7 @@ const Events = () => {
                       ) : viewingEvent.isPaid ? (
                         <a href={viewingEvent.ticketLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", flex: 1 }}>
                           <button style={{ width: "100%", background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: "0 10px 20px rgba(255,106,0,0.3)" }}>
-                            SECURE ACCESS TICKET (${viewingEvent.ticketPrice || "49.00"}) <ExternalLink size={14} />
+                            GET A SPECTATOR PASS (${ticketPriceOf(viewingEvent).toFixed(2)}) <ExternalLink size={14} />
                           </button>
                         </a>
                       ) : (
@@ -1793,6 +1811,14 @@ const Events = () => {
                     <div style={{ fontSize: "12px", fontWeight: 900, color: "#FF6A00", letterSpacing: "0.1em" }}>{featuredEvent.category}{featuredEvent.location ? ` · ${featuredEvent.location}` : ""}</div>
                     <h2 style={{ fontSize: "clamp(22px, 3vw, 34px)", fontWeight: 950, textTransform: "uppercase", margin: "6px 0 0" }}>{featuredEvent.title}</h2>
                   </div>
+                  {featuredEvent.isPaid && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>{isTicketOnSale(featuredEvent) ? `Spectator pass $${ticketPriceOf(featuredEvent).toFixed(2)}` : "Passes are not on sale"}</span>
+                      {isTicketOnSale(featuredEvent) && (
+                        <button type="button" onClick={() => handleAddTicket(featuredEvent)} style={{ background: "white", color: "#111", border: "none", borderRadius: "100px", padding: "14px 24px", fontWeight: 900, fontSize: "13px", cursor: "pointer" }}>GET A SPECTATOR PASS</button>
+                      )}
+                    </div>
+                  )}
                   <Link to={`/stream/${featuredEvent.id}`} style={{ textDecoration: "none" }}>
                     <button type="button" style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "14px 28px", fontWeight: 900, fontSize: "13px", cursor: "pointer" }}>OPEN EVENT PAGE</button>
                   </Link>

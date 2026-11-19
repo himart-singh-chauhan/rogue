@@ -9,15 +9,45 @@ export const isRealEventId = (id) =>
 
 export const ticketPriceOf = (ev) => Number(ev?.ticketPrice ?? ev?.ticket_price) || 0;
 
-// Upcoming, paid, real events: the ones a fan can buy a ticket for
+// One rule for every page (homepage, Live Events, event page), the same one checkout uses on the server:
+// passes are on sale for a paid event with a price until the event has ended or been cancelled.
 export const isTicketOnSale = (ev) => {
   if (!ev || !isRealEventId(ev.id)) return false;
   if (!(ev.isPaid ?? ev.is_paid) || ticketPriceOf(ev) <= 0) return false;
-  const status = String(ev.rawStatus || ev.status || "").toLowerCase();
-  if (["completed", "cancelled", "past"].includes(status)) return false;
-  const when = ev.rawDate || ev.date;
-  // allow the event day itself (live events stay on sale)
-  return !when || new Date(when).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+  return eventPhaseOf(ev) !== "ended";
+};
+
+// live | upcoming | ended
+export const eventPhaseOf = (ev) => {
+  const status = String(ev?.rawStatus || ev?.status || "").toLowerCase();
+  if (["completed", "cancelled", "past"].includes(status)) return "ended";
+  if (ev?.isLive || ev?.is_live || status === "live") return "live";
+  return "upcoming";
+};
+
+/**
+ * What every page shows for an event: its state, whether it's free, the pass price, and the main button.
+ * hasPass: the visitor already has a pass for it (paid events only).
+ */
+export const eventAccessOf = (ev, { hasPass = false } = {}) => {
+  const phase = eventPhaseOf(ev);
+  const isPaid = !!(ev?.isPaid ?? ev?.is_paid);
+  const price = ticketPriceOf(ev);
+  const onSale = isTicketOnSale(ev);
+  const priceText = isPaid && price > 0 ? `$${price.toFixed(2)}` : "Free";
+  let action; // "watch" | "pass" | "view" | "none"
+  let label;
+  if (!isPaid || hasPass) {
+    action = phase === "upcoming" ? "view" : "watch";
+    label = phase === "live" ? "Watch Live" : phase === "ended" ? "Watch Replay" : "View Event";
+  } else if (onSale) {
+    action = "pass";
+    label = "Get a Spectator Pass";
+  } else {
+    action = "none";
+    label = phase === "ended" ? "Event Ended" : "Passes Not On Sale Yet";
+  }
+  return { phase, isPaid, price, priceText, onSale, action, label };
 };
 
 const readCart = () => {

@@ -1,8 +1,9 @@
 import { ALL_COUNTRIES } from "../utils/countries";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Zap, Globe, Calendar, MapPin, Loader2 } from "lucide-react";
+import { ArrowRight, Zap, Globe, Calendar, MapPin, Loader2, Eye, EyeOff } from "lucide-react";
 import Navbar from "../components/Navbar";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Captcha, { captchaOn } from "../components/Captcha";
 import { useAuth } from "../context/AuthContext";
 import { ChevronDown } from "lucide-react";
 import {
@@ -18,6 +19,9 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const captchaRef = useRef(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [weightUnit, setWeightUnit] = useState("kg"); // "kg" or "lbs"
@@ -36,6 +40,10 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (captchaOn && !captchaToken) {
+      setError("Please wait a moment while we run a quick security check, then try again.");
+      return;
+    }
     setLoading(true);
     try {
       const heightValFinal = heightUnit === "cm" ? heightVal : `${heightFt}'${heightIn}"`;
@@ -52,11 +60,13 @@ const Signup = () => {
         height: heightValFinal,
         heightUnit,
         country,
-        city
+        city,
+        captchaToken: captchaToken || undefined
       });
       navigate("/profile");
     } catch (err) {
       setError(err.message || "Failed to create profile");
+      captchaRef.current?.reset(); // each security check works once
     } finally {
       setLoading(false);
     }
@@ -211,14 +221,21 @@ const Signup = () => {
               {/* Row 3: Password */}
               <div>
                 <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "white", marginBottom: "6px", textTransform: "uppercase" }}>PASSWORD</label>
-                <input 
-                  type="password" 
-                  placeholder="********" 
+                <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="********"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "12px 16px", color: "white", outline: "none", fontSize: "13px" }} 
+                  style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "12px", padding: "12px 96px 12px 16px", color: "white", outline: "none", fontSize: "13px" }}
                 />
+                <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}
+                  style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 900, letterSpacing: "0.05em", padding: 6 }}>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />} {showPassword ? "HIDE" : "SHOW"}
+                </button>
+                </div>
               </div>
 
               {/* Row 4: Gender & DOB */}
@@ -550,7 +567,9 @@ const Signup = () => {
                 </label>
               </div>
 
-              <button 
+              <Captcha ref={captchaRef} onToken={setCaptchaToken} />
+
+              <button
                 type="submit"
                 disabled={loading}
                 style={{

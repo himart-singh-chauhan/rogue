@@ -74,7 +74,7 @@ const computeStats = async (userIds = null, { needAmbassador = true } = {}) => {
   return stats;
 };
 
-const newAwardNumber = () => `AWD-${new Date().getUTCFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+const newAwardNumber = () => `AWR-${new Date().getUTCFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
 /**
  * Gives every published automatic award to the members who qualify and do not have it yet.

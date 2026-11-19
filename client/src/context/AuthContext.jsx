@@ -38,8 +38,8 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = async (email, password) => {
-    const data = await apiCall('/auth/login', 'POST', { email, password });
+  const login = async (email, password, captchaToken) => {
+    const data = await apiCall('/auth/login', 'POST', { email, password, captchaToken: captchaToken || undefined });
     setUser(data);
     localStorage.setItem('userInfo', JSON.stringify(data));
     return data;
@@ -64,6 +64,19 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  // Re-read the account (e.g. after the member verifies their email in another tab)
+  const refreshUser = async () => {
+    const stored = (() => { try { return JSON.parse(localStorage.getItem('userInfo') || 'null'); } catch { return null; } })();
+    if (!stored?.token) return null;
+    try {
+      const fresh = await apiCall('/auth/profile', 'GET', null, stored.token);
+      const merged = { ...stored, ...fresh, token: stored.token };
+      setUser(merged);
+      localStorage.setItem('userInfo', JSON.stringify(merged));
+      return merged;
+    } catch { return null; }
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('userInfo');
@@ -72,7 +85,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, updateProfile, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, updateProfile, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

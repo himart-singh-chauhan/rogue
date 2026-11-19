@@ -4,7 +4,7 @@ const { evaluateCoupon } = require('./couponController');
 const { feeForRecordType } = require('../utils/fees');
 const { thumbnailFor } = require('../utils/youtubeIntegration');
 const stripe = require('../utils/stripe');
-const { notifyMember } = require('../utils/notify');
+const { notifyMember, notifyAdmins, siteUrl } = require('../utils/notify');
 
 const isUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 const str = (v) => (v === undefined || v === null ? '' : String(v));
@@ -436,10 +436,30 @@ const processCheckout = async (req, res) => {
       updated_at: new Date(),
     }], { onConflict: 'record_id' });
     if (metaError) throw metaError;
+    await alertAdminsNewSubmission(req.params.id, { paid: 0, trackingNumber, coupon: discount > 0 ? couponCode : null });
     res.status(200).json({ success: true, trackingNumber });
   } catch (error) {
     console.error('processCheckout error:', error);
     res.status(500).json({ message: 'Could not complete checkout' });
+  }
+};
+
+// Admins hear about every submission that is ready for review (paid, or covered by the member's allowance)
+const alertAdminsNewSubmission = async (recordId, { paid = 0, trackingNumber, coupon = null } = {}) => {
+  try {
+    const { data: rec } = await supabase.from('records').select('id, title, category, record_type, challenged_record_id, user:user_id(name, email, member_number)').eq('id', recordId).maybeSingle();
+    if (!rec) return;
+    const isChallenge = rec.record_type === 'challenge' || !!rec.challenged_record_id;
+    const who = rec.user?.name || 'A member';
+    const how = paid > 0 ? `paid $${Number(paid).toFixed(2)}` : coupon ? `used coupon ${coupon} (nothing to pay)` : 'used a free submission from their plan';
+    await notifyAdmins({
+      subject: `New ${isChallenge ? 'challenge' : 'record submission'} to review: ${rec.title || 'Untitled'}`,
+      body: `${who}${rec.user?.member_number ? ` (${rec.user.member_number})` : ''} submitted "${rec.title || 'Untitled'}"${rec.category ? ` in ${rec.category}` : ''} and ${how}.\n\nTracking number: ${trackingNumber || '—'}\n\nPlease review the evidence and verify or reject the record.`,
+      link: `${siteUrl()}/admin?tab=records`,
+      linkText: 'Review submissions',
+    });
+  } catch (e) {
+    console.warn('[Submission] admin alert failed:', e.message);
   }
 };
 
@@ -464,6 +484,7 @@ const paymentHooks = {
       if (result !== 'ok') console.warn(`[Submission] fee paid but coupon ${code} could not be counted (${result}).`);
     }
     const { data: rec } = await supabase.from('records').select('title, record_type').eq('id', payment.reference_id).maybeSingle();
+    await alertAdminsNewSubmission(payment.reference_id, { paid: Number(payment.amount), trackingNumber });
     await notifyMember({
       userId: payment.user_id,
       subject: `${rec?.record_type === 'challenge' ? 'Challenge' : 'Submission'} fee received`,

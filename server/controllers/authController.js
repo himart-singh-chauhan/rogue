@@ -4,6 +4,8 @@ const supabase = require('../config/supabase');
 const { accountBlockReason } = require('../middleware/authMiddleware');
 const { tierFor } = require('../utils/rankings');
 const rewards = require('../utils/rewards');
+const { captchaProblem } = require('../utils/captcha');
+const verification = require('../utils/emailVerification');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -13,7 +15,7 @@ const generateToken = (id) => {
 
 // Every column of users EXCEPT the password hash.
 const SAFE_USER_COLUMNS =
-  'id, name, email, is_admin, role, membership_type, account_status, suspended_until, profile_image, username, phone, gender, dob, weight, weight_unit, height, height_unit, country, city, street_address, state, zip_code, member_number, ethnicity, created_at, updated_at';
+  'id, name, email, is_admin, role, membership_type, account_status, suspended_until, profile_image, username, phone, gender, dob, weight, weight_unit, height, height_unit, country, city, street_address, state, zip_code, member_number, ethnicity, created_at, updated_at, email_verified_at, verification_sent_at';
 
 // Columns shown on public athlete profiles (MemberProfilePage).
 const PUBLIC_USER_COLUMNS =
@@ -48,6 +50,7 @@ const serializeUser = (u, withToken = false) => {
     membershipType: u.membership_type || 'free_athlete',
     accountStatus: u.account_status || 'active',
     memberNumber: u.member_number || '',
+    emailVerified: !!u.email_verified_at,
   };
   if (withToken) out.token = generateToken(u.id);
   return out;
@@ -90,6 +93,8 @@ const authUser = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
+    const captcha = await captchaProblem(req);
+    if (captcha) return res.status(400).json({ message: captcha, code: 'captcha_failed' });
 
     const { data: user, error } = await supabase
       .from('users')
@@ -141,6 +146,8 @@ const registerUser = async (req, res) => {
     if (String(password).length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
+    const captcha = await captchaProblem(req);
+    if (captcha) return res.status(400).json({ message: captcha, code: 'captcha_failed' });
 
     const { data: userExists, error: existsError } = await supabase
       .from('users')
@@ -216,7 +223,9 @@ const registerUser = async (req, res) => {
       await rewards.recordReferralAtSignup({ newUserId: user.id, newUserEmail: email, code: req.body.referralCode, ip });
     }
 
-    return res.status(201).json(serializeUser(user, true));
+    // Email verification: the link goes to the address they typed (sending never blocks the sign-up)
+    const verificationEmail = await verification.sendVerification(user, { force: true });
+    return res.status(201).json({ ...serializeUser(user, true), verificationEmail });
   } catch (err) {
     console.error('Register error:', err);
     return res.status(500).json({ message: 'Registration failed. Please try again.' });
@@ -324,6 +333,8 @@ const updateUserProfile = async (req, res) => {
       if (emailTaken) {
         return res.status(400).json({ message: 'That email is already in use' });
       }
+      updates.email_verified_at = null; // the new address has to be verified
+      updates.verification_sent_at = null;
     }
 
     if (password) {
@@ -350,6 +361,7 @@ const updateUserProfile = async (req, res) => {
       return res.status(400).json({ message: 'Could not update profile' });
     }
 
+    if (updates.email_verified_at === null) await verification.sendVerification(updatedUser, { force: true });
     return res.json(serializeUser(updatedUser, true));
   } catch (err) {
     console.error('Update profile error:', err);
@@ -472,7 +484,43 @@ const getPublicUserProfile = async (req, res) => {
   }
 };
 
+// @desc    Confirm an email address from the link in the verification email
+// @route   POST /api/auth/verify-email { token }
+// @access  Public
+const verifyEmail = async (req, res) => {
+  try {
+    const r = await verification.readToken(req.body?.token || req.query?.token);
+    if (r.error) return res.status(400).json({ message: r.error });
+    if (!r.already) await supabase.from('users').update({ email_verified_at: new Date().toISOString() }).eq('id', r.userId).is('email_verified_at', null);
+    return res.json({ ok: true, email: r.email, already: !!r.already });
+  } catch (err) {
+    console.error('Verify email error:', err);
+    return res.status(500).json({ message: 'Could not verify your email right now. Please try again.' });
+  }
+};
+
+// @desc    Send the verification email again
+// @route   POST /api/auth/resend-verification
+// @access  Private
+const resendVerification = async (req, res) => {
+  try {
+    const { data: user } = await supabase.from('users').select('id, name, email, email_verified_at, verification_sent_at').eq('id', req.user.id).maybeSingle();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const result = await verification.sendVerification(user);
+    if (result === 'already') return res.json({ ok: true, already: true, message: 'Your email address is already verified.' });
+    if (result === 'wait') return res.status(429).json({ message: 'We just sent you an email. Please wait a minute before asking for another one.' });
+    if (result === 'off') return res.status(503).json({ message: 'Email is not available right now. Please try again later.' });
+    if (result !== 'sent') return res.status(502).json({ message: 'We could not send the email. Please try again in a moment.' });
+    return res.json({ ok: true, message: `We sent a new verification link to ${user.email}.` });
+  } catch (err) {
+    console.error('Resend verification error:', err);
+    return res.status(500).json({ message: 'Could not send the email. Please try again.' });
+  }
+};
+
 module.exports = {
+  verifyEmail,
+  resendVerification,
   authUser,
   registerUser,
   getUserProfile,

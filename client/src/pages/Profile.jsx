@@ -12,6 +12,7 @@ import Navbar from "../components/Navbar";
 import MessageComposer from "../components/MessageComposer";
 import Footer from "../components/Footer";
 import MyRewards from "../components/MyRewards";
+import VerifyEmailBanner from "../components/VerifyEmailBanner";
 import { useAuth } from "../context/AuthContext";
 import { apiCall, apiUpload, formatProductImage } from "../utils/api";
 import { downloadCertificatePdf, formatCertDate } from "../utils/certificatePdf";
@@ -506,6 +507,7 @@ const Profile = () => {
 
       {/* 2. Floating Profile Header Card */}
       <section className="container" style={{ position: "relative", zIndex: 10, marginTop: "-120px", paddingBottom: "20px" }}>
+        {isOwnProfile && <VerifyEmailBanner style={{ marginBottom: "20px" }} />}
         <div style={{
           display: "flex",
           alignItems: "flex-end",

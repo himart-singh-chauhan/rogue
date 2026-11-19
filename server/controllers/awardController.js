@@ -1,5 +1,5 @@
 // Achievement awards: custom awards made in Admin → Achievement Awards and given to members.
-// They are separate from World Record certificates: their own design, their own numbers (AWD-…).
+// They are separate from World Record certificates: their own design, their own numbers (AWR-…, AMPEX World Records).
 // Only published awards show on member profiles.
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
@@ -91,7 +91,7 @@ const listAssignments = async (req, res) => {
   res.json(data || []);
 };
 
-const newAwardNumber = () => `AWD-${new Date().getUTCFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+const newAwardNumber = () => `AWR-${new Date().getUTCFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
 // POST /api/admin/awards/:id/assign { userId, awardDate?, recipientName?, title?, description? }
 const assignAward = async (req, res) => {

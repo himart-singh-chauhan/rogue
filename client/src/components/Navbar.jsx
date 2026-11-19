@@ -25,7 +25,7 @@ const Navbar = () => {
     { label: "Records", to: "/explore-records" },
     { label: "Rankings", to: "/leaderboard" },
     { label: "Challenge", to: "/challenge" },
-    { label: "Submit", to: "/verify" },
+    { label: "Submit a Record", to: "/verify", highlight: true },
     { label: "Live Events", to: "/events" },
     { label: "Shop", to: "/shop" },
   ];
@@ -105,11 +105,13 @@ const Navbar = () => {
               to={l.to}
               className="nav-pill-item"
               style={{
-                color: isActive(l.to) ? "white" : (location.pathname === "/" ? "#111" : "white"),
-                fontWeight: isActive(l.to) ? "900" : "600",
+                color: isActive(l.to) || l.highlight ? (l.highlight && !isActive(l.to) ? "#FF6A00" : "white") : (location.pathname === "/" ? "#111" : "white"),
+                fontWeight: isActive(l.to) || l.highlight ? "900" : "600",
                 background: isActive(l.to) ? "#FF6A00" : "transparent",
+                border: l.highlight && !isActive(l.to) ? "1.5px solid #FF6A00" : "1.5px solid transparent",
                 borderRadius: "100px",
-                padding: "8px 20px"
+                padding: "8px 20px",
+                whiteSpace: "nowrap"
               }}
             >
               {l.label}
@@ -246,7 +248,7 @@ const Navbar = () => {
               to={l.to}
               onClick={() => setMobileOpen(false)}
               className="mobile-nav-link"
-              style={{ color: location.pathname === "/" ? "#111" : "white" }}
+              style={{ color: l.highlight ? "#FF6A00" : location.pathname === "/" ? "#111" : "white", fontWeight: l.highlight ? 900 : undefined }}
             >
               {l.label}
             </Link>

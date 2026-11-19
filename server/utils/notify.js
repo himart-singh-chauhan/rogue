@@ -24,4 +24,24 @@ const notifyMember = async ({ userId, senderId = null, subject, body }) => {
   if (error) console.warn('[Inbox] could not notify member:', error.message);
 };
 
-module.exports = { notifyMember, siteUrl };
+/**
+ * Tell the AMPEX admins about something they need to act on: a message in every admin's inbox and an email
+ * to the AMPEX address (ADMIN_NOTIFY_EMAIL, or the Gmail account the site sends from). Never throws.
+ */
+const notifyAdmins = async ({ subject, body, link, linkText = 'Open in admin' }) => {
+  try {
+    const { data: admins } = await supabase.from('users').select('id').eq('is_admin', true).neq('account_status', 'banned');
+    const text = link ? `${body}\n\n${linkText}: ${link}` : body;
+    await Promise.all((admins || []).map((a) => notifyMember({ userId: a.id, subject, body: text })));
+    const email = require('./email'); // loaded here: email.js itself needs siteUrl from this file
+    const to = String(process.env.ADMIN_NOTIFY_EMAIL || process.env.GMAIL_USER || '').trim();
+    if (to && email.emailEnabled()) {
+      const msg = email.buildEmail({ subject, body, buttonText: link ? linkText : undefined, buttonUrl: link || undefined, member: { name: 'AMPEX Admin' }, kind: 'account' });
+      await email.send({ to, subject: msg.subject, html: msg.html, text: msg.text });
+    }
+  } catch (e) {
+    console.warn('[Admin alert] could not notify admins:', e.message);
+  }
+};
+
+module.exports = { notifyMember, notifyAdmins, siteUrl };

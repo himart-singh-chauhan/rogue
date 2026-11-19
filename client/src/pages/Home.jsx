@@ -6,7 +6,7 @@ import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
 import StreamPlayer from "../components/StreamPlayer";
 import { embedUrlFor } from "../components/EvidencePreview";
-import { isRealEventId } from "../utils/ticketCart";
+import { isRealEventId, eventAccessOf } from "../utils/ticketCart";
 import { useAuth } from "../context/AuthContext";
 import { useCategories, categoryMeta } from "../utils/categoryMeta";
 import InfiniteSlider from "../components/InfiniteSlider";
@@ -285,6 +285,7 @@ const Home = () => {
   const [heroSetting, setHeroSetting] = useState(null);
   const [allEvents, setAllEvents] = useState([]);
   const [heroSound, setHeroSound] = useState(false);
+  const [heroHasPass, setHeroHasPass] = useState(false);
   useEffect(() => { apiCall("/settings/homepage-hero", "GET").then(setHeroSetting).catch(() => {}); }, []);
 
   // Live homepage data from admin controls
@@ -449,21 +450,42 @@ const Home = () => {
   const heroLink = heroIsVideo ? heroSetting.videoUrl : (heroEvent?.videoUrl || "");
   const heroEmbed = heroLink ? embedUrlFor(heroLink) : null;
   const heroFile = heroLink && !heroEmbed && /\.(mp4|webm|mov|m3u8)(\?|$)/i.test(heroLink) ? formatProductImage(heroLink) : null;
-  const heroLive = !heroIsVideo && !!heroEvent && !!heroEvent.isLive && !heroEvent.isPaid && isRealEventId(heroEvent.id);
+  // Same event status, pass availability and price as the Live Events page and the event page
+  const heroAccess = !heroIsVideo && heroEvent ? eventAccessOf(heroEvent, { hasPass: heroHasPass }) : null;
+  const heroLive = !heroIsVideo && !!heroEvent && heroAccess?.phase === "live" && heroAccess.action === "watch" && isRealEventId(heroEvent.id);
   const heroTitle = heroIsVideo ? (heroSetting.title || "") : (heroEvent?.title || "");
   const heroSubtitle = heroIsVideo ? (heroSetting.subtitle || "") : (heroEvent?.description || "");
   const heroPoster = heroIsVideo ? (heroSetting.posterUrl ? formatProductImage(heroSetting.posterUrl) : "") : (heroEvent?.imageUrl || heroEvent?.image || "");
-  const heroKind = heroIsVideo ? (KIND_LABEL[heroSetting.kind] || "FEATURED") : heroEvent?.isLive ? "LIVE NOW" : heroEvent ? "FEATURED EVENT" : "FEATURED";
+  const heroKind = heroIsVideo ? (KIND_LABEL[heroSetting.kind] || "FEATURED") : heroAccess?.phase === "live" ? "LIVE NOW" : heroAccess?.phase === "ended" ? "REPLAY" : heroEvent ? "UPCOMING EVENT" : "FEATURED";
   const heroCta = heroIsVideo
     ? (heroSetting.linkUrl ? { to: heroSetting.linkUrl, label: heroSetting.linkText || "Learn more", external: /^https?:/i.test(heroSetting.linkUrl) } : null)
-    : heroEvent ? { to: `/stream/${heroEvent.id || heroEvent._id}`, label: heroEvent.isLive ? "Watch live stream" : "View event" } : { to: "/verify", label: "Submit a record" };
+    : heroEvent ? { to: `/stream/${heroEvent.id || heroEvent._id}`, label: heroAccess.action === "pass" ? `${heroAccess.label} · ${heroAccess.priceText}` : heroAccess.label, muted: heroAccess.action === "none" } : { to: "/verify", label: "Submit a record" };
+  const heroEventId = !heroIsVideo && heroEvent && isRealEventId(heroEvent.id) && heroEvent.isPaid ? heroEvent.id : null;
+  useEffect(() => {
+    if (!heroEventId || !user?.token) { setHeroHasPass(false); return undefined; }
+    let cancelled = false;
+    apiCall(`/tickets/verify/${heroEventId}`, "GET", null, user.token)
+      .then((r) => { if (!cancelled) setHeroHasPass(!!r?.canWatch); })
+      .catch(() => { if (!cancelled) setHeroHasPass(false); });
+    return () => { cancelled = true; };
+  }, [heroEventId, user?.token]);
   // Sidebar: up to three live / upcoming streams
   const sidebarStreams = allEvents
     .filter((e) => isRealEventId(e.id) && !["completed", "past", "cancelled"].includes(String(e.status || "").toLowerCase()) && (e.isLive || new Date(e.date) > new Date(Date.now() - 6 * 3600e3)))
     .sort((x, y) => (Number(!!y.isLive) - Number(!!x.isLive)) || (new Date(x.date) - new Date(y.date)))
     .slice(0, 3)
     // events without a picture get a stock sports photo (a different one per card) instead of a black box
-    .map((e, i) => ({ eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : STATIC_FEATURED[(i + 3) % STATIC_FEATURED.length].img, badge: e.isLive ? "LIVE" : "UPCOMING" }));
+    .map((e, i) => { const a = eventAccessOf(e); return { eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : STATIC_FEATURED[(i + 3) % STATIC_FEATURED.length].img, badge: a.phase === "live" ? "LIVE" : "UPCOMING", price: !a.isPaid ? "FREE" : a.onSale ? `PASS ${a.priceText}` : "" }; });
+
+  // "Popular" search tags: the categories with the most verified records, so every tag shows records
+  const popularTags = (() => {
+    const flat = [];
+    const walk = (nodes) => (nodes || []).forEach((n) => { flat.push(n); walk(n.children); });
+    walk(categoryTree);
+    const withRecords = flat.filter((c) => Number(c.verifiedCount) > 0).sort((a, b) => Number(b.verifiedCount) - Number(a.verifiedCount));
+    const names = [...new Set(withRecords.map((c) => c.name))].slice(0, 4);
+    return (names.length ? names : ["Strength", "Endurance", "Talent", "Fitness"]).map((n) => `#${n}`);
+  })();
 
   const handleHomeSearch = (e) => {
     e.preventDefault();
@@ -687,6 +709,18 @@ const Home = () => {
                   <DecryptedText text="LIVE." animateOn="inViewHover" speed={75} maxIterations={14} />
                 </span>
               </h1>
+              <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                <Link to="/verify" style={{ textDecoration: "none" }}>
+                  <span className="home-submit-cta" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#FF6A00", color: "white", borderRadius: 100, padding: "11px 22px", fontSize: 14, fontWeight: 900, boxShadow: "0 10px 24px rgba(255,106,0,0.3)" }}>
+                    Submit a Record <ArrowRight style={{ width: 16, height: 16 }} />
+                  </span>
+                </Link>
+                <Link to="/challenge" style={{ textDecoration: "none" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", color: "#111", border: "1px solid rgba(0,0,0,0.25)", borderRadius: 100, padding: "10px 20px", fontSize: 14, fontWeight: 800 }}>
+                    Challenge a Record
+                  </span>
+                </Link>
+              </div>
             </div>
 
             {/* Middle: Video Frame — admin's choice (Admin → Homepage Control → Big video) */}
@@ -743,6 +777,11 @@ const Home = () => {
                 <div style={{ background: heroKind === "LIVE NOW" ? "#ef4444" : "#FF6A00", color: "white", padding: "5px 12px", borderRadius: "6px", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.08em" }}>
                   <Play size={10} fill="white" /> {heroKind}
                 </div>
+                {heroAccess && (
+                  <div style={{ background: "rgba(0,0,0,0.65)", color: "white", padding: "5px 10px", borderRadius: "6px", fontWeight: 800, fontSize: 11, letterSpacing: "0.06em" }}>
+                    {!heroAccess.isPaid ? "FREE TO WATCH" : heroHasPass ? "YOU HAVE A PASS" : heroAccess.onSale ? `SPECTATOR PASS ${heroAccess.priceText}` : "PASSES NOT ON SALE"}
+                  </div>
+                )}
               </div>
 
               {/* Title — small, bottom left, never across the video */}
@@ -753,7 +792,7 @@ const Home = () => {
                   {heroCta && (
                     heroCta.external
                       ? <a href={heroCta.to} target="_blank" rel="noopener noreferrer sponsored" style={{ textDecoration: "none" }}><span style={{ background: "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></a>
-                      : <Link to={heroCta.to} style={{ textDecoration: "none" }}><span style={{ background: "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></Link>
+                      : <Link to={heroCta.to} style={{ textDecoration: "none" }}><span style={{ background: heroCta.muted ? "rgba(255,255,255,0.18)" : "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></Link>
                   )}
                   <Link to="/explore" style={{ textDecoration: "none" }}><span style={{ background: "rgba(0,0,0,0.35)", color: "white", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px", padding: "9px 16px", fontSize: 13, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} /> Explore Records</span></Link>
                 </div>
@@ -817,7 +856,7 @@ const Home = () => {
                     <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", height: "96px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", cursor: "pointer", background: "#111" }}>
                       {video.img && <img loading="lazy" decoding="async" src={video.img} alt={video.title || "Live stream"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
                       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.1))" }} />
-                      {video.badge && <div style={{ position: "absolute", top: 6, left: 8, background: video.badge === "LIVE" ? "#ef4444" : "#FF6A00", color: "white", fontSize: 9, fontWeight: 900, padding: "2px 7px", borderRadius: 4 }}>{video.badge}</div>}
+                      {video.badge && <div style={{ position: "absolute", top: 6, left: 8, display: "flex", gap: 4 }}><span style={{ background: video.badge === "LIVE" ? "#ef4444" : "#FF6A00", color: "white", fontSize: 9, fontWeight: 900, padding: "2px 7px", borderRadius: 4 }}>{video.badge}</span>{video.price && <span style={{ background: "rgba(0,0,0,0.7)", color: "white", fontSize: 9, fontWeight: 900, padding: "2px 7px", borderRadius: 4 }}>{video.price}</span>}</div>}
                       <div style={{ position: "absolute", bottom: 6, left: 8, right: 40, color: "white", fontSize: 11, fontWeight: 800, lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{video.title}</div>
                       {/* small play button */}
                       <div style={{ position: "absolute", right: 8, bottom: 8, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1236,7 +1275,7 @@ const Home = () => {
               </form>
               <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ color: "#666", fontSize: 13 }}>Popular:</span>
-                {["#Endurance", "#Strength", "#Speed", "#Gaming"].map(tag => (
+                {popularTags.map(tag => (
                   <span
                     key={tag}
                     onClick={() => navigate(`/explore?q=${encodeURIComponent(tag.replace("#", ""))}`)}

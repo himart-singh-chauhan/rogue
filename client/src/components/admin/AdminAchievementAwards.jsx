@@ -12,7 +12,7 @@ import { downloadAwardPdf, awardFromRow as toDrawable } from "../../utils/awardP
 const BLANK = { title: "", description: "", icon: "🏆", background_url: "", design: "template", criteria: "manual", criteria_value: "", status: "draft", sort_order: 100 };
 const ICONS = ["🏆", "👑", "🥇", "🥈", "🥉", "⭐", "🎖️", "🏅", "📜", "💪", "🔥", "⚡", "🚀", "🎯", "🦁"];
 const today = () => new Date().toISOString().slice(0, 10);
-const sample = (a, extra = {}) => toDrawable(a, { recipientName: "Member Name", date: today(), awardNumber: "AWD-2026-SAMPLE", ...extra });
+const sample = (a, extra = {}) => toDrawable(a, { recipientName: "Member Name", date: today(), awardNumber: "AWR-2026-SAMPLE", ...extra });
 
 function AwardEditor({ initial, criteria, onClose, onSaved }) {
   const api = useAdminApi();
@@ -163,7 +163,7 @@ function AssignPanel({ award, onClose, onChanged }) {
           <Field label="Name printed on the award"><input style={ui.input} value={form.recipientName} onChange={(e) => setForm({ ...form, recipientName: e.target.value })} placeholder="Member's name" /></Field>
           <Field label="Award date"><input type="date" style={{ ...ui.input, colorScheme: "dark" }} value={form.awardDate} onChange={(e) => setForm({ ...form, awardDate: e.target.value })} /></Field>
         </div>
-        {member && <div style={{ maxWidth: 360 }}><AwardPreview award={toDrawable(award, { recipientName: form.recipientName || member.name, date: form.awardDate, awardNumber: "AWD-NEW" })} width={700} /></div>}
+        {member && <div style={{ maxWidth: 360 }}><AwardPreview award={toDrawable(award, { recipientName: form.recipientName || member.name, date: form.awardDate, awardNumber: "AWR-NEW" })} width={700} /></div>}
         <div><button type="button" style={ui.btn} disabled={busy || !member} onClick={give}><UserPlus size={15} /> {busy ? "Giving…" : "Give award"}</button></div>
       </div>
       <div style={{ color: "white", fontWeight: 900 }}>Members with this award</div>

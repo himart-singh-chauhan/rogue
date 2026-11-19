@@ -9,7 +9,7 @@ import { useAuth } from "../context/AuthContext";
 
 import { apiCall } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
-import { addTicketToCart, isRealEventId } from "../utils/ticketCart";
+import { addTicketToCart, isRealEventId, eventAccessOf } from "../utils/ticketCart";
 import StreamPlayer from "../components/StreamPlayer";
 import MuxStreamPanel from "../components/admin/MuxStreamPanel";
 import EventLiveControls from "../components/admin/EventLiveControls";
@@ -233,6 +233,8 @@ const StreamDetail = () => {
   const currentEvent = event || eventsData.find(e => e.id === id) || eventsData[0];
   const requiresTicket = event ? eventIsPaid : (currentEvent.isFreeStream === false);
   const isLocked = !loading && currentEvent && requiresTicket && !canWatch;
+  // Same status, pass availability and price as the homepage and the Live Events page
+  const access = event && isRealEventId(event.id || event._id || id) ? eventAccessOf(event, { hasPass: hasTicket || (canWatch && eventIsPaid) }) : null;
 
   const handleWatchClick = () => {
     if (isCurrentUserKicked) return;
@@ -463,9 +465,9 @@ const StreamDetail = () => {
                   </div>
 
                   <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", lineHeight: 1.6, marginBottom: "24px" }}>
-                    {isRealEventId(event?.id || event?._id || id)
+                    {access?.onSale
                       ? "Your pass is added to your cart. Pay at checkout and it is linked to your account, which unlocks this stream."
-                      : "Spectator passes for this event are not on sale yet."}
+                      : access?.phase === "ended" ? "This event has ended, so passes are no longer on sale." : "Spectator passes for this event are not on sale yet."}
                   </p>
                   <div style={{ display: "none" }}>
                     <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px" }}>Card Details</label>
@@ -666,7 +668,7 @@ const StreamDetail = () => {
                         </Link>
                       )}
                       <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{ background: "#FF6A00", border: "none", color: "white", padding: "14px 32px", borderRadius: "100px", fontWeight: "900", fontSize: "13px", cursor: "pointer", boxShadow: "0 10px 20px rgba(255,106,0,0.25)", transition: "transform 0.2s" }} onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"} onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                        PURCHASE TICKET
+                        {access?.onSale ? `GET A SPECTATOR PASS · ${access.priceText}` : "PASSES NOT ON SALE YET"}
                       </button>
                       <button
                         onClick={() => setShowRedeemModal(true)}
@@ -1003,7 +1005,7 @@ const StreamDetail = () => {
         </div>
 
         {/* PURCHASE TICKETS SECTION - Conditionally Rendered */}
-        {currentEvent.status !== "PAST" && (
+        {access && access.isPaid && access.phase !== "ended" && !(hasTicket || canWatch) && (
           <section style={{ margin: "0 auto 0", padding: "40px 5% 100px", maxWidth: "1400px" }}>
             <div style={{
               background: "linear-gradient(135deg, rgba(255,106,0,0.1) 0%, rgba(255,106,0,0.02) 100%)",
@@ -1026,18 +1028,18 @@ const StreamDetail = () => {
                   <span style={{ fontSize: "12px", fontWeight: "900", letterSpacing: "0.2em", textTransform: "uppercase" }}>FRONT-ROW EXPERIENCE</span>
                 </div>
                 <h2 style={{ fontSize: "56px", fontWeight: "950", textTransform: "uppercase", letterSpacing: "-0.03em", lineHeight: "1", marginBottom: "24px" }}>
-                  PURCHASE <br /> <span style={{ color: "#FF6A00" }}>TICKETS NOW</span>
+                  {access.onSale ? <>GET A <br /> <span style={{ color: "#FF6A00" }}>SPECTATOR PASS</span></> : <>PASSES <br /> <span style={{ color: "#FF6A00" }}>NOT ON SALE YET</span></>}
                 </h2>
                 <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "16px", maxWidth: "500px", lineHeight: "1.6", marginBottom: "24px" }}>
                   Want to witness history in person? Secure your exclusive spectator pass now to watch the live world record attempts from the absolute front row.
                 </p>
                 <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
                   <div style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#EF4444", padding: "6px 16px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", letterSpacing: "0.05em" }}>
-                    🎟️ SPECTATOR PASSES ON SALE
+                    {access.onSale ? "🎟️ SPECTATOR PASSES ON SALE" : "PASSES NOT ON SALE"}
                   </div>
-                  <div style={{ fontSize: "18px", fontWeight: "900", color: "white" }}>
-                    FROM <span style={{ color: "#FF6A00" }}>${ticketPrice.toFixed(2)}</span> / PASS
-                  </div>
+                  {access.onSale && <div style={{ fontSize: "18px", fontWeight: "900", color: "white" }}>
+                    <span style={{ color: "#FF6A00" }}>{access.priceText}</span> / PASS
+                  </div>}
                 </div>
               </div>
 
@@ -1058,7 +1060,7 @@ const StreamDetail = () => {
                   )}
                 </div>
 
-                <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{
+                {access.onSale && <button onClick={() => { if (!user) { window.location.href = '/login'; return; } setShowModal(true); }} style={{
                   background: "#FF6A00",
                   color: "white",
                   border: "none",
@@ -1074,8 +1076,8 @@ const StreamDetail = () => {
                   boxShadow: "0 20px 40px rgba(255, 106, 0, 0.3)",
                   transition: "transform 0.3s"
                 }} onMouseEnter={e => e.currentTarget.style.transform = "translateY(-5px)"} onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                  GET YOUR PASSES <ArrowRight size={18} />
-                </button>
+                  GET A SPECTATOR PASS <ArrowRight size={18} />
+                </button>}
               </div>
             </div>
           </section>

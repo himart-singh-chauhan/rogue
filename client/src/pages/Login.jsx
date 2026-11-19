@@ -1,13 +1,17 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { ArrowRight, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowRight, ChevronRight, Loader2, Eye, EyeOff } from "lucide-react";
 import Navbar from "../components/Navbar";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Captcha, { captchaOn } from "../components/Captcha";
 import { useAuth } from "../context/AuthContext";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const captchaRef = useRef(null);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -16,12 +20,17 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (captchaOn && !captchaToken) {
+      setError("Please wait a moment while we run a quick security check, then press Enter Arena again.");
+      return;
+    }
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, captchaToken);
       navigate("/profile");
     } catch (err) {
       setError(err.message);
+      captchaRef.current?.reset(); // each security check works once
     } finally {
       setLoading(false);
     }
@@ -134,9 +143,10 @@ const Login = () => {
                   }}
                 />
               </div>
-              <div>
+              <div style={{ position: "relative" }}>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   placeholder="PASSWORD"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -151,10 +161,17 @@ const Login = () => {
                     fontSize: "12px",
                     fontWeight: "700",
                     outline: "none",
-                    letterSpacing: "0.05em"
+                    letterSpacing: "0.05em",
+                    paddingRight: "96px"
                   }}
                 />
+                <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}
+                  style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 900, letterSpacing: "0.05em", padding: 6 }}>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />} {showPassword ? "HIDE" : "SHOW"}
+                </button>
               </div>
+
+              <Captcha ref={captchaRef} onToken={setCaptchaToken} />
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 10px" }}>
                 <Link to="/contact" style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.05em" }}>
