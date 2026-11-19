@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Zap, Globe, Calendar, MapPin, Loader2, Eye, EyeOff } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useRef, useState } from "react";
-import Captcha, { captchaOn } from "../components/Captcha";
+import Captcha, { captchaOn, captchaMessage } from "../components/Captcha";
 import { useAuth } from "../context/AuthContext";
 import { ChevronDown } from "lucide-react";
 import {
@@ -40,11 +40,14 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (captchaOn && !captchaToken) {
-      setError("Please wait a moment while we run a quick security check, then try again.");
+    setLoading(true);
+    // wait for the security check to finish rather than asking the visitor to press twice
+    const token = captchaOn ? (captchaToken || await captchaRef.current?.getToken(15000)) : "";
+    if (captchaOn && !token) {
+      setLoading(false);
+      setError(captchaMessage(captchaRef.current?.status(), "press the button again"));
       return;
     }
-    setLoading(true);
     try {
       const heightValFinal = heightUnit === "cm" ? heightVal : `${heightFt}'${heightIn}"`;
       await signup({
@@ -61,7 +64,7 @@ const Signup = () => {
         heightUnit,
         country,
         city,
-        captchaToken: captchaToken || undefined
+        captchaToken: token || undefined
       });
       navigate("/profile");
     } catch (err) {

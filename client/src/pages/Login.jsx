@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ArrowRight, ChevronRight, Loader2, Eye, EyeOff } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useRef, useState } from "react";
-import Captcha, { captchaOn } from "../components/Captcha";
+import Captcha, { captchaOn, captchaMessage } from "../components/Captcha";
 import { useAuth } from "../context/AuthContext";
 
 const Login = () => {
@@ -20,13 +20,16 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (captchaOn && !captchaToken) {
-      setError("Please wait a moment while we run a quick security check, then press Enter Arena again.");
+    setLoading(true);
+    // wait for the security check to finish rather than asking the visitor to press twice
+    const token = captchaOn ? (captchaToken || await captchaRef.current?.getToken(15000)) : "";
+    if (captchaOn && !token) {
+      setLoading(false);
+      setError(captchaMessage(captchaRef.current?.status(), "press Enter Arena again"));
       return;
     }
-    setLoading(true);
     try {
-      await login(email, password, captchaToken);
+      await login(email, password, token);
       navigate("/profile");
     } catch (err) {
       setError(err.message);
