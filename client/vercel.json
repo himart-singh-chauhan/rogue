@@ -4,6 +4,6 @@
     { "source": "/explore", "destination": "/explore-records", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/" }
   ]
 }
