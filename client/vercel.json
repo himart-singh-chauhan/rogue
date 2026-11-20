@@ -1,4 +1,8 @@
 {
+  "cleanUrls": true,
+  "redirects": [
+    { "source": "/explore", "destination": "/explore-records", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

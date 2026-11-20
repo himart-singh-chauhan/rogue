@@ -112,11 +112,11 @@ const FAQ = () => {
              </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <Link to="/explore" style={{ textDecoration: "none" }}>
+            <Link to="/explore-records" style={{ textDecoration: "none" }}>
               <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: "20px", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: "10px", fontWeight: "900", color: "#FF6A00", marginBottom: "4px" }}>EXPLORE NOW</div>
-                  <div style={{ fontSize: "20px", fontWeight: "950" }}>EXPLORE ALL RECORDS</div>
+                  <div style={{ fontSize: "20px", fontWeight: "950" }}>EXPLORE RECORDS</div>
                 </div>
                 <ArrowRight size={24} />
               </div>

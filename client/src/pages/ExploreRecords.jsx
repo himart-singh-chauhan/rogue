@@ -91,7 +91,7 @@ export default function ExploreRecords() {
     const params = new URLSearchParams(location.search);
     if (cat === 'All') params.delete('category');
     else params.set('category', cat);
-    navigate(`/explore?${params.toString()}`);
+    navigate(`/explore-records?${params.toString()}`);
   };
 
   // Several requests can be in flight when someone taps categories quickly, and they can come back in any
@@ -126,7 +126,7 @@ export default function ExploreRecords() {
     const v = String(value || '').trim();
     if (v) params.set('q', v); else { params.delete('q'); params.delete('search'); }
     const qs = params.toString();
-    navigate(`/explore${qs ? `?${qs}` : ''}`, { replace: true });
+    navigate(`/explore-records${qs ? `?${qs}` : ''}`, { replace: true });
   };
   const handleSearch = (e) => {
     e.preventDefault();

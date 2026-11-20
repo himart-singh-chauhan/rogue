@@ -127,7 +127,7 @@ const CertificateVerify = () => {
           )}
 
           <p style={{ textAlign: "center", marginTop: "28px", fontSize: "13px" }}>
-            <Link to="/explore-records" style={{ color: "#FF6A00", fontWeight: 800, textDecoration: "none" }}>Explore verified records →</Link>
+            <Link to="/explore-records" style={{ color: "#FF6A00", fontWeight: 800, textDecoration: "none" }}>Explore Records →</Link>
           </p>
         </main>
         <Footer />

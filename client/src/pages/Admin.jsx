@@ -15,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import { apiCall, formatProductImage, API_URL, uploadDirect } from "../utils/api";
 import AdminRankingPanel from "../components/AdminRankingPanel";
 import AdminCategoryManager from "../components/admin/AdminCategoryManager";
+import AdminProductOrder from "../components/admin/AdminProductOrder";
 import AdminDivisionPanels from "../components/admin/AdminDivisionPanels";
 import AdminPlansManager from "../components/admin/AdminPlansManager";
 import AdminSubscribers from "../components/admin/AdminSubscribers";
@@ -113,6 +114,7 @@ const Admin = () => {
   const [events, setEvents] = useState([]);
   const [eventsFilter, setEventsFilter] = useState("ALL");
   const [products, setProducts] = useState([]);
+  const [arrangeProducts, setArrangeProducts] = useState(false); // Products → Arrange shop order
   const [orders, setOrders] = useState([]);
   const [selectedCustomerEmail, setSelectedCustomerEmail] = useState("");
   const [customerHistory, setCustomerHistory] = useState(null);
@@ -3350,13 +3352,25 @@ const Admin = () => {
                     MANAGE THE AMPEX OFFICIAL MERCHANDISE AND STOCK
                   </p>
                 </div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setArrangeProducts((v) => !v)}
+                  style={{ background: arrangeProducts ? "rgba(255,85,0,0.15)" : "rgba(255,255,255,0.06)", color: "white", border: "1px solid rgba(255,85,0,0.4)", padding: "12px 20px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  ↕ ARRANGE SHOP ORDER
+                </button>
                 <button
                   onClick={() => openModal("add")}
                   style={{ background: "linear-gradient(135deg, #FF5500 0%, #ff8800 100%)", color: "white", border: "none", padding: "12px 24px", borderRadius: "100px", fontSize: "12px", fontWeight: "900", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
                 >
                   <Plus size={16} /> ADD PRODUCT
                 </button>
+                </div>
               </div>
+
+              {arrangeProducts && (
+                <AdminProductOrder products={products} onSaved={(list) => setProducts(list)} onClose={() => setArrangeProducts(false)} />
+              )}
 
               {/* Products Filter bar */}
               <div style={{ background: "rgba(13,13,16,0.5)", border: "1px solid rgba(255,255,255,0.03)", borderRadius: "20px", padding: "16px 24px", marginBottom: "24px", display: "flex", alignItems: "center" }}>

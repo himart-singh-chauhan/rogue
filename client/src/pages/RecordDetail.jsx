@@ -92,7 +92,7 @@ const RecordDetail = () => {
       <PageTransition>
         <div style={{ background: "#0A0A0A", color: "white", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "24px" }}>
           <div style={{ fontSize: "24px", fontWeight: "900", color: "#EF4444", letterSpacing: "2px" }}>RECORD NOT FOUND</div>
-          <Link to="/explore" style={{ color: "#FF6A00", textDecoration: "none", fontWeight: "800", fontSize: "14px" }}>RETURN TO EXPLORE</Link>
+          <Link to="/explore-records" style={{ color: "#FF6A00", textDecoration: "none", fontWeight: "800", fontSize: "14px" }}>BACK TO EXPLORE RECORDS</Link>
         </div>
       </PageTransition>
     );

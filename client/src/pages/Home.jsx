@@ -490,7 +490,7 @@ const Home = () => {
   const handleHomeSearch = (e) => {
     e.preventDefault();
     if (homeSearchQuery.trim()) {
-      navigate(`/explore?q=${encodeURIComponent(homeSearchQuery.trim())}`);
+      navigate(`/explore-records?q=${encodeURIComponent(homeSearchQuery.trim())}`);
     }
   };
 
@@ -794,7 +794,7 @@ const Home = () => {
                       ? <a href={heroCta.to} target="_blank" rel="noopener noreferrer sponsored" style={{ textDecoration: "none" }}><span style={{ background: "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></a>
                       : <Link to={heroCta.to} style={{ textDecoration: "none" }}><span style={{ background: heroCta.muted ? "rgba(255,255,255,0.18)" : "#FF6A00", color: "white", borderRadius: "10px", padding: "10px 18px", fontSize: 13, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}><Play size={13} fill="white" /> {heroCta.label}</span></Link>
                   )}
-                  <Link to="/explore" style={{ textDecoration: "none" }}><span style={{ background: "rgba(0,0,0,0.35)", color: "white", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px", padding: "9px 16px", fontSize: 13, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} /> Explore Records</span></Link>
+                  <Link to="/explore-records" style={{ textDecoration: "none" }}><span style={{ background: "rgba(0,0,0,0.35)", color: "white", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "10px", padding: "9px 16px", fontSize: 13, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} /> Explore Records</span></Link>
                 </div>
               </div>
 
@@ -966,7 +966,7 @@ const Home = () => {
                 <ScrollReveal>Check out the latest records broken around the world.</ScrollReveal>
               </p>
             </div>
-            <Link to="/explore" style={{ color: '#FF6A00', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: '15px' }}>
+            <Link to="/explore-records" style={{ color: '#FF6A00', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: '15px' }}>
               View All Records <ChevronRight style={{ width: 16, height: 16 }} />
             </Link>
           </div>
@@ -997,7 +997,7 @@ const Home = () => {
                 </h2>
                 <p className="section-subtitle" style={{ marginTop: 8, color: "#555", fontSize: "16px" }}>Records that were broken by a winning challenge. Open one to watch the new record that beat it.</p>
               </div>
-              <Link to="/explore" onClick={() => { try { sessionStorage.setItem("explore_tab", "beaten"); } catch { /* ignore */ } }} style={{ color: "#FF6A00", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, fontSize: "15px" }}>
+              <Link to="/explore-records" onClick={() => { try { sessionStorage.setItem("explore_tab", "beaten"); } catch { /* ignore */ } }} style={{ color: "#FF6A00", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4, fontSize: "15px" }}>
                 View all <ChevronRight style={{ width: 16, height: 16 }} />
               </Link>
             </div>
@@ -1065,7 +1065,7 @@ const Home = () => {
                     {cat.subs.map((sub) => (
                       <span
                         key={sub}
-                        onClick={(e) => { e.stopPropagation(); navigate(`/explore?category=${encodeURIComponent(sub)}`); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/explore-records?category=${encodeURIComponent(sub)}`); }}
                         style={{ fontSize: "11px", fontWeight: 700, color: "#FF6A00", border: "1px solid rgba(255,106,0,0.35)", borderRadius: "100px", padding: "3px 10px", cursor: "pointer" }}
                       >
                         {sub}
@@ -1278,7 +1278,7 @@ const Home = () => {
                 {popularTags.map(tag => (
                   <span
                     key={tag}
-                    onClick={() => navigate(`/explore?q=${encodeURIComponent(tag.replace("#", ""))}`)}
+                    onClick={() => navigate(`/explore-records?q=${encodeURIComponent(tag.replace("#", ""))}`)}
                     style={{ color: "#aaa", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
                     onMouseEnter={(e) => e.currentTarget.style.color = "#FF6A00"}
                     onMouseLeave={(e) => e.currentTarget.style.color = "#aaa"}

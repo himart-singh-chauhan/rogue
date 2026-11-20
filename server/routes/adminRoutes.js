@@ -101,6 +101,7 @@ router.delete('/events/:id', deleteEventByAdmin);
 // 🛍️ Shop Catalog Operations
 router.get('/products', getAllProductsByAdmin);
 router.post('/products', createProductByAdmin);
+router.put('/products/order', require('../controllers/adminController').reorderProductsByAdmin); // before /products/:id
 router.put('/products/:id', updateProductByAdmin);
 router.delete('/products/:id', deleteProductByAdmin);
 router.post('/products/:id/image', productImageUpload.single('productImage'), uploadProductImage);

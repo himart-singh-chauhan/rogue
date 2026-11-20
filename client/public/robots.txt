@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /profile$
+Disallow: /submission-checkout
+Disallow: /unsubscribe
+Disallow: /verify-email
+
+Sitemap: https://www.ampexworldrecords.com/sitemap.xml

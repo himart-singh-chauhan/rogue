@@ -8,9 +8,11 @@ const { notifyMember } = require('../utils/notify');
 // @route   GET /api/shop
 // @access  Public
 const getProducts = async (req, res) => {
+  // The order the admin set in Admin → Products → Arrange shop order (new products go at the end)
   const { data: products, error } = await supabase
     .from('products')
     .select('*')
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false });
 
   if (error) {

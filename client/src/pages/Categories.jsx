@@ -21,7 +21,7 @@ const Categories = () => {
       return {
         name: child.name,
         categoryName: child.name,
-        href: `/explore?category=${encodeURIComponent(child.name)}`,
+        href: `/explore-records?category=${encodeURIComponent(child.name)}`,
         desc: child.description || childMeta.desc,
         items: childMeta.subs.flatMap((sub) => sub.items).slice(0, 6),
       };
@@ -200,7 +200,7 @@ const Categories = () => {
                         }}>
                           <h4 style={{ fontSize: "16px", fontWeight: "900", color: "white", textTransform: "uppercase", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
                             <Link
-                              to={sub.href || `/explore?category=${encodeURIComponent(currentCat.name)}&q=${encodeURIComponent(sub.name)}`}
+                              to={sub.href || `/explore-records?category=${encodeURIComponent(currentCat.name)}&q=${encodeURIComponent(sub.name)}`}
                               style={{
                                 textDecoration: "none",
                                 color: "white",
@@ -223,7 +223,7 @@ const Categories = () => {
                             {sub.items.map((item, iIdx) => {
                               return (
                                 <Link
-                                  to={`/explore?category=${encodeURIComponent(sub.categoryName || currentCat.name)}&q=${encodeURIComponent(item)}`} 
+                                  to={`/explore-records?category=${encodeURIComponent(sub.categoryName || currentCat.name)}&q=${encodeURIComponent(item)}`} 
                                   key={iIdx}
                                   style={{ textDecoration: "none" }}
                                 >

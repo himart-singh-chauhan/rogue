@@ -1,5 +1,6 @@
-import React, { useState, useCallback, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react'
+import { titleFor, DEFAULT_TITLE } from './seoPages'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ReactLenis } from 'lenis/react'
 import Home from './pages/Home'
 import LoadingScreen from './components/LoadingScreen'
@@ -53,6 +54,25 @@ const AdminGuide = lazy(() => import('./pages/AdminGuide'))
 const CertificateVerify = lazy(() => import('./pages/CertificateVerify'))
 const SubmissionCheckout = lazy(() => import('./pages/SubmissionCheckout'))
 
+// Old /explore links (bookmarks, emails, search results) open Explore Records with the same search
+function ExploreRedirect() {
+  const { search, hash } = useLocation()
+  return <Navigate to={{ pathname: '/explore-records', search, hash }} replace />
+}
+
+// Browser tab title for the page being viewed (same titles search engines get, see seoPages.js).
+// The homepage uses the title from Admin → System Settings → Global SEO when one is set.
+let adminSeoTitle = ''
+function RouteTitle() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+    const title = path === '/' && adminSeoTitle ? adminSeoTitle : titleFor(path)
+    document.title = title || DEFAULT_TITLE
+  }, [pathname])
+  return null
+}
+
 // Site title / description from Admin → System Settings → Global SEO
 const applySeo = () => {
   const base = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL
@@ -60,7 +80,7 @@ const applySeo = () => {
     .then((r) => (r.ok ? r.json() : null))
     .then((s) => {
       if (!s) return
-      if (s.seoTitle) document.title = s.seoTitle
+      if (s.seoTitle) { adminSeoTitle = s.seoTitle; if (window.location.pathname === '/') document.title = s.seoTitle }
       if (s.seoDescription) document.querySelector('meta[name="description"]')?.setAttribute('content', s.seoDescription)
     })
     .catch(() => {})
@@ -87,6 +107,7 @@ function App() {
       {loading && <LoadingScreen onFinish={handleFinish} />}
       <ReactLenis root>
         <BrowserRouter>
+          <RouteTitle />
           <ScrollToTop />
           <FloatingBack />
           <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000' }} />}>
@@ -108,7 +129,7 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/shop" element={<Shop />} />
-            <Route path="/explore" element={<ExploreRecords />} />
+            <Route path="/explore" element={<ExploreRedirect />} />
             <Route path="/challenge" element={<Challenges />} />
             <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
             <Route path="/challenge-verify" element={<ProtectedRoute><ChallengeVerify /></ProtectedRoute>} />

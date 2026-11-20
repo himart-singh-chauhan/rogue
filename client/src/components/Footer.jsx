@@ -50,7 +50,7 @@ const Footer = () => {
                     let path = "#";
                     if (l === "About Us") path = "/about";
                     if (l === "Contact Us") path = "/contact";
-                    if (l === "Explore Records") path = "/explore";
+                    if (l === "Explore Records") path = "/explore-records";
                     if (l === "Submit a Record") path = "/verify";
                     if (l === "Verification Process") path = "/process";
                     if (l === "Challenge a Record") path = "/challenge";

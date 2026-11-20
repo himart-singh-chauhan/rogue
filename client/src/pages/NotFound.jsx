@@ -12,7 +12,7 @@ export default function NotFound() {
         <p style={{ color: "#aaa", lineHeight: 1.6, margin: "0 0 28px" }}>This link doesn't go to a page on Ampex World Records. It may be mistyped or out of date.</p>
         <div style={{ display: "flex", gap: 18, justifyContent: "center", flexWrap: "wrap" }}>
           <Link to="/" style={{ color: "#FF6A00", fontWeight: 800 }}>Home</Link>
-          <Link to="/explore" style={{ color: "#FF6A00", fontWeight: 800 }}>Records</Link>
+          <Link to="/explore-records" style={{ color: "#FF6A00", fontWeight: 800 }}>Explore Records</Link>
           <Link to="/events" style={{ color: "#FF6A00", fontWeight: 800 }}>Live Events</Link>
           <Link to="/shop" style={{ color: "#FF6A00", fontWeight: 800 }}>Shop</Link>
         </div>

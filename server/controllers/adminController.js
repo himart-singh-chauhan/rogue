@@ -321,6 +321,7 @@ const getAllProductsByAdmin = async (req, res) => {
     const { data: products, error } = await supabase
       .from('products')
       .select('*')
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -347,16 +348,40 @@ const cleanColors = (raw) => {
 const needsApproval = (category, flag) =>
   APPROVAL_CATEGORIES.includes(String(category || '').trim().toLowerCase()) || flag === true || flag === 'true';
 
+// @desc    Set the order products appear in the shop
+// @route   PUT /api/admin/products/order { ids: [productId, …] } (first id = first in the shop)
+// @access  Private/Admin
+const reorderProductsByAdmin = async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+  const isId = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  if (!ids.length || ids.length > 1000 || !ids.every(isId) || new Set(ids).size !== ids.length) {
+    return res.status(400).json({ message: 'Send the products in the order you want them.' });
+  }
+  try {
+    const results = await Promise.all(ids.map((id, i) => supabase.from('products').update({ sort_order: (i + 1) * 10 }).eq('id', id)));
+    const failed = results.find((r) => r.error);
+    if (failed) throw failed.error;
+    await supabase.from('audit_logs').insert({ actor_id: req.user.id, action_type: 'reorder_products', metadata: { count: ids.length } });
+    const { data: products } = await supabase.from('products').select('*').order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
+    res.json({ message: 'Shop order saved.', products: products || [] });
+  } catch (error) {
+    res.status(500).json({ message: 'Could not save the shop order.', error: error.message });
+  }
+};
+
 // @desc    Create a shop product
 // @route   POST /api/admin/products
 // @access  Private/Admin
 const createProductByAdmin = async (req, res) => {
   const { name, description, price, imageUrl, category, stockCount, sizes, imageUrls, requiresAuthorization } = req.body;
   try {
+    // a new product goes at the end of the shop; the admin can move it in Arrange shop order
+    const { data: last } = await supabase.from('products').select('sort_order').not('sort_order', 'is', null).order('sort_order', { ascending: false }).limit(1).maybeSingle();
     const { data: createdProduct, error } = await supabase
       .from('products')
       .insert([
         {
+          sort_order: (Number(last?.sort_order) || 0) + 10,
           name,
           description: description || '',
           price: parseFloat(price) || 0.00,
@@ -1419,6 +1444,7 @@ const removeRecordFromHomepage = async (req, res) => {
 };
 
 module.exports = {
+  reorderProductsByAdmin,
   // Users
   getAllUsers,
   updateUserByAdmin,
