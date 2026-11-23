@@ -65,10 +65,12 @@ const updateStreamSettings = async (req, res) => {
   const patch = {};
   if (typeof req.body?.chatEnabled === 'boolean') patch.chat_enabled = req.body.chatEnabled;
   if (typeof req.body?.replayEnabled === 'boolean') patch.replay_enabled = req.body.replayEnabled;
+  // a finished event is listed in the public Past events only after an admin approves it
+  if (typeof req.body?.replayApproved === 'boolean') patch.replay_approved = req.body.replayApproved;
   if (!Object.keys(patch).length) return res.status(400).json({ message: 'Nothing to change' });
-  const { data, error } = await supabase.from('events').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', event.id).select('id, chat_enabled, replay_enabled').single();
+  const { data, error } = await supabase.from('events').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', event.id).select('id, chat_enabled, replay_enabled, replay_approved').single();
   if (error) return res.status(500).json({ message: 'Could not save', error: error.message });
-  res.json({ chatEnabled: data.chat_enabled, replayEnabled: data.replay_enabled });
+  res.json({ chatEnabled: data.chat_enabled, replayEnabled: data.replay_enabled, replayApproved: data.replay_approved === true });
 };
 
 // ---------------- live chat ----------------

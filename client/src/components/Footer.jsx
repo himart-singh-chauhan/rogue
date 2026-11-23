@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
+import SocialIcons from "./SocialIcons";
 import SponsorBanner from "./SponsorBanner";
 
 const Footer = () => {
@@ -22,24 +23,15 @@ const Footer = () => {
               Structured divisions ensure fairness, increase participation, and scale record categories globally.
             </p>
             <div style={{ display: "flex", gap: "10px" }}>
-              {/* AMPEX social accounts: a button only shows once its link is filled in (the old Rogue accounts are removed) */}
-              {[
-                { name: "X", url: "" },
-                { name: "IG", url: "" },
-                { name: "YT", url: "" },
-                { name: "FB", url: "" }
-              ].filter((s) => s.url).map(s => (
-                <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
-                  <div className="social-btn">{s.name}</div>
-                </a>
-              ))}
+              {/* AMPEX social accounts: Admin → System → Company & social links (an icon shows once its link is filled in) */}
+              <SocialIcons size={18} />
             </div>
           </div>
 
           {/* Links */}
           <div className="footer-links-grid">
             {[
-              { t: "PLATFORM", ls: ["Explore Records", "Submit a Record", "Challenge a Record", "Leaderboard"] },
+              { t: "PLATFORM", ls: ["Explore Records", "Try These Records", "Submit a Record", "Challenge a Record", "Leaderboard", "Membership & Pricing"] },
               { t: "INFO", ls: ["About Us", "Contact Us", "Verification Process", "Support / FAQs", "Appeal a Decision"] },
               { t: "LEGAL", ls: ["Terms of Service", "Privacy Policy", "Cookie Policy", "Adjudication Rules"] },
             ].map(col => (
@@ -61,6 +53,8 @@ const Footer = () => {
                     if (l === "Terms of Service") path = "/terms";
                     if (l === "Cookie Policy") path = "/cookies";
                     if (l === "Adjudication Rules") path = "/rules";
+                    if (l === "Membership & Pricing") path = "/elite";
+                    if (l === "Try These Records") path = "/try-these-records";
                     
                     return (
                       <li key={l}>

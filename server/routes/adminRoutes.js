@@ -221,6 +221,17 @@ router.post('/emails/:id/retry', emails.retryFailed);
 
 // Homepage big video
 router.put('/homepage-hero', require('../controllers/heroController').saveHero);
+router.put('/company-profile', require('../controllers/companyController').saveCompany);
+// Try These Records
+{
+  const open = require('../controllers/openRecordController');
+  router.post('/open-records', open.create);
+  router.put('/open-records/order', open.reorder); // before /open-records/:id
+  router.put('/open-records-rules', open.saveRules);
+  router.put('/open-records/:id', open.update);
+  router.get('/open-records/:id/attempts', open.attempts);
+  router.put('/open-records/:id/holder', open.setHolder);
+}
 
 // Submission packs and members' extra submissions
 const packs = require('../controllers/submissionPackController');
@@ -246,6 +257,7 @@ router.delete('/member-awards/:id', awards.removeAssignment);
 const rewards = require('../controllers/rewardsController');
 router.get('/rewards/settings', rewards.getSettings);
 router.put('/rewards/settings', rewards.updateSettings);
+router.put('/rewards/product-points', rewards.updateProductPoints);
 router.get('/rewards/members', rewards.listMembers);
 router.post('/rewards/adjust', rewards.adjust);
 router.get('/rewards/transactions', rewards.listTransactions);

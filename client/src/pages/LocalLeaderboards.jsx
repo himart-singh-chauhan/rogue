@@ -17,6 +17,7 @@ import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
+import SponsorBanner from "../components/SponsorBanner";
 import ScrollReveal from "../components/ScrollReveal";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -410,6 +411,8 @@ const LocalLeaderboards = () => {
             </div>
           </div>
         </section>
+
+        <SponsorBanner placements={["rankings"]} />
 
         <Footer />
       </div>

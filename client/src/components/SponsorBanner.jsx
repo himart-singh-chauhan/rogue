@@ -82,11 +82,24 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
 
   useEffect(() => {
     let cancelled = false;
-    apiCall(`/sponsors?placement=${encodeURIComponent(key)}`, "GET")
-      .then((data) => {
-        if (!cancelled) setSponsors(Array.isArray(data) ? data.filter((s) => s.banner_url || s.logo_url || s.video_url) : []);
-      })
-      .catch(() => {});
+    // Admin preview (Admin → Sponsorships → Preview): show this sponsor first, even if it isn't live yet
+    let previewId = "";
+    let token = "";
+    try {
+      previewId = new URLSearchParams(window.location.search).get("sponsorPreview") || "";
+      const u = JSON.parse(localStorage.getItem("userInfo") || "null");
+      token = u?.isAdmin ? u.token : "";
+    } catch { /* ignore */ }
+    const preview = previewId && token
+      ? apiCall(`/sponsors/preview/${encodeURIComponent(previewId)}`, "GET", null, token).catch(() => null)
+      : Promise.resolve(null);
+    Promise.all([apiCall(`/sponsors?placement=${encodeURIComponent(key)}`, "GET").catch(() => []), preview])
+      .then(([data, p]) => {
+        if (cancelled) return;
+        const live = Array.isArray(data) ? data.filter((s) => s.banner_url || s.logo_url || s.video_url) : [];
+        const mine = p && placements.includes(p.placement) ? [{ ...p, _preview: true }] : [];
+        setSponsors([...mine, ...live.filter((s) => !mine.some((m) => m.id === s.id))]);
+      });
     return () => {
       cancelled = true;
     };
@@ -109,7 +122,7 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
   const visible = variant === "compact" ? sponsors : sponsors.slice(index, index + 1);
   useEffect(() => {
     visible.forEach((s) => {
-      if (!tracked.has(s.id)) {
+      if (!s._preview && !tracked.has(s.id)) { // previews are not counted as views
         tracked.add(s.id);
         track(s.id, "view");
       }
@@ -179,7 +192,7 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
       <section style={{ padding: "32px 0", ...style }}>
         <div className="container">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1.5px", color: "#888", textTransform: "uppercase" }}>Sponsored{s.company_name ? ` · ${s.company_name}` : ""}</span>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1.5px", color: "#888", textTransform: "uppercase" }}>Sponsored{s.company_name ? ` · ${s.company_name}` : ""}{s._preview && <span style={{ color: "#F59E0B", marginLeft: 8 }}>· PREVIEW (only admins see this)</span>}</span>
             {href && <a {...linkProps(s)} style={{ fontSize: 12, fontWeight: 900, color: "#FF5500", textDecoration: "none" }}>Visit {s.company_name || "sponsor"} →</a>}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", borderRadius: 16, overflow: "hidden", background: "#000", boxShadow: "0 10px 30px rgba(0,0,0,0.15)" }}>
@@ -199,7 +212,7 @@ const SponsorBanner = ({ placements = [], variant = "banner", style }) => {
   return (
     <section style={{ padding: "32px 0", ...style }}>
       <div className="container">
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1.5px", color: "#888", textTransform: "uppercase", marginBottom: 10 }}>Sponsored</div>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1.5px", color: "#888", textTransform: "uppercase", marginBottom: 10 }}>Sponsored{s._preview && <span style={{ color: "#F59E0B", marginLeft: 8 }}>· PREVIEW (only admins see this)</span>}</div>
         <Tag
           {...linkProps(s)}
           style={{ display: "block", borderRadius: 16, overflow: "hidden", background: "#111", boxShadow: "0 10px 30px rgba(0,0,0,0.15)", textDecoration: "none" }}

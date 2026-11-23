@@ -4,6 +4,8 @@ import { Play, Download, Share2, Heart, Eye, Trophy, User, Calendar, MapPin, Awa
 import { apiCall, formatProductImage } from '../utils/api';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
+import RecordHistory from '../components/RecordHistory';
+import SponsorBanner from '../components/SponsorBanner';
 
 export default function RecordDetailPage() {
   const { recordId } = useParams();
@@ -627,6 +629,10 @@ export default function RecordDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Record history: current and previous holders, progression, attempts */}
+        <RecordHistory recordId={record.id} />
+        <SponsorBanner placements={["record_page"]} style={{ padding: "0 0 40px" }} />
       </div>
     </div>
   );

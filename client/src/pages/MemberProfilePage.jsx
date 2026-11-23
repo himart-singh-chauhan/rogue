@@ -8,6 +8,7 @@ import MessageComposer from '../components/MessageComposer';
 import AwardPreview from '../components/AwardPreview';
 import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
+import SponsorBanner from '../components/SponsorBanner';
 
 export default function MemberProfilePage() {
   const { username } = useParams();
@@ -732,6 +733,7 @@ export default function MemberProfilePage() {
       {composeOpen && profile && (
         <MessageComposer to={{ id: profile.id, name: profile.display_name }} onClose={() => setComposeOpen(false)} />
       )}
+      <SponsorBanner placements={["profiles"]} />
     </div>
   );
 }

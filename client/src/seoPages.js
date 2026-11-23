@@ -25,6 +25,12 @@ export const PAGES = {
     h1: "Explore Records",
     text: ["Browse every verified AMPEX World Record. Search by name or category, see the newest and most viewed records, and the records that were beaten by a winning challenge."],
   },
+  "/try-these-records": {
+    title: t("Try These Records"),
+    description: "Record ideas waiting for their first official AMPEX record holder. Choose an open record, follow the rules, submit your evidence and make AMPEX history.",
+    h1: "Try These Records",
+    text: ["These records are waiting for their first official record holder. Choose an open record, follow the rules, submit your evidence, and become the first person to make AMPEX history."],
+  },
   "/verify": {
     title: t("Submit a Record"),
     description: "Submit your world record attempt to AMPEX World Records. Upload your video evidence and get it verified by our adjudication team.",

@@ -6,6 +6,27 @@ const { tierFor } = require('../utils/rankings');
 const rewards = require('../utils/rewards');
 const { captchaProblem } = require('../utils/captcha');
 const verification = require('../utils/emailVerification');
+const links = require('../utils/accountLinks');
+
+// ---- sign-up checks (done here on the server, not only in the form) ----
+const EMAIL_RE = /^[^\s@,;<>()"]+@[^\s@,;<>()"]+\.[a-z]{2,}$/i;
+const USERNAME_RE = /^[A-Za-z0-9_.]{3,30}$/;
+const GUARDIAN_RELATIONSHIPS = ['Mother', 'Father', 'Parent', 'Legal guardian', 'Grandparent', 'Other'];
+const ageOn = (dob, now = new Date()) => {
+  const d = new Date(`${String(dob).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  let age = now.getUTCFullYear() - d.getUTCFullYear();
+  const m = now.getUTCMonth() - d.getUTCMonth();
+  if (m < 0 || (m === 0 && now.getUTCDate() < d.getUTCDate())) age -= 1;
+  return age;
+};
+const passwordProblem = (pw) => {
+  const p = String(pw || '');
+  if (p.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Za-z]/.test(p) || !/\d/.test(p)) return 'Password must contain at least one letter and one number';
+  if (p.length > 200) return 'Password is too long';
+  return null;
+};
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -143,8 +164,30 @@ const registerUser = async (req, res) => {
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Name, email and password are required' });
     }
-    if (String(password).length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    const cleanName = String(name).trim();
+    if (cleanName.length < 2 || cleanName.length > 80) return res.status(400).json({ message: 'Please enter your full name (2 to 80 characters).' });
+    if (!EMAIL_RE.test(email) || email.length > 200) return res.status(400).json({ message: 'Please enter a valid email address.' });
+    if (!USERNAME_RE.test(String(username || '').trim())) return res.status(400).json({ message: 'Username must be 3 to 30 characters: letters, numbers, dots or underscores.' });
+    const pwProblem = passwordProblem(password);
+    if (pwProblem) return res.status(400).json({ message: pwProblem });
+    if (req.body.acceptTerms !== true) return res.status(400).json({ message: 'Please accept the Terms of Service and Privacy Policy.' });
+    if (req.body.ageConfirmed !== true) return res.status(400).json({ message: 'Please confirm the age statement: you are at least 18, or your parent or legal guardian has approved and will manage this account.' });
+    const age = dob ? ageOn(dob) : null;
+    if (age === null) return res.status(400).json({ message: 'Please enter your date of birth.' });
+    if (age < 0 || age > 120) return res.status(400).json({ message: 'Please check your date of birth.' });
+    // Under 18: a parent or legal guardian (18+) must approve and manage the account
+    const minor = age < 18;
+    let guardian = null;
+    if (minor) {
+      const gName = String(req.body.guardianName || '').trim();
+      const gRel = String(req.body.guardianRelationship || '').trim();
+      const gEmail = normalizeEmail(req.body.guardianEmail);
+      if (gName.length < 2 || gName.length > 80) return res.status(400).json({ message: 'Members under 18 need a parent or legal guardian: please enter their full name.' });
+      if (!GUARDIAN_RELATIONSHIPS.includes(gRel)) return res.status(400).json({ message: 'Please choose how the parent or guardian is related to you.' });
+      if (!EMAIL_RE.test(gEmail)) return res.status(400).json({ message: 'Please enter a valid email address for your parent or guardian.' });
+      if (gEmail === email) return res.status(400).json({ message: "Your parent or guardian's email must be different from yours." });
+      if (req.body.guardianIsAdult !== true) return res.status(400).json({ message: 'Please confirm that your parent or guardian is at least 18 years old.' });
+      guardian = { guardian_name: gName, guardian_relationship: gRel, guardian_email: gEmail };
     }
     const captcha = await captchaProblem(req);
     if (captcha) return res.status(400).json({ message: captcha, code: 'captcha_failed' });
@@ -179,9 +222,13 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(String(password), salt);
     const memberNumber = await generateUniqueMemberNumber();
 
+    const now = new Date().toISOString();
     const newUser = {
-      name,
+      name: cleanName,
       email,
+      terms_accepted_at: now,
+      age_confirmed_at: now,
+      ...(guardian || {}),
       password: hashedPassword,
       is_admin: false,
       profile_image: '',
@@ -201,7 +248,8 @@ const registerUser = async (req, res) => {
       ethnicity: ethnicity || '',
       role: 'athlete',
       membership_type: 'free_athlete',
-      account_status: 'active',
+      // under 18: closed until the parent/guardian approves it from their email
+      account_status: minor ? 'pending_guardian' : 'active',
       member_number: memberNumber,
     };
 
@@ -225,6 +273,13 @@ const registerUser = async (req, res) => {
 
     // Email verification: the link goes to the address they typed (sending never blocks the sign-up)
     const verificationEmail = await verification.sendVerification(user, { force: true });
+    if (minor) {
+      const guardianEmail = await links.sendGuardianApproval({ ...user, ...guardian }, { force: true });
+      return res.status(201).json({
+        pendingGuardian: true, guardianEmail, verificationEmail,
+        message: `Almost done! We emailed your parent or guardian at ${guardian.guardian_email}. Your account opens as soon as they approve it.`,
+      });
+    }
     return res.status(201).json({ ...serializeUser(user, true), verificationEmail });
   } catch (err) {
     console.error('Register error:', err);
@@ -342,9 +397,8 @@ const updateUserProfile = async (req, res) => {
       if (!currentPassword || !(await bcrypt.compare(String(currentPassword), user.password || ''))) {
         return res.status(400).json({ message: 'Current password is incorrect' });
       }
-      if (String(password).length < 6) {
-        return res.status(400).json({ message: 'Password must be at least 6 characters' });
-      }
+      const pwIssue = passwordProblem(password);
+      if (pwIssue) return res.status(400).json({ message: pwIssue });
       const salt = await bcrypt.genSalt(10);
       updates.password = await bcrypt.hash(String(password), salt);
     }
@@ -484,6 +538,63 @@ const getPublicUserProfile = async (req, res) => {
   }
 };
 
+// @desc    Email a password reset link (always answers the same, so it can't reveal who has an account)
+// @route   POST /api/auth/forgot-password { email, captchaToken }
+// @access  Public
+const forgotPassword = async (req, res) => {
+  try {
+    const address = normalizeEmail(req.body?.email);
+    if (!EMAIL_RE.test(address)) return res.status(400).json({ message: 'Please enter a valid email address.' });
+    const captcha = await captchaProblem(req);
+    if (captcha) return res.status(400).json({ message: captcha, code: 'captcha_failed' });
+    const { data: user } = await supabase.from('users').select('id, name, email, password, account_status, password_reset_sent_at').ilike('email', address).maybeSingle();
+    if (user && user.account_status !== 'banned') {
+      const r = await links.sendPasswordReset(user);
+      if (r === 'off') return res.status(503).json({ message: 'Email is not available right now. Please try again later.' });
+    }
+    return res.json({ ok: true, message: `If an account uses ${address}, we've sent it a link to reset the password. Check your inbox (and spam folder).` });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ message: 'Could not send the email. Please try again.' });
+  }
+};
+
+// @desc    Set a new password from the emailed link
+// @route   POST /api/auth/reset-password { token, password }
+// @access  Public
+const resetPassword = async (req, res) => {
+  try {
+    const r = await links.readResetToken(req.body?.token);
+    if (r.error) return res.status(400).json({ message: r.error });
+    const problem = passwordProblem(req.body?.password);
+    if (problem) return res.status(400).json({ message: problem });
+    const hash = await bcrypt.hash(String(req.body.password), await bcrypt.genSalt(10));
+    const { error } = await supabase.from('users').update({ password: hash, password_changed_at: new Date().toISOString(), updated_at: new Date() }).eq('id', r.user.id);
+    if (error) throw error;
+    return res.json({ ok: true, message: 'Your password has been changed. You can log in with your new password.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({ message: 'Could not change the password. Please try again.' });
+  }
+};
+
+// @desc    A parent/guardian approves the account of a member under 18
+// @route   POST /api/auth/guardian-approve { token }
+// @access  Public
+const guardianApprove = async (req, res) => {
+  try {
+    const r = await links.readGuardianToken(req.body?.token);
+    if (r.error) return res.status(400).json({ message: r.error });
+    if (!r.already) {
+      await supabase.from('users').update({ guardian_verified_at: new Date().toISOString(), ...(r.user.account_status === 'pending_guardian' ? { account_status: 'active' } : {}) }).eq('id', r.user.id);
+    }
+    return res.json({ ok: true, already: !!r.already, memberName: r.user.name });
+  } catch (err) {
+    console.error('Guardian approve error:', err);
+    return res.status(500).json({ message: 'Could not approve the account. Please try again.' });
+  }
+};
+
 // @desc    Confirm an email address from the link in the verification email
 // @route   POST /api/auth/verify-email { token }
 // @access  Public
@@ -519,6 +630,9 @@ const resendVerification = async (req, res) => {
 };
 
 module.exports = {
+  forgotPassword,
+  resetPassword,
+  guardianApprove,
   verifyEmail,
   resendVerification,
   authUser,

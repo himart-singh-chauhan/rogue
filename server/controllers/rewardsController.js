@@ -48,7 +48,6 @@ const getMyRewards = async (req, res) => {
 // POST /api/rewards/quote { items: [{ id, qty, type, eventId }] } — preview of the member's level discount
 const quote = async (req, res) => {
   try {
-    if (!req.user) return res.json({ percent: 0, amount: 0, level: null });
     const items = Array.isArray(req.body.items) ? req.body.items.slice(0, 100) : [];
     const ids = [...new Set(items.map((i) => i.id).filter(isUUID))];
     const { data: products } = ids.length ? await supabase.from('products').select('id, price, category').in('id', ids) : { data: [] };
@@ -62,13 +61,23 @@ const quote = async (req, res) => {
       const p = byId[i.id];
       return p ? { productId: p.id, category: p.category, unitPrice: Number(p.price) || 0, qty } : null;
     }).filter(Boolean);
+    const settingsNow = await R.getSettings();
+    // points each product earns (shown on every cart line)
+    const linePoints = {};
+    lines.forEach((l) => { if (l.productId) linePoints[l.productId] = R.productPointsInfo({ id: l.productId, category: l.category, price: l.unitPrice }, settingsNow).rewardPoints; });
+    if (!req.user) {
+      const earnPoints = settingsNow.enabled ? R.purchasePointsFor(lines, settingsNow, 1) : 0;
+      return res.json({ percent: 0, amount: 0, level: null, linePoints, earnPoints, loggedIn: false });
+    }
     const q = await R.quoteDiscount(req.user.id, lines);
     const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
     const couponGuess = Math.max(0, Number(req.body.couponDiscount) || 0); // only for the preview; checkout works it out again
     const levelOff = q.settings.allowCouponStacking || !couponGuess ? q.amount : Math.max(0, q.amount - couponGuess);
     const payable = Math.max(0, Math.round((subtotal - Math.max(couponGuess, 0) - levelOff) * 100) / 100);
     const pr = await R.quoteRedemption(req.user.id, lines, payable, req.body.redeemPoints);
-    res.json({ percent: q.percent, amount: q.amount, level: q.level, eligibleSubtotal: q.eligibleSubtotal, allowCouponStacking: q.settings.allowCouponStacking, redemption: pr });
+    const finalTotal = Math.max(0, payable - (pr.amount || 0));
+    const earnPoints = settingsNow.enabled && subtotal > 0 ? R.purchasePointsFor(lines, settingsNow, finalTotal / subtotal) : 0;
+    res.json({ percent: q.percent, amount: q.amount, level: q.level, eligibleSubtotal: q.eligibleSubtotal, allowCouponStacking: q.settings.allowCouponStacking, redemption: pr, linePoints, earnPoints, loggedIn: true });
   } catch (e) {
     res.status(500).json({ message: 'Could not work out your reward discount' });
   }
@@ -217,4 +226,19 @@ const report = async (req, res) => {
   }
 };
 
-module.exports = { getMyRewards, quote, getSettings, updateSettings, listMembers, adjust, listTransactions, listReferrals, decideReferral, report };
+// PUT /api/admin/rewards/product-points { productId, points }  (points empty = use the per-dollar rate)
+const updateProductPoints = async (req, res) => {
+  const { productId } = req.body || {};
+  if (!isUUID(productId)) return res.status(400).json({ message: 'Choose a product' });
+  const raw = req.body.points;
+  const points = raw === null || raw === undefined || raw === '' ? null : int(raw, -1);
+  if (points !== null && (points < 0 || points > 1000000)) return res.status(400).json({ message: 'Points must be 0 or more' });
+  try {
+    const saved = await R.setProductPoints(productId, points, req.user.id);
+    res.json({ productId, points: saved.purchase.productPoints[productId] ?? null });
+  } catch (e) {
+    res.status(500).json({ message: 'Could not save the points', error: e.message });
+  }
+};
+
+module.exports = { updateProductPoints, getMyRewards, quote, getSettings, updateSettings, listMembers, adjust, listTransactions, listReferrals, decideReferral, report };

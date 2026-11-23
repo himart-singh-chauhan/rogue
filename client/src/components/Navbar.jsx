@@ -23,6 +23,7 @@ const Navbar = () => {
   const navLinks = [
     { label: "Home", to: "/" },
     { label: "Records", to: "/explore-records" },
+    { label: "Try These Records", to: "/try-these-records" },
     { label: "Rankings", to: "/leaderboard" },
     { label: "Challenge", to: "/challenge" },
     { label: "Submit a Record", to: "/verify", highlight: true },
@@ -54,6 +55,7 @@ const Navbar = () => {
     { label: "Coupons", icon: <Tag size={16} />, to: "/admin?tab=coupons" },
     { label: "Fees", icon: <DollarSign size={16} />, to: "/admin?tab=systemSettings#fees" },
     { label: "Rewards & Referrals", icon: <Gift size={16} />, to: "/admin?tab=rewards" },
+    { label: "Try These Records", icon: <Target size={16} />, to: "/admin?tab=openRecords" },
     { label: "Achievement Awards", icon: <Award size={16} />, to: "/admin?tab=awards" },
     { label: "Memberships", icon: <CreditCard size={16} />, to: "/admin?tab=memberships" },
     { label: "Shop Catalog", icon: <Layers size={16} />, to: "/admin?tab=products" },

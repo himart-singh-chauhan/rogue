@@ -5,6 +5,7 @@ import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
+import SponsorBanner from "../components/SponsorBanner";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall } from "../utils/api";
 import WatchToUnlockVideo from "../components/WatchToUnlockVideo";
@@ -45,8 +46,8 @@ const Challenges = () => {
           description: record.description || "No description provided.",
           rules: record.rules ? record.rules.split("\n") : ["Official rules apply.", "Must provide uncut video evidence.", "Follow all safety guidelines."],
           videoUrl: record.evidence_url || record.video_url || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-          participants: Math.floor(Math.random() * 1000) + 100,
-          difficulty: "HARD",
+          participants: Number(record.challengeAttempts) || 0, // real challenge attempts
+          difficulty: (record.category || "Open").toUpperCase(),
           img: record.thumbnail_url || record.image_url || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=600&q=80",
           status: record.status
         }));
@@ -182,11 +183,11 @@ const Challenges = () => {
               
               <div style={{ display: "flex", gap: "40px", marginBottom: "40px" }}>
                 <div>
-                  <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "4px" }}>PARTICIPANTS</div>
+                  <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "4px" }}>CHALLENGE ATTEMPTS</div>
                   <div style={{ fontSize: "18px", fontWeight: "900" }}>{featuredChallenge.participants}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "4px" }}>DIFFICULTY</div>
+                  <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", marginBottom: "4px" }}>CATEGORY</div>
                   <div style={{ fontSize: "18px", fontWeight: "900", color: "#FF6A00" }}>{featuredChallenge.difficulty}</div>
                 </div>
               </div>
@@ -253,8 +254,8 @@ const Challenges = () => {
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(10,10,10,0.9), transparent)" }} />
               
               <div style={{ position: "absolute", top: "16px", left: "16px", display: "flex", gap: "8px" }}>
-                <div style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "900" }}>{card.difficulty} LEVEL</div>
-                <div style={{ background: "rgba(255,106,0,0.2)", color: "#FF6A00", padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "900" }}>{card.participants} PARTICIPATING</div>
+                <div style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "900" }}>{card.difficulty}</div>
+                <div style={{ background: "rgba(255,106,0,0.2)", color: "#FF6A00", padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: "900" }}>{card.participants} {card.participants === 1 ? "ATTEMPT" : "ATTEMPTS"}</div>
               </div>
 
               <div style={{ position: "absolute", bottom: "32px", left: "32px", right: "32px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -715,6 +716,7 @@ const Challenges = () => {
         )}
 
         {/* FOOTER */}
+        <SponsorBanner placements={["challenges"]} />
         <Footer />
 
         {/* ATTEMPT VIDEO MODAL */}

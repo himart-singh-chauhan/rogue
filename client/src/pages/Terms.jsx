@@ -27,6 +27,12 @@ const Terms = () => {
       content: "Users may be required to create an account to access certain features.\nYou agree to:\n• Provide accurate and truthful information\n• Maintain the security of your account\n• Keep login credentials confidential\n• Accept responsibility for activity under your account\nWe reserve the right to suspend or terminate accounts that violate these terms."
     },
     {
+      id: "age",
+      icon: <Shield size={24} />,
+      title: "3A. Age Requirements & Parent/Guardian Approval",
+      content: "Every member must give their date of birth when signing up.\n• Members who are 18 or older manage their own account.\n• Anyone under 18 must have a parent or legal guardian, who is at least 18 years old, create, approve and manage the account. The parent or guardian's name, relationship and email address are required, and the account stays closed until the parent or guardian approves it from the email we send them.\n• When signing up, every member must confirm: \"I confirm that I am at least 18 years old, or that my parent or legal guardian, who is at least 18 years old, has approved and will manage this account. I understand that providing false age or guardian information may result in account suspension and the revocation of any records earned through the account.\"\nIf false age or guardian information is discovered, the account will be suspended, and any records earned through the account will be reviewed and may be revoked."
+    },
+    {
       id: "memberships",
       icon: <Scale size={24} />,
       title: "4. Memberships & Fees",
@@ -114,7 +120,7 @@ const Terms = () => {
       id: "contact-info",
       icon: <Mail size={24} />,
       title: "18. Contact Information",
-      content: "For questions regarding these Terms of Service, please contact:\nGeneral Support\ampexworldrecords@gmail.com"
+      content: "For questions regarding these Terms of Service, please contact:\nGeneral Support\nsupport@ampexworldrecords.com"
     }
   ];
 
@@ -236,7 +242,7 @@ const Terms = () => {
                 <p style={{ color: "rgba(255,255,255,0.9)", fontSize: "18px", marginBottom: "40px", maxWidth: "600px", margin: "0 auto 40px" }}>
                   Our legal and compliance team is here to help you understand your rights and responsibilities on the platform.
                 </p>
-                <a href="mailto:ampexworldrecords@gmail.com" style={{ 
+                <a href="mailto:support@ampexworldrecords.com" style={{ 
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "12px",

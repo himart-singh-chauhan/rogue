@@ -17,17 +17,41 @@ const gateMedia = (formatted, raw, user, tickets) => {
   return { ...formatted, streamUrl: '', videoUrl: '', locked: true };
 };
 
+// "Live" only while an event is really on: an event left live for more than 12 hours (and not broadcasting on
+// Mux right now), or still "upcoming" a day after its date without ever starting, is moved to the past.
+// Admins can always change it back. Runs at most once a minute.
+let lastTidy = 0;
+const tidyStaleEvents = async () => {
+  if (Date.now() - lastTidy < 60 * 1000) return;
+  lastTidy = Date.now();
+  try {
+    const now = Date.now();
+    const { data } = await supabase.from('events').select('id, status, date, started_at, mux_status').in('status', ['live', 'upcoming']);
+    const staleLive = (data || []).filter((e) => e.status === 'live' && e.mux_status !== 'active' && new Date(e.started_at || e.date).getTime() < now - 12 * 3600 * 1000).map((e) => e.id);
+    const neverHeld = (data || []).filter((e) => e.status === 'upcoming' && !e.started_at && e.date && new Date(e.date).getTime() < now - 24 * 3600 * 1000).map((e) => e.id);
+    const at = new Date().toISOString();
+    if (staleLive.length) await supabase.from('events').update({ status: 'completed', is_live: false, ended_at: at, updated_at: at }).in('id', staleLive);
+    if (neverHeld.length) await supabase.from('events').update({ status: 'completed', is_live: false, updated_at: at }).in('id', neverHeld);
+  } catch (e) {
+    console.warn('[Events] tidy failed:', e.message);
+  }
+};
+const isFinished = (e) => ['completed', 'past'].includes(String(e.status || '').toLowerCase());
+
 // @desc    Get all events
 // @route   GET /api/events
 // @access  Public
 const getEvents = async (req, res) => {
   try {
-    const { data: events, error } = await supabase
+    await tidyStaleEvents();
+    const { data: all, error } = await supabase
       .from('events')
       .select('*')
       .order('date', { ascending: true });
 
     if (error) throw error;
+    // Finished events appear in the public Past list only once an admin approves them
+    const events = req.user?.is_admin ? (all || []) : (all || []).filter((e) => !isFinished(e) || e.replay_approved === true);
     const tickets = await ticketedEventIds(req.user);
 
     // Map camelCase fields to match previous Mongoose models for frontend compatibility
@@ -60,6 +84,7 @@ const getEvents = async (req, res) => {
       replayEnabled: e.replay_enabled !== false,
       startedAt: e.started_at || null,
       endedAt: e.ended_at || null,
+      replayApproved: e.replay_approved === true,
       createdAt: e.created_at,
       updatedAt: e.updated_at
     }, e, req.user, tickets));
@@ -116,6 +141,7 @@ const getEventById = async (req, res) => {
       hasRecording: !!event.mux_recording_playback_id,
       chatEnabled: event.chat_enabled !== false,
       replayEnabled: event.replay_enabled !== false,
+      replayApproved: event.replay_approved === true,
       startedAt: event.started_at || null,
       endedAt: event.ended_at || null,
       createdAt: event.created_at,
@@ -197,6 +223,7 @@ const createEvent = async (req, res) => {
       hasRecording: !!event.mux_recording_playback_id,
       chatEnabled: event.chat_enabled !== false,
       replayEnabled: event.replay_enabled !== false,
+      replayApproved: event.replay_approved === true,
       startedAt: event.started_at || null,
       endedAt: event.ended_at || null,
       createdAt: event.created_at,
@@ -289,6 +316,7 @@ const updateEvent = async (req, res) => {
       hasRecording: !!event.mux_recording_playback_id,
       chatEnabled: event.chat_enabled !== false,
       replayEnabled: event.replay_enabled !== false,
+      replayApproved: event.replay_approved === true,
       startedAt: event.started_at || null,
       endedAt: event.ended_at || null,
       createdAt: event.created_at,
@@ -406,6 +434,7 @@ const adminStreamView = (e) => ({
   eventStatus: e.status || 'upcoming',
   chatEnabled: e.chat_enabled !== false,
   replayEnabled: e.replay_enabled !== false,
+  replayApproved: e.replay_approved === true,
   startedAt: e.started_at || null,
   endedAt: e.ended_at || null,
   rtmpUrl: mux.RTMP_URL,

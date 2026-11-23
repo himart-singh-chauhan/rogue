@@ -15,6 +15,7 @@ import {
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import SponsorBanner from "../components/SponsorBanner";
 import ScrollReveal from "../components/ScrollReveal";
 import { motion } from "motion/react";
 
@@ -265,6 +266,8 @@ const GlobalRankings = () => {
 
           </div>
         </section>
+
+        <SponsorBanner placements={["rankings"]} />
 
         <Footer />
       </div>

@@ -19,6 +19,7 @@ import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import PageNav from "../components/PageNav";
 import Footer from "../components/Footer";
+import SponsorBanner from "../components/SponsorBanner";
 import ScrollReveal from "../components/ScrollReveal";
 import { motion } from "motion/react";
 
@@ -69,6 +70,8 @@ const GlobalLeaderboard = () => {
   const [globalData, setGlobalData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [siteStats, setSiteStats] = useState(null); // real totals from the database
+  React.useEffect(() => { apiCall("/stats/public", "GET").then(setSiteStats).catch(() => {}); }, []);
 
   React.useEffect(() => {
     const fetchRankings = async () => {
@@ -164,18 +167,18 @@ const GlobalLeaderboard = () => {
             {/* QUICK STATS */}
             <div style={{ display: "flex", justifyContent: "center", gap: "40px", flexWrap: "wrap" }}>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "32px", fontWeight: "900", color: "white" }}>195</div>
+                <div style={{ fontSize: "32px", fontWeight: "900", color: "white" }}>{siteStats ? Number(siteStats.countries || 0).toLocaleString() : "–"}</div>
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: "4px" }}>Countries</div>
               </div>
               <div style={{ width: "1px", background: "rgba(255,255,255,0.1)", alignSelf: "stretch" }} />
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "32px", fontWeight: "900", color: "white" }}>12.4K</div>
-                <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: "4px" }}>Athletes</div>
+                <div style={{ fontSize: "32px", fontWeight: "900", color: "white" }}>{siteStats ? Number(siteStats.verifiedAthletes || 0).toLocaleString() : "–"}</div>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: "4px" }}>Record Holders</div>
               </div>
               <div style={{ width: "1px", background: "rgba(255,255,255,0.1)", alignSelf: "stretch" }} />
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "32px", fontWeight: "900", color: "white" }}>$2.5M</div>
-                <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: "4px" }}>Prize Pool</div>
+                <div style={{ fontSize: "32px", fontWeight: "900", color: "white" }}>{siteStats ? Number(siteStats.recordsSet || 0).toLocaleString() : "–"}</div>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: "4px" }}>Verified Records</div>
               </div>
             </div>
           </div>
@@ -387,6 +390,8 @@ const GlobalLeaderboard = () => {
 
           </div>
         </section>
+
+        <SponsorBanner placements={["rankings"]} />
 
         <Footer />
       </div>

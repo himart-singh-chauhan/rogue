@@ -325,7 +325,13 @@ const getAllProductsByAdmin = async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(products);
+    const rewards = require('../utils/rewards');
+    const settings = await rewards.getSettings({ fresh: true }).catch(() => null);
+    res.json(settings ? (products || []).map((p) => ({
+      ...p,
+      ...rewards.productPointsInfo(p, settings),
+      fixedRewardPoints: settings.purchase.productPoints[String(p.id)] ?? null,
+    })) : products);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

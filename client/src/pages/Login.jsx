@@ -30,7 +30,8 @@ const Login = () => {
     }
     try {
       await login(email, password, token);
-      navigate("/profile");
+      const from = location.state?.from;
+      navigate(typeof from === "string" && from.startsWith("/") && !from.startsWith("//") ? from : "/profile");
     } catch (err) {
       setError(err.message);
       captchaRef.current?.reset(); // each security check works once
@@ -177,7 +178,7 @@ const Login = () => {
               <Captcha ref={captchaRef} onToken={setCaptchaToken} />
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 10px" }}>
-                <Link to="/contact" style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <Link to="/forgot-password" style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   FORGOT PASSWORD?
                 </Link>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

@@ -21,7 +21,9 @@ const getJson = async (p) => {
   } catch { return null; }
 };
 
-const css = `<style>.seo-static{min-height:100vh;background:#0A0A0A;color:#fff;font-family:Inter,system-ui,sans-serif;padding:32px 20px;box-sizing:border-box}.seo-static a{color:#FF6A00}.seo-static nav a{margin-right:14px;display:inline-block;margin-bottom:6px}.seo-static main{max-width:860px;margin:32px auto}.seo-static h1{font-size:32px;margin:0 0 14px}.seo-static p,.seo-static li{color:#bbb;line-height:1.6}</style>`;
+// Branded screen while the site starts (black + logo, like the loading animation); the text below it is for
+// search engines and screen readers only and is never shown, so the plain page can't flash on a slow connection.
+const css = `<style>html,body{background:#000}.seo-splash{position:fixed;inset:0;z-index:1;background:#000;display:flex;align-items:center;justify-content:center}.seo-splash img{width:120px;height:120px;opacity:.9}.seo-static{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;margin:-1px!important;padding:0!important;border:0!important}</style>`;
 
 const render = ({ urlPath, title, description, h1, text = [], extra = "", jsonLd = null }) => {
   const url = SITE_URL + (urlPath === "/" ? "/" : urlPath);
@@ -34,7 +36,7 @@ const render = ({ urlPath, title, description, h1, text = [], extra = "", jsonLd
     `<meta name="twitter:image" content="${SITE_URL}/images/ampex-og.jpg" />`,
     jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>` : "",
   ].join("\n    ");
-  const body = `${css}<div class="seo-static"><nav>${NAV_LINKS.map(([to, label]) => `<a href="${to}">${esc(label)}</a>`).join("")}</nav><main><h1>${esc(h1)}</h1>${text.map((p) => `<p>${esc(p)}</p>`).join("")}${extra}</main><footer><p>${esc(SITE_NAME)} · <a href="${SITE_URL}/">ampexworldrecords.com</a></p></footer></div>`;
+  const body = `${css}<div class="seo-splash" aria-hidden="true"><img src="/images/ampex-logo.webp" alt="" width="120" height="120" /></div><div class="seo-static"><nav>${NAV_LINKS.map(([to, label]) => `<a href="${to}">${esc(label)}</a>`).join("")}</nav><main><h1>${esc(h1)}</h1>${text.map((p) => `<p>${esc(p)}</p>`).join("")}${extra}</main><footer><p>${esc(SITE_NAME)} · <a href="${SITE_URL}/">ampexworldrecords.com</a></p></footer></div>`;
   return shell
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`)
     .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(description)}$2`)
@@ -42,7 +44,7 @@ const render = ({ urlPath, title, description, h1, text = [], extra = "", jsonLd
     .replace(/(<meta property="og:description" content=")[^"]*(")/, `$1${esc(description)}$2`)
     .replace(/(<meta property="og:image" content=")\/([^"]*")/, `$1${SITE_URL}/$2`)
     .replace("</head>", `    ${head}\n  </head>`)
-    .replace('<div id="root"></div>', `<div id="root">${body}</div>`);
+    .replace(/<div id="root">[\s\S]*?<\/div>/, `<div id="root">${body}</div>`);
 };
 
 // dist/about.html is served at /about (vercel.json: cleanUrls); "/" is dist/index.html
@@ -52,10 +54,11 @@ const write = (urlPath, html) => {
   fs.writeFileSync(file, html);
 };
 
-const [records, events, settings] = await Promise.all([
+const [records, events, settings, challenges] = await Promise.all([
   getJson("/records/explore/all?filter=new").then((d) => (Array.isArray(d?.records) ? d.records : [])),
   getJson("/events").then((d) => (Array.isArray(d) ? d : [])),
   getJson("/settings/public"),
+  getJson("/open-records").then((d) => (Array.isArray(d) ? d : [])),
 ]);
 const recordUrl = (r) => `/record/${encodeURIComponent(r.slug || r.id)}`;
 const holder = (r) => r.user?.display_name || r.user?.name || r.athlete_id || "an AMPEX athlete";
@@ -85,9 +88,17 @@ for (const r of records) {
   }));
   pages += 1;
 }
+// Try These Records: one page per challenge
+const challengeUrl = (c) => `/try-these-records/${c.id}`;
+for (const c of challenges) {
+  const title = `${c.title} | Try These Records | AMPEX World Records`;
+  const description = `${c.status === "set" ? "Record set" : "Open to set"}: ${c.title}. ${c.description || ""} Follow the rules, submit your attempt and become the first AMPEX record holder.`.trim();
+  write(challengeUrl(c), render({ urlPath: challengeUrl(c), title, description, h1: c.title, text: [c.description || "", c.rules || ""].filter(Boolean) }));
+  pages += 1;
+}
 
 const today = new Date().toISOString().slice(0, 10);
-const urls = [...Object.keys(PAGES).filter((u) => !["/login", "/signup"].includes(u)), ...records.map(recordUrl)];
+const urls = [...Object.keys(PAGES).filter((u) => !["/login", "/signup"].includes(u)), ...records.map(recordUrl), ...challenges.map(challengeUrl)];
 fs.writeFileSync(path.join(DIST, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${SITE_URL}${u === "/" ? "/" : u}</loc><lastmod>${today}</lastmod>${u === "/" ? "<priority>1.0</priority>" : ""}</url>`).join("\n")}\n</urlset>\n`);
 console.log(`[prerender] ${pages} pages, ${records.length} records, sitemap with ${urls.length} links${records.length ? "" : " (records skipped: API not reachable)"}`);
 void DEFAULT_TITLE; void DEFAULT_DESCRIPTION;

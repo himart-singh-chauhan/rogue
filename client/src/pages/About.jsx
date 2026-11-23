@@ -5,6 +5,9 @@ import { Link } from "react-router-dom";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import CompanyInfo from "../components/CompanyInfo";
+import FounderBio from "../components/FounderBio";
+import AiReviewProcess from "../components/AiReviewProcess";
 import ScrollReveal from "../components/ScrollReveal";
 import GlowCard from "../components/GlowCard";
 
@@ -365,6 +368,9 @@ const About = () => {
         </section>
 
         {/* FOOTER */}
+        <FounderBio />
+        <AiReviewProcess />
+        <CompanyInfo title="Company details" showVerification={false} />
         <Footer />
 
       </div>

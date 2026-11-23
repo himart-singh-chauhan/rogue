@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall } from "../utils/api";
+import CompanyInfo from "../components/CompanyInfo";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -69,13 +70,10 @@ const Contact = () => {
             {/* RESPONSE TIME BOX */}
             <div style={{ background: "#161616", padding: "40px", borderRadius: "24px", border: "1px solid rgba(255,255,255,0.05)", width: "320px", position: "relative", overflow: "hidden" }}>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>
-                RESPONSE TIME
+                WE REPLY BY EMAIL
               </div>
-              <div style={{ fontSize: "64px", fontWeight: "950", color: "white", lineHeight: "1" }}>
-                2.4 <span style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)" }}>HOURS</span>
-              </div>
-              <div style={{ marginTop: "24px", width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px" }}>
-                <div style={{ width: "70%", height: "100%", background: "#FF6A00", borderRadius: "2px", boxShadow: "0 0 10px #FF6A00" }}></div>
+              <div style={{ fontSize: "22px", fontWeight: "900", color: "white", lineHeight: "1.3" }}>
+                Every message is answered by a member of the AMPEX team.
               </div>
             </div>
           </div>
@@ -88,10 +86,11 @@ const Contact = () => {
               <h2 style={{ fontSize: "32px", fontWeight: "900", textTransform: "uppercase", marginBottom: "40px" }}>CONTACT INFO</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 {[
-                  { icon: <MessageSquare size={20} />, title: "GENERAL SUPPORT", email: "ampexworldrecords@gmail.com", desc: "Questions, Account, Memberships, Tech issues" },
-                  { icon: <Shield size={20} />, title: "RECORD SUBMISSIONS", email: "ampexworldrecords@gmail.com", desc: "Applications, Evidence, Rule clarification" },
-                  { icon: <User size={20} />, title: "MEDIA & PRESS", email: "ampexworldrecords@gmail.com", desc: "Interviews, News, Podcasts, TV" },
-                  { icon: <ArrowRight size={20} />, title: "SPONSORSHIPS & PARTNERSHIPS", email: "ampexworldrecords@gmail.com", desc: "Brands, Events, Advertising" }
+                  { icon: <MessageSquare size={20} />, title: "GENERAL SUPPORT", email: "support@ampexworldrecords.com", desc: "Questions, Account, Memberships, Tech issues" },
+                  { icon: <Shield size={20} />, title: "RECORD SUBMISSIONS", email: "submissions@ampexworldrecords.com", desc: "Applications, Evidence, Rule clarification" },
+                  { icon: <Shield size={20} />, title: "RECORDS & VERIFICATION", email: "records@ampexworldrecords.com", desc: "Verification decisions, Record history, Certificates" },
+                  { icon: <User size={20} />, title: "SHOP & SALES", email: "sales@ampexworldrecords.com", desc: "Orders, Merchandise, Belts, Trophies" },
+                  { icon: <ArrowRight size={20} />, title: "SPONSORSHIPS, PARTNERSHIPS & MEDIA", email: "partners@ampexworldrecords.com", desc: "Brands, Events, Advertising, Press" }
                 ].map((item, idx) => (
                   <div key={idx} style={{ background: "#161616", padding: "24px 32px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.03)", display: "flex", alignItems: "center", gap: "24px", transition: "all 0.2s" }}>
                     <div style={{ color: "#FF6A00" }}>{item.icon}</div>
@@ -248,6 +247,7 @@ const Contact = () => {
         </main>
 
         {/* FOOTER */}
+        <CompanyInfo title="Contact details" />
         <Footer />
 
       </div>

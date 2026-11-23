@@ -396,7 +396,31 @@ const resetTicketScan = async (req, res) => {
   }
 };
 
+// @desc    The logged-in member's own passes (with the code their QR pass shows)
+// @route   GET /api/tickets/mine
+// @access  Private
+const getMyTickets = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*, event:events(id, title, date, location, image_url, status, is_live)')
+      .eq('user_id', req.user.id)
+      .neq('status', 'revoked')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    res.json((data || []).map((t) => ({
+      id: t.id, accessCode: t.access_code, status: t.status, ticketType: t.ticket_type || 'spectator',
+      scanCount: t.scan_count || 0, lastScannedAt: t.last_scanned_at, expiresAt: t.expires_at, createdAt: t.created_at,
+      event: t.event ? { id: t.event.id, title: t.event.title, date: t.event.date, location: t.event.location, imageUrl: t.event.image_url, status: t.event.status, isLive: t.event.is_live } : null,
+    })));
+  } catch (error) {
+    res.status(500).json({ message: 'Could not load your passes' });
+  }
+};
+
 module.exports = {
+  getMyTickets,
   purchaseTicket,
   verifyTicket,
   getTicketDetails,

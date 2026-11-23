@@ -16,6 +16,8 @@ import { apiCall, formatProductImage, API_URL, uploadDirect } from "../utils/api
 import AdminRankingPanel from "../components/AdminRankingPanel";
 import AdminCategoryManager from "../components/admin/AdminCategoryManager";
 import AdminProductOrder from "../components/admin/AdminProductOrder";
+import AdminCompanyProfile from "../components/admin/AdminCompanyProfile";
+import AdminOpenRecords from "../components/admin/AdminOpenRecords";
 import AdminDivisionPanels from "../components/admin/AdminDivisionPanels";
 import AdminPlansManager from "../components/admin/AdminPlansManager";
 import AdminSubscribers from "../components/admin/AdminSubscribers";
@@ -49,6 +51,17 @@ const SPONSOR_SIZES = {
   video_overlay: { w: 600, h: 120, note: "Small logo strip over the video player. Transparent PNG works best" },
   footer: { w: 400, h: 120, note: "Logo in the footer sponsor row. Transparent PNG works best" },
   footer_sponsor: { w: 400, h: 120, note: "Logo in the footer sponsor row. Transparent PNG works best" },
+  records: { w: 1920, h: 400, note: "Banner on Explore Records" },
+  record_page: { w: 1920, h: 400, note: "Banner on each record's page" },
+  rankings: { w: 1920, h: 400, note: "Banner on the Rankings / leaderboard pages" },
+  challenges: { w: 1920, h: 400, note: "Banner on the Challenge page" },
+  profiles: { w: 1920, h: 400, note: "Banner on member profile pages" },
+};
+// Where each placement appears (for "Preview on page")
+const SPONSOR_PAGE = {
+  homepage_top_banner: "/", homepage_sidebar: "/", homepage: "/", featured: "/", footer: "/", footer_sponsor: "/",
+  live_event: "/events", livestream: "/events", video_overlay: "/events", shop: "/shop",
+  records: "/explore-records", record_page: "/explore-records", rankings: "/leaderboard", challenges: "/challenge", profiles: "/profile",
 };
 
 // Event status from the real event data (not from its position in the list)
@@ -285,7 +298,7 @@ const Admin = () => {
   // ===== CERTIFICATE & AWARD CONTROL SUITE STATE =====
   const [adminSubTab, setAdminSubTab] = useState("official");
   const [viewEvent, setViewEvent] = useState(null);
-  const [seoForm, setSeoForm] = useState({ title: "AMPEX World Records Elite Athlete Database", description: "", keywords: "" });
+  const [seoForm, setSeoForm] = useState({ title: "AMPEX World Records | ampexworldrecords.com", description: "", keywords: "" });
   const [seoStatus, setSeoStatus] = useState("");
   useEffect(() => {
     if (activeTab !== "systemSettings") return;
@@ -1167,10 +1180,11 @@ const Admin = () => {
           sizes: item.sizes || [],
           imageUrls: item.image_urls || [],
           colors: Array.isArray(item.colors) ? item.colors : [],
-          requiresAuthorization: !!item.requires_authorization
+          requiresAuthorization: !!item.requires_authorization,
+          rewardPointsFixed: item.fixedRewardPoints ?? ""
         });
       } else {
-        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], colors: [], requiresAuthorization: false });
+        setProductForm({ name: "", description: "", price: "", imageUrl: "", category: "", stockCount: "", sizes: [], imageUrls: [], colors: [], requiresAuthorization: false, rewardPointsFixed: "" });
       }
     } else if (activeTab === "coupons") {
       if (type === "edit" && item) {
@@ -1385,11 +1399,15 @@ const Admin = () => {
         const method = modalType === "edit" ? "PUT" : "POST";
 
         // Exclude file helper attributes from JSON payload
-        const { imageFile, imagePreview, ...jsonPayload } = productForm;
+        const { imageFile, imagePreview, rewardPointsFixed, ...jsonPayload } = productForm;
 
         // First create/update product details
         const createdProduct = await apiCall(endpoint, method, jsonPayload, user.token);
         const productId = modalType === "edit" ? modalTarget.id : createdProduct.id;
+        // Reward points for buying it (empty = the per-dollar rate from Rewards settings)
+        try {
+          await apiCall("/admin/rewards/product-points", "PUT", { productId, points: String(rewardPointsFixed ?? "").trim() === "" ? null : Number(rewardPointsFixed) }, user.token);
+        } catch (pointsErr) { alert(`Product saved, but the reward points could not be saved: ${pointsErr.message}`); }
 
         // Then upload image if file is selected
         if (productForm.imageFile) {
@@ -6657,6 +6675,7 @@ const Admin = () => {
                   <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>API Integrations, SEO, and global parameters.</p>
                 </div>
               </div>
+              <AdminCompanyProfile />
               <div style={{ background: "#111", borderRadius: "20px", padding: "24px", border: "1px solid rgba(255,255,255,0.05)" }}>
                 <h3 style={{ margin: "0 0 16px 0", fontSize: "16px" }}>Global SEO Settings</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
@@ -6707,6 +6726,11 @@ const Admin = () => {
               { value: "livestream",          label: "Livestream Banner" },
               { value: "shop",               label: "Shop Page" },
               { value: "footer",             label: "Footer Banner" },
+              { value: "records",            label: "Explore Records Page" },
+              { value: "record_page",        label: "Each Record's Page" },
+              { value: "rankings",           label: "Rankings / Leaderboards" },
+              { value: "challenges",         label: "Challenge Page" },
+              { value: "profiles",           label: "Member Profiles" },
             ];
 
             const now = new Date();
@@ -7147,6 +7171,8 @@ const Admin = () => {
                                 style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", color: "white", padding: "7px", borderRadius: "8px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>👁 View</button>
                               <button onClick={() => openEditForm(sponsor)}
                                 style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", color: "white", padding: "7px", borderRadius: "8px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>✏️ Edit</button>
+                              <a href={`${SPONSOR_PAGE[sponsor.placement] || "/"}?sponsorPreview=${sponsor.id}`} target="_blank" rel="noopener noreferrer" title="See it on its page (only you see the preview)"
+                                style={{ flex: 1, background: "rgba(255,106,0,0.1)", border: "1px solid rgba(255,106,0,0.3)", color: "#FF6A00", padding: "7px", borderRadius: "8px", fontSize: "11px", fontWeight: 800, textAlign: "center", textDecoration: "none" }}>Preview</a>
                               <button onClick={() => toggleStatus(sponsor)}
                                 style={{ flex: 1, background: sponsor.active_status ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.08)", border: "none", color: sponsor.active_status ? "#ef4444" : "#22c55e", padding: "7px", borderRadius: "8px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>
                                 {sponsor.active_status ? "Deactivate" : "Activate"}
@@ -7167,6 +7193,7 @@ const Admin = () => {
 
           {/* ==================== 5M. VIP & RANKINGS (PHASE 4) ==================== */}
           {activeTab === "rewards" && <AdminRewards />}
+          {activeTab === "openRecords" && <AdminOpenRecords />}
           {activeTab === "awards" && <AdminAchievementAwards />}
           {activeTab === "emails" && <AdminEmailMembers />}
 
@@ -8849,6 +8876,11 @@ const Admin = () => {
                         <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>STOCK INVENTORY COUNT</label>
                         <input type="number" min="0" inputMode="numeric" placeholder="0" value={productForm.stockCount} onChange={(e) => setProductForm({ ...productForm, stockCount: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
                       </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>REWARD POINTS FOR BUYING THIS</label>
+                      <input type="number" min="0" inputMode="numeric" placeholder="Empty = per-dollar rate from Rewards settings" value={productForm.rewardPointsFixed ?? ""} onChange={(e) => setProductForm({ ...productForm, rewardPointsFixed: e.target.value })} style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "10px 14px", color: "white" }} />
+                      <div style={{ fontSize: "11px", color: "#777", marginTop: "4px" }}>Members get these points once their payment is confirmed (e.g. hat 5, sweatsuit 20, belt 100). Shown on the product, cart and receipt.</div>
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "#555", marginBottom: "6px" }}>UPLOAD PRODUCT IMAGE</label>

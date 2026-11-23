@@ -117,6 +117,15 @@ app.get('/api/awards/catalog', require('./controllers/awardController').catalog)
 }
 // Public: the homepage big video (set in Admin → Homepage Control)
 app.get('/api/settings/homepage-hero', require('./controllers/heroController').getHero);
+app.get('/api/settings/company', require('./controllers/companyController').getCompany);
+// Try These Records (public list and pages; admins see everything with ?all=1)
+{
+  const open = require('./controllers/openRecordController');
+  const { optionalAuth } = require('./middleware/authMiddleware');
+  app.get('/api/open-records', optionalAuth, open.list);
+  app.get('/api/open-records-rules', open.getRules);
+  app.get('/api/open-records/:id', optionalAuth, open.getOne);
+}
 // Public: homepage numbers (verified records, countries, categories)
 app.get('/api/stats/public', require('./controllers/statsController').publicStats);
 app.get('/api/email/unsubscribe', require('./controllers/emailController').unsubscribe);

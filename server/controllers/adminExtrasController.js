@@ -120,7 +120,7 @@ const getPublicSettings = async (req, res) => {
   res.json({
     submissionFee: fees.submissionFee,
     challengeFee: fees.challengeFee,
-    seoTitle: map.seo_title || 'AMPEX World Records Elite Athlete Database',
+    seoTitle: map.seo_title || 'AMPEX World Records | ampexworldrecords.com',
     seoDescription: map.seo_description || '',
     seoKeywords: map.seo_keywords || '',
   });

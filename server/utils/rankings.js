@@ -129,6 +129,8 @@ const syncRecordAward = async (record, { verified, points = 0, adminId = null } 
   if (record?.id) await syncBeatenRecord(record.id, verified);
   // Rewards program: points for a verified record / a won challenge (set in Admin → Rewards)
   if (record?.id) await require('./rewards').syncRecordRewards(record.id, verified);
+  // Try These Records: the first verified attempt at an open record becomes its original record
+  if (record?.id) await require('../controllers/openRecordController').onRecordVerified(record.id, verified);
   if (!record?.id || !record.user_id) return null;
   const { held, net } = await recordAwardState(record.id);
 

@@ -6,12 +6,14 @@ import {
   CheckCircle2, Share2, User, Mail, LogOut, Plus, ShieldCheck,
   Flame, Loader2, AlertCircle, Eye, RefreshCw, BarChart2, Shield,
   Award, TrendingUp, Compass, ChevronRight, HardDrive, Bell, Settings,
-  Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search, Download, ExternalLink, Gift
+  Scale, Ruler, Heart, Phone, Sparkles, X, Edit3, Image, Search, Download, ExternalLink, Gift, Ticket
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import MessageComposer from "../components/MessageComposer";
 import Footer from "../components/Footer";
+import SponsorBanner from "../components/SponsorBanner";
 import MyRewards from "../components/MyRewards";
+import MyPasses from "../components/MyPasses";
 import VerifyEmailBanner from "../components/VerifyEmailBanner";
 import { useAuth } from "../context/AuthContext";
 import { apiCall, apiUpload, formatProductImage } from "../utils/api";
@@ -849,6 +851,31 @@ const Profile = () => {
                 >
                   <Gift size={15} /> MY REWARDS
                 </button>
+                {isOwnProfile && (
+                <button
+                  onClick={() => setActiveTab("passes")}
+                  style={{
+                    flex: "1 1 150px",
+                    background: activeTab === "passes" ? "linear-gradient(135deg, #FF5500 0%, #ff7733 100%)" : "transparent",
+                    border: "none",
+                    color: activeTab === "passes" ? "white" : "#888",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    fontSize: "13px",
+                    fontWeight: "900",
+                    letterSpacing: "1px",
+                    cursor: "pointer",
+                    transition: "all 0.25s",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "8px",
+                    boxShadow: activeTab === "passes" ? "0 10px 25px rgba(255, 85, 0, 0.25)" : "none"
+                  }}
+                >
+                  <Ticket size={15} /> MY PASSES
+                </button>
+                )}
               </div>
 
               {/* TAB 1: Real-time Record Submissions list */}
@@ -1166,6 +1193,7 @@ const Profile = () => {
               {/* TAB 4: Inbox */}
               {activeTab === "messages" && <Inbox state={inboxState} token={user?.token} onRead={markReadLocally} myId={user?._id || user?.id} />}
               {activeTab === "rewards" && <MyRewards token={user?.token} />}
+              {activeTab === "passes" && isOwnProfile && <MyPasses title="My Event Passes" />}
             </div>
           ) : (
             /* ================== PUBLIC PRO ATHLETE VIEW ================== */
@@ -1931,6 +1959,8 @@ const Profile = () => {
           </div>
         </div>
       )}
+
+      <SponsorBanner placements={["profiles"]} />
 
       <Footer />
 

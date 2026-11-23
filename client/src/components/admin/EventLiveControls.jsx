@@ -2,7 +2,7 @@
 // Works for every event (Mux streams and YouTube/Vimeo links). With Mux, "End event" also tells Mux the
 // broadcast is over so the recording is finished for the replay.
 import { useEffect, useState } from "react";
-import { Radio, Square, MessageSquare, Film } from "lucide-react";
+import { Radio, Square, MessageSquare, Film, Eye } from "lucide-react";
 import { apiCall } from "../../utils/api";
 
 const btn = (bg) => ({ background: bg, color: "white", border: "none", borderRadius: 100, padding: "10px 18px", fontSize: 12, fontWeight: 900, textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 });
@@ -45,7 +45,7 @@ export default function EventLiveControls({ eventId, token, onChanged }) {
   const setting = async (key, value) => {
     try {
       const r = await apiCall(`/events/${eventId}/stream-settings`, "PUT", { [key]: value }, token);
-      setInfo((i) => ({ ...i, chatEnabled: r.chatEnabled, replayEnabled: r.replayEnabled }));
+      setInfo((i) => ({ ...i, chatEnabled: r.chatEnabled, replayEnabled: r.replayEnabled, replayApproved: r.replayApproved }));
     } catch (e) { setNotice(e.message); }
   };
 
@@ -62,7 +62,13 @@ export default function EventLiveControls({ eventId, token, onChanged }) {
       <div style={{ display: "grid", gap: 10 }}>
         <Switch on={info.chatEnabled !== false} onChange={(v) => setting("chatEnabled", v)} label="Live chat on this event" icon={<MessageSquare size={14} />} />
         <Switch on={info.replayEnabled !== false} onChange={(v) => setting("replayEnabled", v)} label="Save the recording and show the replay after the event" icon={<Film size={14} />} />
+        <Switch on={info.replayApproved === true} onChange={(v) => setting("replayApproved", v)} label="Approved: list this event in the public Past events after it ends" icon={<Eye size={14} />} />
       </div>
+      {ended && info.replayApproved !== true && (
+        <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", color: "#F59E0B", fontSize: 12, fontWeight: 800 }}>
+          This event has ended and is waiting for your approval. The public won't see it in Past events until you switch on "Approved" above. Pass holders can still watch their 24-hour replay.
+        </div>
+      )}
       <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, margin: "12px 0 0" }}>
         Free events: everyone can watch, live and replay. Paid events: only spectator pass holders; after the event ends they can watch the replay for 24 hours.
         {" "}With a Mux stream, viewers see LIVE as soon as your broadcast starts; “End event” closes it and finishes the recording.

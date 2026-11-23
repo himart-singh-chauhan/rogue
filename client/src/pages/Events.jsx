@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import AdminFinishedEvents from "../components/admin/AdminFinishedEvents";
+import AdminTicketScanner from "../components/admin/AdminTicketScanner";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
@@ -268,6 +270,15 @@ const Events = () => {
 
   // Spectator tickets: added to the shop cart, paid at checkout, issued to the buyer's account
   const [ticketsInCart, setTicketsInCart] = useState(0);
+  const navigate = useNavigate();
+  // "Get a Spectator Pass": put the pass in the cart and go straight to checkout
+  const getPass = (ev) => {
+    if (!user) { navigate("/login", { state: { message: "Please log in to buy a spectator pass. Passes are linked to your account." } }); return; }
+    const res = addTicketToCart(ev);
+    if (!res.ok) { showToast(res.reason); return; }
+    navigate("/cart");
+  };
+
   const handleAddTicket = (ev) => {
     const res = addTicketToCart(ev);
     if (!res.ok) {
@@ -471,7 +482,8 @@ const Events = () => {
             ticketLink: item.ticketLink || item.ticket_link || "",
             sponsors: item.sponsors || "",
             rules: item.rules || "",
-            rawStatus: item.status || "upcoming"
+            rawStatus: item.status || "upcoming",
+            replayApproved: item.replayApproved === true
           };
         });
         setDbEvents(formatted);
@@ -1166,7 +1178,7 @@ const Events = () => {
                       {viewingEvent.isPaid && isTicketOnSale(viewingEvent) && !viewingEvent.ticketLink ? (
                         <>
                           <button
-                            onClick={() => handleAddTicket(viewingEvent)}
+                            onClick={() => getPass(viewingEvent)}
                             style={{ flex: 1, background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "16px 28px", fontSize: "13px", fontWeight: "950", textTransform: "uppercase", cursor: "pointer" }}
                           >
                             GET A SPECTATOR PASS (${ticketPriceOf(viewingEvent).toFixed(2)})
@@ -1393,397 +1405,15 @@ const Events = () => {
           </div>
         )}
 
-        {/* TICKET SCANNING & VERIFICATION STATION */}
+        {/* EVENT CHECK-IN: admins scan the QR code on members' passes */}
         {user && user.isAdmin && (
-          <div style={{
-            background: "rgba(20, 20, 20, 0.4)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 106, 0, 0.15)",
-            borderRadius: "32px",
-            padding: "40px",
-            marginBottom: "60px",
-            maxWidth: "1200px",
-            width: "100%",
-            margin: "0 auto 60px",
-            boxShadow: "0 30px 60px rgba(0,0,0,0.4)"
-          }}>
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "24px", marginBottom: "32px" }}>
-              <div>
-                <h3 style={{ fontSize: "20px", fontWeight: "950", color: "white", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
-                  🎟️ TICKET SCANNING & VERIFICATION STATION
-                </h3>
-                <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", margin: 0 }}>
-                  Generate attendee passes, simulate high-definition scanner camera laser checks, detect duplicate scans, and verify VIP seating.
-                </p>
-              </div>
-              <div style={{ background: "rgba(255, 106, 0, 0.1)", border: "1px solid rgba(255, 106, 0, 0.3)", color: "#FF6A00", padding: "6px 16px", borderRadius: "100px", fontSize: "11px", fontWeight: "900", letterSpacing: "0.05em" }}>
-                🔴 SECURE VERIFICATION MODE
-              </div>
-            </div>
-
-            {/* Split Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: "32px" }}>
-
-              {/* Left Pane: Holographic Laser Scanner Simulator */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-
-                {/* Select Attendee Ticket Widget */}
-                <div>
-                  <label style={{ display: "block", fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "8px", letterSpacing: "0.05em" }}>SELECT ATTENDEE PASS FOR SIMULATION</label>
-                  <select
-                    value={selectedAdminTicket ? selectedAdminTicket.id : ""}
-                    onChange={e => {
-                      const t = adminTickets.find(x => x.id === e.target.value);
-                      if (t) setSelectedAdminTicket(t);
-                    }}
-                    style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "12px", color: "white", fontSize: "13px", outline: "none", cursor: "pointer" }}
-                  >
-                    {ticketsLoading ? (
-                      <option>Loading passes...</option>
-                    ) : (
-                      adminTickets.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.user?.name || "Unknown"} ({t.ticketType?.toUpperCase()}) - {t.status?.toUpperCase()}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-
-                {/* Simulated Scanner Device viewport */}
-                <div style={{
-                  position: "relative",
-                  height: "260px",
-                  background: "#000",
-                  borderRadius: "24px",
-                  border: "2px solid rgba(255, 106, 0, 0.3)",
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: scannerActive ? "0 0 30px rgba(255, 106, 0, 0.25)" : "none",
-                  transition: "all 0.3s"
-                }}>
-                  {/* Grid overlay for camera matrix look */}
-                  <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)", backgroundSize: "16px 16px", pointerEvents: "none" }} />
-
-                  {/* Corner Targets */}
-                  <div style={{ position: "absolute", top: "16px", left: "16px", width: "16px", height: "16px", borderTop: "2px solid #FF6A00", borderLeft: "2px solid #FF6A00" }} />
-                  <div style={{ position: "absolute", top: "16px", right: "16px", width: "16px", height: "16px", borderTop: "2px solid #FF6A00", borderRight: "2px solid #FF6A00" }} />
-                  <div style={{ position: "absolute", bottom: "16px", left: "16px", width: "16px", height: "16px", borderBottom: "2px solid #FF6A00", borderLeft: "2px solid #FF6A00" }} />
-                  <div style={{ position: "absolute", bottom: "16px", right: "16px", width: "16px", height: "16px", borderBottom: "2px solid #FF6A00", borderRight: "2px solid #FF6A00" }} />
-
-                  {/* Interactive Laser Scanning Line */}
-                  {scannerActive && (
-                    <div style={{
-                      position: "absolute",
-                      left: 0,
-                      right: 0,
-                      height: "3px",
-                      background: "linear-gradient(90deg, transparent, #FF6A00, #ff8c3b, #FF6A00, transparent)",
-                      boxShadow: "0 0 15px #FF6A00",
-                      animation: "laserMove 1.5s infinite ease-in-out",
-                      zIndex: 3
-                    }} />
-                  )}
-
-                  {/* Visual SVG QR Pass Generator Mockup */}
-                  {selectedAdminTicket ? (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", zIndex: 2, transition: "opacity 0.2s", opacity: scannerActive ? 0.6 : 1 }}>
-                      <svg width="120" height="120" viewBox="0 0 120 120" style={{ background: "white", padding: "8px", borderRadius: "12px", boxShadow: "0 10px 20px rgba(0,0,0,0.5)" }}>
-                        <rect x="0" y="0" width="30" height="30" fill="black" />
-                        <rect x="5" y="5" width="20" height="20" fill="white" />
-                        <rect x="10" y="10" width="10" height="10" fill="black" />
-
-                        <rect x="90" y="0" width="30" height="30" fill="black" />
-                        <rect x="95" y="5" width="20" height="20" fill="white" />
-                        <rect x="100" y="10" width="10" height="10" fill="black" />
-
-                        <rect x="0" y="90" width="30" height="30" fill="black" />
-                        <rect x="5" y="95" width="20" height="20" fill="white" />
-                        <rect x="10" y="100" width="10" height="10" fill="black" />
-
-                        {Array.from({ length: 12 }).map((_, i) => (
-                          <rect
-                            key={i}
-                            x={40 + (i % 4) * 12}
-                            y={40 + Math.floor(i / 4) * 16}
-                            width={(selectedAdminTicket.accessCode.charCodeAt(i % selectedAdminTicket.accessCode.length) % 2 === 0) ? "8" : "4"}
-                            height={(selectedAdminTicket.accessCode.charCodeAt((i + 2) % selectedAdminTicket.accessCode.length) % 2 === 0) ? "8" : "4"}
-                            fill="black"
-                          />
-                        ))}
-
-                        <rect x="90" y="90" width="15" height="15" fill="black" />
-                        <rect x="105" y="105" width="15" height="15" fill="black" />
-                      </svg>
-                      <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", fontFamily: "monospace", letterSpacing: "1px" }}>
-                        {selectedAdminTicket.accessCode}
-                      </span>
-                    </div>
-                  ) : (
-                    <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "12px", textAlign: "center" }}>
-                      No pass generated.<br />Select a user above.
-                    </div>
-                  )}
-                </div>
-
-                {/* Device Actions */}
-                <div style={{ display: "flex", gap: "12px" }}>
-                  <button
-                    onClick={() => handleScanTicket(selectedAdminTicket ? selectedAdminTicket.accessCode : "")}
-                    disabled={scannerActive || !selectedAdminTicket}
-                    style={{
-                      flex: 1,
-                      background: "#FF6A00",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "100px",
-                      padding: "14px 20px",
-                      fontSize: "12px",
-                      fontWeight: "900",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      boxShadow: "0 10px 20px rgba(255,106,0,0.2)",
-                      opacity: (scannerActive || !selectedAdminTicket) ? 0.6 : 1,
-                      transition: "transform 0.2s"
-                    }}
-                    onMouseEnter={e => !scannerActive && (e.currentTarget.style.transform = "translateY(-2px)")}
-                    onMouseLeave={e => !scannerActive && (e.currentTarget.style.transform = "translateY(0)")}
-                  >
-                    {scannerActive ? "SCANNING PASSPORT..." : "⚡ SCAN PRESENTED QR PASS"}
-                  </button>
-
-                  {selectedAdminTicket && (
-                    <button
-                      onClick={() => handleResetTicket(selectedAdminTicket)}
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        color: "white",
-                        borderRadius: "50%",
-                        width: "45px",
-                        height: "45px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        fontSize: "16px"
-                      }}
-                      title="Reset scan state for testing duplicate alerts"
-                    >
-                      🔄
-                    </button>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Right & Center Pane: Scan Verification Engine & Logs */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-
-                {/* Manual Code entry panel */}
-                <div style={{ display: "flex", gap: "12px" }}>
-                  <div style={{ flex: 1, position: "relative" }}>
-                    <input
-                      type="text"
-                      value={manualCode}
-                      onChange={e => setManualCode(e.target.value)}
-                      placeholder="Paste or type access code (e.g. usr-1-evt-1-98247)"
-                      style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "100px", padding: "14px 24px", color: "white", fontSize: "13px", outline: "none" }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleScanTicket(manualCode)}
-                    disabled={scannerActive}
-                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "white", borderRadius: "100px", padding: "0 28px", fontSize: "12px", fontWeight: "900", textTransform: "uppercase", cursor: "pointer" }}
-                  >
-                    VERIFY CODE
-                  </button>
-                </div>
-
-                {/* Telemetry Counter Widgets */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "16px" }}>
-                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>TOTAL SCANS</div>
-                    <div style={{ fontSize: "24px", fontWeight: "950", color: "#FF6A00" }}>{scanTelemetry.totalScanned}</div>
-                  </div>
-                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "16px" }}>
-                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>VIP VERIFIED</div>
-                    <div style={{ fontSize: "24px", fontWeight: "950", color: "#a855f7" }}>{scanTelemetry.vipVerified}</div>
-                  </div>
-                  <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "16px", padding: "16px" }}>
-                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>DUPLICATE BLOCKS</div>
-                    <div style={{ fontSize: "24px", fontWeight: "950", color: "#EF4444" }}>{scanTelemetry.duplicateBlocks}</div>
-                  </div>
-                </div>
-
-                {/* Outcome Display card */}
-                <div style={{ minHeight: "130px", display: "flex", alignItems: "stretch" }}>
-                  {scanResult ? (
-                    <div
-                      style={{
-                        flex: 1,
-                        borderRadius: "20px",
-                        padding: "24px",
-                        display: "flex",
-                        gap: "20px",
-                        alignItems: "center",
-                        background:
-                          scanResult.type === "success" ? "rgba(34, 197, 94, 0.05)" :
-                          scanResult.type === "vip" ? "linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.05) 100%)" :
-                          scanResult.type === "duplicate" ? "rgba(239, 68, 68, 0.05)" :
-                          "rgba(255, 255, 255, 0.03)",
-                        border:
-                          scanResult.type === "success" ? "1px solid rgba(34, 197, 94, 0.3)" :
-                          scanResult.type === "vip" ? "1px solid rgba(168, 85, 247, 0.4)" :
-                          scanResult.type === "duplicate" ? "1px solid rgba(239, 68, 68, 0.4)" :
-                          "1px solid rgba(255, 255, 255, 0.1)",
-                        boxShadow:
-                          scanResult.type === "success" ? "0 0 20px rgba(34, 197, 94, 0.1)" :
-                          scanResult.type === "vip" ? "0 0 25px rgba(168, 85, 247, 0.2)" :
-                          scanResult.type === "duplicate" ? "0 0 20px rgba(239, 68, 68, 0.1)" :
-                          "none"
-                      }}
-                    >
-                      {/* Icon */}
-                      <div style={{
-                        width: "56px",
-                        height: "56px",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "24px",
-                        background:
-                          scanResult.type === "success" ? "rgba(34, 197, 94, 0.15)" :
-                          scanResult.type === "vip" ? "rgba(168, 85, 247, 0.25)" :
-                          scanResult.type === "duplicate" ? "rgba(239, 68, 68, 0.15)" :
-                          "rgba(255, 255, 255, 0.05)",
-                        color:
-                          scanResult.type === "success" ? "#22C55E" :
-                          scanResult.type === "vip" ? "#c084fc" :
-                          scanResult.type === "duplicate" ? "#EF4444" :
-                          "white"
-                      }}>
-                        {scanResult.type === "success" && "✓"}
-                        {scanResult.type === "vip" && "👑"}
-                        {scanResult.type === "duplicate" && "🚫"}
-                        {scanResult.type === "error" && "❌"}
-                      </div>
-
-                      {/* Metadata */}
-                      <div style={{ flex: 1 }}>
-                        <div style={{
-                          fontSize: "12px",
-                          fontWeight: "900",
-                          letterSpacing: "1px",
-                          textTransform: "uppercase",
-                          color:
-                            scanResult.type === "success" ? "#22C55E" :
-                            scanResult.type === "vip" ? "#d8b4fe" :
-                            scanResult.type === "duplicate" ? "#F87171" :
-                            "#9CA3AF",
-                          marginBottom: "4px"
-                        }}>
-                          {scanResult.message}
-                        </div>
-                        {scanResult.user && (
-                          <div style={{ fontSize: "16px", fontWeight: "900", color: "white" }}>
-                            {scanResult.user.name} <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)", fontWeight: "500" }}>({scanResult.user.email})</span>
-                          </div>
-                        )}
-                        {scanResult.event && (
-                          <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "4px", fontWeight: "600" }}>
-                            Event: <span style={{ color: "white" }}>{scanResult.event.title}</span>
-                          </div>
-                        )}
-                        {scanResult.lastScanned && (
-                          <div style={{ fontSize: "11px", color: "#EF4444", marginTop: "6px", fontWeight: "700" }}>
-                            Original Scan: {new Date(scanResult.lastScanned).toLocaleString()}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{
-                      flex: 1,
-                      border: "1px dashed rgba(255,255,255,0.1)",
-                      borderRadius: "20px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "rgba(255,255,255,0.25)",
-                      fontSize: "13px",
-                      fontWeight: "600",
-                      textAlign: "center"
-                    }}>
-                      [ Awaiting device scan input or manual code validation... ]
-                    </div>
-                  )}
-                </div>
-
-                {/* Audit Ledger */}
-                <div>
-                  <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>
-                    LIVE AUDIT LOGS (LAST 5 TRANSACTIONS)
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {scanHistoryLogs.length > 0 ? (
-                      scanHistoryLogs.map((log) => (
-                        <div key={log.id} style={{
-                          background: "rgba(255,255,255,0.01)",
-                          border: "1px solid rgba(255,255,255,0.03)",
-                          borderRadius: "10px",
-                          padding: "10px 16px",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          fontSize: "12px"
-                        }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{ fontWeight: "800", color: "white" }}>{log.name}</span>
-                            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.3)", fontFamily: "monospace" }}>{log.code}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.3)", fontWeight: "700" }}>{log.time}</span>
-                            <span style={{
-                              fontSize: "9px",
-                              fontWeight: "900",
-                              padding: "2px 8px",
-                              borderRadius: "4px",
-                              background:
-                                log.status.includes("APPROVED") ? "rgba(34, 197, 94, 0.15)" :
-                                log.status.includes("DUPLICATE") ? "rgba(239, 68, 68, 0.15)" :
-                                "rgba(255,255,255,0.08)",
-                              color:
-                                log.status.includes("APPROVED") ? "#22C55E" :
-                                log.status.includes("DUPLICATE") ? "#EF4444" :
-                                "white"
-                            }}>
-                              {log.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.2)", fontStyle: "italic", textAlign: "center", padding: "16px" }}>
-                        No scan transactions logged in this session.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
+          <div style={{ maxWidth: "1200px", margin: "0 auto 40px", width: "100%" }}>
+            <AdminTicketScanner token={user.token} />
           </div>
         )}
+
+        {/* Admins: finished events waiting for approval before they show in Past events */}
+        {user?.isAdmin && <AdminFinishedEvents events={dbEvents} token={user.token} onChanged={fetchEvents} />}
 
         {/* DYNAMIC EVENTS CONTENT SECTION */}
         <AnimatePresence mode="wait">
@@ -1815,7 +1445,7 @@ const Events = () => {
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                       <span style={{ fontSize: "13px", fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>{isTicketOnSale(featuredEvent) ? `Spectator pass $${ticketPriceOf(featuredEvent).toFixed(2)}` : "Passes are not on sale"}</span>
                       {isTicketOnSale(featuredEvent) && (
-                        <button type="button" onClick={() => handleAddTicket(featuredEvent)} style={{ background: "white", color: "#111", border: "none", borderRadius: "100px", padding: "14px 24px", fontWeight: 900, fontSize: "13px", cursor: "pointer" }}>GET A SPECTATOR PASS</button>
+                        <button type="button" onClick={() => getPass(featuredEvent)} style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "14px 24px", fontWeight: 900, fontSize: "13px", cursor: "pointer" }}>GET A SPECTATOR PASS</button>
                       )}
                     </div>
                   )}
@@ -2098,41 +1728,32 @@ const Events = () => {
 
         {/* BOTTOM SECTION */}
         <div style={{ maxWidth: "1200px", margin: "0 auto", display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "24px", width: "100%" }}>
-          {/* TREND CHART */}
+          {/* PAST EVENTS (real; finished events show here once an admin approves them) */}
           <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "32px", padding: "40px", position: "relative", overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
-              <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em" }}>EVENT RECORD TREND</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", fontWeight: "900", color: "#FF6A00" }}>
-                <Activity size={14} /> +12.4% YEARLY GROWTH
-              </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", gap: "12px", flexWrap: "wrap" }}>
+              <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.1em" }}>PAST EVENTS</div>
+              <button type="button" onClick={() => { setActiveTab("PAST"); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ background: "none", border: "none", color: "#FF6A00", fontSize: "11px", fontWeight: "900", cursor: "pointer" }}>SEE ALL PAST EVENTS →</button>
             </div>
-
-            <div style={{ display: "flex", alignItems: "flex-end", gap: "16px", height: "160px", marginBottom: "32px", position: "relative" }}>
-               {/* Vertical grid lines */}
-               <div style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "space-between", pointerEvents: "none", opacity: 0.1 }}>
-                 {[1,2,3,4,5,6].map(i => <div key={i} style={{ width: "1px", height: "100%", background: "white" }} />)}
-               </div>
-
-               {[30, 45, 35, 55, 40, 95, 65].map((h, idx) => (
-                <div key={idx} style={{ flex: 1, position: "relative" }}>
-                   <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: `${h}%` }}
-                    transition={{ duration: 1, delay: idx * 0.1 }}
-                    style={{
-                      background: idx === 5 ? "linear-gradient(to top, #FF6A00, #FF8C3B)" : "rgba(255,255,255,0.05)",
-                      borderRadius: "8px 8px 0 0",
-                      width: "100%",
-                      boxShadow: idx === 5 ? "0 0 30px rgba(255, 106, 0, 0.4)" : "none"
-                    }}
-                   />
+            {(() => {
+              const pastEvents = dbEvents.filter((e) => e.status === "PAST" && (e.replayApproved || !user?.isAdmin)).sort((x, y) => new Date(y.rawDate) - new Date(x.rawDate)).slice(0, 5);
+              if (!pastEvents.length) {
+                return <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "14px", lineHeight: 1.6 }}>No past events yet. Finished events appear here after the AMPEX team publishes them.</div>;
+              }
+              return (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {pastEvents.map((ev) => (
+                    <Link key={ev.id} to={`/stream/${ev.id}`} style={{ display: "flex", alignItems: "center", gap: "14px", textDecoration: "none", color: "white", background: "rgba(255,255,255,0.03)", borderRadius: "16px", padding: "10px 12px" }}>
+                      <img src={ev.img} alt="" loading="lazy" style={{ width: "64px", height: "44px", objectFit: "cover", borderRadius: "10px", flexShrink: 0 }} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: "13px", fontWeight: "900", textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</div>
+                        <div style={{ fontSize: "11px", fontWeight: "700", color: "rgba(255,255,255,0.5)" }}>{ev.rawDate ? new Date(ev.rawDate).toLocaleDateString("en-US", { dateStyle: "medium" }) : ""}{ev.isPaid ? " · paid event" : " · free"}</div>
+                      </div>
+                      <Play size={14} color="#FF6A00" />
+                    </Link>
+                  ))}
                 </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.2)", fontSize: "10px", fontWeight: "900" }}>
-              <span>JAN</span><span>MAR</span><span>MAY</span><span>JUL</span><span style={{ color: "rgba(255,255,255,0.4)" }}>AUG (NOW)</span><span>OCT</span><span>DEC</span>
-            </div>
+              );
+            })()}
           </div>
 
           {/* SPECTATOR PASS CARD */}

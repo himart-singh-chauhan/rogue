@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { apiCall, formatProductImage } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import PointsEarnedPopup from "../components/PointsEarnedPopup";
 import { goToCheckout, readPaymentReturn, clearPaymentReturn, checkPayment, cancelPayment } from "../utils/payments";
 
 const isTicket = (item) => item.type === "ticket" || String(item.title || "").toLowerCase().includes("spectator pass");
@@ -160,12 +161,17 @@ const Cart = () => {
   // Rewards program: the member's level discount (Bronze 5% … Ambassador 40%), checked again at checkout
   const [rewardQuote, setRewardQuote] = React.useState(null);
   const [paidBreakdown, setPaidBreakdown] = React.useState(null);
+  // the points popup opens as soon as a confirmed order's points are credited
+  const [pointsPopup, setPointsPopup] = React.useState(null);
+  React.useEffect(() => {
+    if (paidBreakdown?.pointsEarned > 0) setPointsPopup({ points: paidBreakdown.pointsEarned, balance: paidBreakdown.pointsBalance ?? null });
+  }, [paidBreakdown]);
   const [usePoints, setUsePoints] = React.useState(false); // pay part of the order with reward points
   const quoteKey = items.map((i) => `${i.id}:${i.qty}:${i.type || ""}`).join("|");
   React.useEffect(() => {
-    if (!user?.token || !items.length) { setRewardQuote(null); return undefined; }
+    if (!items.length) { setRewardQuote(null); return undefined; } // visitors who aren't logged in still see the points they'd earn
     let cancelled = false;
-    apiCall("/rewards/quote", "POST", { items: items.map((i) => ({ id: i.id, qty: i.qty, type: i.type || "product", eventId: i.eventId || null })), redeemPoints: usePoints ? 1000000000 : 0, couponDiscount: discount }, user.token)
+    apiCall("/rewards/quote", "POST", { items: items.map((i) => ({ id: i.id, qty: i.qty, type: i.type || "product", eventId: i.eventId || null })), redeemPoints: usePoints ? 1000000000 : 0, couponDiscount: discount }, user?.token)
       .then((q) => { if (!cancelled) setRewardQuote(q || null); })
       .catch(() => { if (!cancelled) setRewardQuote(null); });
     return () => { cancelled = true; };
@@ -202,7 +208,7 @@ const Cart = () => {
         const order = r?.order;
         if (r?.payment?.status === "paid" && order) {
           setReceiptItems((order.items || []).map((i) => ({ id: i.product_name, title: i.product_name, qty: i.quantity, price: Number(i.price), size: i.size, color: i.color, type: i.event_id ? "ticket" : "product" })));
-          setPaidBreakdown({ total: Number(order.total) });
+          setPaidBreakdown({ total: Number(order.total), pointsEarned: Number(r.pointsEarned) || 0, pointsBalance: r.pointsBalance });
           setItems([]);
           localStorage.removeItem("rogue_cart_items");
           setIsProcessing(false);
@@ -225,6 +231,7 @@ const Cart = () => {
     <PageTransition>
       <div style={{ background: "#0A0A0A", color: "white", minHeight: "100vh", fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" }}>
         <Navbar />
+        {pointsPopup && <PointsEarnedPopup points={pointsPopup.points} balance={pointsPopup.balance} onClose={() => setPointsPopup(null)} />}
 
         <div style={{ padding: "180px 5% 120px", maxWidth: "1200px", margin: "0 auto", flex: 1 }}>
           <Link to="/shop" style={{ display: "flex", alignItems: "center", gap: "8px", color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: "14px", fontWeight: "700", marginBottom: "40px", transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "white"} onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}>
@@ -366,7 +373,7 @@ const Cart = () => {
                             </div>
                           )}
                         </div>
-                        <span style={{ color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap", paddingLeft: "8px" }}>${(item.price * item.qty).toFixed(2)}</span>
+                        <span style={{ color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap", paddingLeft: "8px", textAlign: "right" }}>${(item.price * item.qty).toFixed(2)}{rewardQuote?.linePoints?.[item.id] > 0 && <span style={{ display: "block", color: "#FF6A00", fontSize: "10px", fontWeight: 900 }}>★ {(rewardQuote.linePoints[item.id] * item.qty).toLocaleString()} pts</span>}</span>
                       </div>
                     ))}
                   </div>
@@ -425,6 +432,11 @@ const Cart = () => {
                   <span>TOTAL</span>
                   <span style={{ color: "#FF6A00" }}>${total.toFixed(2)}</span>
                 </div>
+                {rewardQuote?.earnPoints > 0 && (
+                  <div style={{ background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.25)", borderRadius: "12px", padding: "10px 12px", fontSize: "13px", fontWeight: 800, color: "#FF8A3D" }}>
+                    ★ {user ? `You'll earn ${rewardQuote.earnPoints.toLocaleString()} reward points with this order` : `Log in to earn ${rewardQuote.earnPoints.toLocaleString()} reward points with this order`}
+                  </div>
+                )}
               </div>
 
               {/* Add Coupon Code section */}
@@ -567,6 +579,13 @@ const Cart = () => {
                     })()}
                   </p>
 
+                  {paidBreakdown?.pointsEarned > 0 && (
+                    <div role="status" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.35)", borderRadius: "16px", padding: "14px 16px", marginBottom: "20px" }}>
+                      <div style={{ fontSize: "15px", fontWeight: 900, color: "#22c55e" }}>🎉 Congratulations! You earned {paidBreakdown.pointsEarned.toLocaleString()} points for your purchase on Ampex World Records.</div>
+                      {paidBreakdown.pointsBalance != null && <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginTop: "4px" }}>Your points balance is now {Number(paidBreakdown.pointsBalance).toLocaleString()}. See them in Profile → My Rewards.</div>}
+                    </div>
+                  )}
+
                   {/* ORDER RECEIPT — shows sizes per item */}
                   <div style={{ background: "rgba(255,106,0,0.05)", border: "1px solid rgba(255,106,0,0.15)", borderRadius: "16px", padding: "18px", marginBottom: "28px", textAlign: "left" }}>
                     <div style={{ fontSize: "9px", fontWeight: "900", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>ORDER RECEIPT</div>
@@ -700,6 +719,7 @@ const Cart = () => {
                       <div style={{ fontSize: "11px", fontWeight: "900", color: "rgba(255,255,255,0.4)" }}>TOTAL DUE</div>
                       <div style={{ fontSize: "20px", fontWeight: "950", color: "#FF6A00" }}>${total.toFixed(2)}</div>
                     </div>
+                    {user && rewardQuote?.earnPoints > 0 && <div style={{ fontSize: "12px", fontWeight: 800, color: "#FF8A3D" }}>★ This order earns {rewardQuote.earnPoints.toLocaleString()} reward points once payment is confirmed</div>}
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

@@ -13,10 +13,19 @@ const detailsFor = async (payment) => {
   if (payment.kind === 'shop') {
     const { data: order } = await supabase
       .from('orders')
-      .select('id, subtotal, discount_amount, reward_discount, reward_level, total, payment_status, items:order_items(product_name, quantity, price, size, color, event_id)')
+      .select('id, user_id, subtotal, discount_amount, reward_discount, reward_level, total, payment_status, points_redeemed, points_discount, items:order_items(product_name, quantity, price, size, color, event_id)')
       .eq('id', payment.reference_id)
       .maybeSingle();
-    return order ? { order } : null;
+    if (!order) return null;
+    let pointsEarned = 0;
+    let pointsBalance = null;
+    if (order.user_id && order.payment_status === 'paid') {
+      const { data: earned } = await supabase.from('reward_transactions').select('points').eq('reference_type', 'order').eq('reference_id', String(order.id)).eq('type', 'purchase');
+      pointsEarned = (earned || []).reduce((s, t) => s + (t.points || 0), 0);
+      pointsBalance = (await require('../utils/rewards').balanceFor(order.user_id)).points;
+    }
+    delete order.user_id;
+    return { order, pointsEarned, pointsBalance };
   }
   if (payment.kind === 'submission') {
     const { data: rec } = await supabase.from('records').select('id, title, record_type').eq('id', payment.reference_id).maybeSingle();

@@ -151,6 +151,8 @@ const categoriesData = {
 
 const Verify = () => {
   const { user, loading: authLoading, updateProfile } = useAuth();
+  // Try These Records: "Attempt This Record" opens /verify?openRecord=<id> with the record filled in
+  const [openRecord, setOpenRecord] = useState(null);
 
   // Live categories (Admin → Categories). Known categories keep their detailed event lists;
   // a subcategory becomes a group whose records are saved under the subcategory itself.
@@ -242,6 +244,16 @@ const Verify = () => {
     zipCode: "",
     countryAddress: ""
   });
+  useEffect(() => {
+    const openId = new URLSearchParams(window.location.search).get("openRecord");
+    if (!openId) return;
+    apiCall(`/open-records/${encodeURIComponent(openId)}`, "GET").then((o) => {
+      if (!o || !["open", "set"].includes(o.status)) return;
+      setOpenRecord(o);
+      setFormData((f) => ({ ...f, recordTitle: o.title, category: o.category || f.category, subCategoryGroup: o.subcategory || f.subCategoryGroup, attemptType: "NEW_RECORD" }));
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -345,7 +357,8 @@ const Verify = () => {
         unit: formData.unit,
         evidenceUrl: formData.youtubeLink || uploadedVideoUrl,
         thumbnailUrl: uploadedImageUrl !== "pending_upload" ? uploadedImageUrl : "pending_upload",
-        paymentStatus: 'pending_payment'
+        paymentStatus: 'pending_payment',
+        ...(openRecord ? { openRecordId: openRecord.id } : {})
       };
 
       const response = await apiCall('/records', 'POST', submissionData, user.token);
@@ -698,6 +711,13 @@ const Verify = () => {
                         </div>
                       </div>
                       <SubmissionAllowanceNote style={{ margin: "-16px 0 28px" }} />
+                      {openRecord && (
+                        <div style={{ background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.35)", borderRadius: "16px", padding: "14px 18px", margin: "0 0 24px", lineHeight: 1.6 }}>
+                          <div style={{ fontSize: "11px", fontWeight: 900, color: "#FF6A00", letterSpacing: "0.1em" }}>ATTEMPTING AN OPEN RECORD · {openRecord.code}</div>
+                          <div style={{ fontSize: "18px", fontWeight: 950, textTransform: "uppercase" }}>{openRecord.title}</div>
+                          <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)" }}>{[openRecord.category, openRecord.subcategory].filter(Boolean).join(" · ")} · measured by {openRecord.measurement}{openRecord.measurementUnit ? ` (${openRecord.measurementUnit})` : ""}. <Link to={`/try-these-records/${openRecord.id}`} style={{ color: "#FF6A00", fontWeight: 800 }}>Read the rules and evidence requirements</Link></div>
+                        </div>
+                      )}
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                         <div>
@@ -965,6 +985,7 @@ const Verify = () => {
                               type="text"
                               placeholder="E.G. MOST PUSH-UPS IN ONE MINUTE"
                               value={formData.recordTitle}
+                              readOnly={!!openRecord}
                               onChange={(e) => setFormData({...formData, recordTitle: e.target.value})}
                               required
                               style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "16px", padding: "18px 24px", color: "white", fontSize: "14px", outline: "none" }}

@@ -5,6 +5,7 @@ const supabase = require('../config/supabase');
 const accountBlockReason = (user) => {
   if (!user) return 'Not authorized, user not found';
   if (user.account_status === 'banned') return 'This account has been banned.';
+  if (user.account_status === 'pending_guardian') return 'Your parent or guardian needs to approve this account first. We sent them an email; please ask them to open it and approve.';
   if (user.account_status === 'suspended') {
     // A suspension with an end date in the past has expired.
     if (!user.suspended_until || new Date(user.suspended_until) > new Date()) {

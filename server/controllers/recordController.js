@@ -40,7 +40,14 @@ const getRecords = async (req, res) => {
 
     const { data: records, error } = await query.limit(limit);
     if (error) throw error;
-    res.json(records || []);
+    // challengeAttempts: how many challenges were submitted against each record (any outcome)
+    const ids = (records || []).map((r) => r.id);
+    const { data: attempts } = ids.length
+      ? await supabase.from('records').select('challenged_record_id').in('challenged_record_id', ids).neq('status', 'draft')
+      : { data: [] };
+    const count = {};
+    (attempts || []).forEach((a) => { count[a.challenged_record_id] = (count[a.challenged_record_id] || 0) + 1; });
+    res.json((records || []).map((r) => ({ ...r, challengeAttempts: count[r.id] || 0 })));
   } catch (error) {
     console.error('getRecords error:', error);
     res.status(500).json({ message: 'Could not load records' });
@@ -217,6 +224,16 @@ const createRecord = async (req, res) => {
       return res.status(400).json({ message: 'Title and category are required' });
     }
 
+    // Try These Records: an attempt at an open record takes its title and category from it
+    let openRecord = null;
+    if (req.body.openRecordId !== undefined && req.body.openRecordId !== null && req.body.openRecordId !== '') {
+      if (!isUUID(req.body.openRecordId)) return res.status(400).json({ message: 'That open record was not found.' });
+      const { data: o } = await supabase.from('open_records').select('id, title, category, subcategory, status, deadline, record_id').eq('id', req.body.openRecordId).maybeSingle();
+      if (!o || !['open', 'set'].includes(o.status)) return res.status(400).json({ message: 'This record is not taking attempts right now.' });
+      if (o.deadline && new Date(o.deadline) < new Date()) return res.status(400).json({ message: 'The deadline for this record has passed.' });
+      openRecord = o;
+    }
+
     // Plan's monthly submissions, then extra submissions from packs (see submissionPackController)
     const packs = require('./submissionPackController');
     const slot = await packs.reserveSubmission(req.user);
@@ -226,12 +243,17 @@ const createRecord = async (req, res) => {
     const scanResult = generateScanResult(req.body);
 
     // Users may only submit standard records or challenges; "world_record" is set by adjudication.
-    const safeRecordType = recordType === 'challenge' ? 'challenge' : 'standard';
+    // An attempt at an open record that already has its holder is a challenge to that record.
+    const openSetRecordId = openRecord && openRecord.status === 'set' && openRecord.record_id ? openRecord.record_id : null;
+    const safeRecordType = recordType === 'challenge' || openSetRecordId ? 'challenge' : 'standard';
+    const finalTitle = openRecord ? openRecord.title : str(title).trim();
+    const finalCategory = openRecord ? (openRecord.subcategory || openRecord.category || str(category)) : str(category);
 
     // A challenge is linked to the verified record it challenges (not the athlete's own record)
     let challengedId = null;
-    if (safeRecordType === 'challenge' && isUUID(challengedRecordId)) {
-      const { data: target } = await supabase.from('records').select('id, user_id, status').eq('id', challengedRecordId).maybeSingle();
+    const challengeTarget = openSetRecordId || challengedRecordId;
+    if (safeRecordType === 'challenge' && isUUID(challengeTarget)) {
+      const { data: target } = await supabase.from('records').select('id, user_id, status').eq('id', challengeTarget).maybeSingle();
       if (target && target.status === 'verified' && String(target.user_id) !== String(req.user.id)) challengedId = target.id;
     }
 
@@ -239,14 +261,14 @@ const createRecord = async (req, res) => {
     let { data: categoryRow } = await supabase
       .from('categories')
       .select('id')
-      .ilike('name', str(category).trim())
+      .ilike('name', str(finalCategory).trim())
       .limit(1)
       .maybeSingle();
     if (!categoryRow) {
       ({ data: categoryRow } = await supabase
         .from('categories')
         .select('id')
-        .eq('slug', slugify(category))
+        .eq('slug', slugify(finalCategory))
         .limit(1)
         .maybeSingle());
     }
@@ -256,9 +278,9 @@ const createRecord = async (req, res) => {
       .insert([{
         user_id: req.user.id,
         athlete_id: str(athleteId) || req.user.username || null,
-        slug: await uniqueSlug(title),
-        title: str(title).trim(),
-        category: str(category).trim(),
+        slug: await uniqueSlug(finalTitle),
+        title: finalTitle,
+        category: str(finalCategory).trim(),
         category_id: categoryRow?.id || null,
         description: str(description),
         value: str(value) || '0',
@@ -273,6 +295,7 @@ const createRecord = async (req, res) => {
         status: 'pending',
         record_type: safeRecordType,
         challenged_record_id: challengedId,
+        open_record_id: openRecord ? openRecord.id : null,
       }])
       .select()
       .single();

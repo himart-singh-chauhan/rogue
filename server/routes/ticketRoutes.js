@@ -8,12 +8,14 @@ const {
   grantFreeAccess,
   scanAndVerifyTicket,
   getAllTicketsAdmin,
-  resetTicketScan
+  resetTicketScan,
+  getMyTickets
 } = require('../controllers/ticketController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 // Logged-in users
 router.get('/verify/:eventId', protect, verifyTicket);
+router.get('/mine', protect, getMyTickets); // before /:ticketId
 router.get('/:ticketId', protect, getTicketDetails); // ownership checked in controller
 
 // Issuing a paid ticket is admin-only until a payment gateway confirms payment.

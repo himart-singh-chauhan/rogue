@@ -38,6 +38,7 @@ function ShopCard({ product, navigate }) {
       <div className="shop-card-body">
         <h3 className="shop-card-title">{product.title}</h3>
         <div className="shop-card-price">{product.price}</div>
+        {product.rewardPoints > 0 && <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(255,106,0,0.12)", color: "#FF6A00", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 900, marginTop: 4 }}>★ Earn {product.rewardPoints.toLocaleString()} points</div>}
         {product.requiresAuthorization && <div className="shop-card-note">Requires approval</div>}
         <button onClick={(e) => { e.stopPropagation(); open(); }} className="shop-card-button">
           View <ArrowRight size={12} />
@@ -144,7 +145,8 @@ const Shop = () => {
         badge: normalizeShopCategory(p.category),
         category: normalizeShopCategory(p.category),
         requiresAuthorization: !!p.requires_authorization,
-        colors: availableColors(p)
+        colors: availableColors(p),
+        rewardPoints: Number(p.rewardPoints) || 0
       }))
     : hardcodedProducts.map(p => ({ ...p, category: normalizeShopCategory(p.category), badge: normalizeShopCategory(p.category) }));
 

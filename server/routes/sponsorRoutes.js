@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
+const { protect, admin } = require('../middleware/authMiddleware');
 
 const isUUID = (v) => /^[0-9a-f-]{36}$/i.test(String(v || ''));
 const PUBLIC_COLUMNS = 'id, company_name, logo_url, banner_url, link_url, placement, package_type, description, end_date, image_fit, image_position, video_url, content_type';
@@ -47,6 +48,15 @@ const bump = (column) => async (req, res) => {
     res.status(500).json({ message: 'Could not track' });
   }
 };
+
+// Admin preview: a sponsor exactly as it will look, even before its start date or while switched off
+router.get('/preview/:id', protect, admin, async (req, res) => {
+  if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Sponsor not found' });
+  const { data, error } = await supabase.from('sponsors').select(PUBLIC_COLUMNS).eq('id', req.params.id).maybeSingle();
+  if (error || !data) return res.status(404).json({ message: 'Sponsor not found' });
+  const { end_date, ...pub } = data;
+  res.json(pub);
+});
 
 // Public impression / click tracking (shown in the admin Sponsorships tab)
 router.post('/:id/view', bump('views_count'));

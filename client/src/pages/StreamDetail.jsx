@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { apiCall } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
 import { addTicketToCart, isRealEventId, eventAccessOf } from "../utils/ticketCart";
+import MyPasses from "../components/MyPasses";
 import StreamPlayer from "../components/StreamPlayer";
 import MuxStreamPanel from "../components/admin/MuxStreamPanel";
 import EventLiveControls from "../components/admin/EventLiveControls";
@@ -998,6 +999,13 @@ const StreamDetail = () => {
 
           </div>
         </section>
+
+        {/* The member's pass for this event, with its QR code for the entrance */}
+        {isRealEventId(event?.id || event?._id || id) && (
+          <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "0 5% 32px" }}>
+            <MyPasses eventId={event?.id || event?._id || id} title="Your pass for this event" />
+          </div>
+        )}
 
         {/* Livestream sponsors (Admin → Sponsorships → "Livestream Banner") */}
         <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "0 5%" }}>

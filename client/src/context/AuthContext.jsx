@@ -52,6 +52,8 @@ export const AuthProvider = ({ children }) => {
     if (!referralCode && typeof window !== 'undefined') referralCode = new URLSearchParams(window.location.search).get('ref');
     const data = await apiCall('/auth/register', 'POST', { ...signupData, referralCode: signupData.referralCode || referralCode || undefined });
     try { localStorage.removeItem('ampex_ref'); } catch { /* ignore */ }
+    // under 18: the account opens only after the parent/guardian approves it, so there is no session yet
+    if (data?.pendingGuardian) return data;
     setUser(data);
     localStorage.setItem('userInfo', JSON.stringify(data));
     return data;

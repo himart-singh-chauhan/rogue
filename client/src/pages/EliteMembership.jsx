@@ -457,7 +457,7 @@ const EliteMembership = () => {
                       onClick={() => {
                         if (!tier.price) {
                           setCheckoutItem({ name: `${tier.name.toUpperCase()} MEMBERSHIP`, slug: tier.id, price: "$0", kind: "plan" });
-                          setSuccessMessage("Every account starts on the Free plan, so there is nothing to pay. You can upgrade at any time.");
+                          setSuccessMessage("Every account starts on the Basic plan, which is free, so there is nothing to pay. You can upgrade at any time.");
                           setIsSuccess(true);
                           setShowCheckout(true);
                           return;

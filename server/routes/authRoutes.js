@@ -8,11 +8,17 @@ const {
   getPublicUserProfile,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
+  guardianApprove,
 } = require('../controllers/authController');
 const { protect, optionalAuth } = require('../middleware/authMiddleware');
 
 router.post('/login', authUser);
 router.post('/verify-email', verifyEmail);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+router.post('/guardian-approve', guardianApprove);
 router.post('/resend-verification', protect, resendVerification);
 router.post('/register', registerUser);
 router.get('/profile', protect, getUserProfile);

@@ -36,6 +36,11 @@ const Rules = lazy(() => import('./pages/Rules'))
 const Unsubscribe = lazy(() => import('./pages/Unsubscribe'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const GuardianApprove = lazy(() => import('./pages/GuardianApprove'))
+const TryTheseRecords = lazy(() => import('./pages/TryTheseRecords'))
+const OpenRecordDetail = lazy(() => import('./pages/OpenRecordDetail'))
 const Appeals = lazy(() => import('./pages/Appeals'))
 const SubmitEvidenceLearnMore = lazy(() => import('./pages/SubmitEvidenceLearnMore'))
 const GlobalRecognitionLearnMore = lazy(() => import('./pages/GlobalRecognitionLearnMore'))
@@ -95,8 +100,24 @@ if (typeof window !== 'undefined') {
   } catch { /* storage blocked: the link still works if they sign up straight away */ }
 }
 
+// The "Preparing Stage" intro plays once per visit (browser session): never again on a reload or when moving
+// between pages. It's marked as seen the moment it starts, so reloading during it doesn't replay it either.
+const INTRO_KEY = 'ampex_intro_seen'
+const introAlreadySeen = () => {
+  try {
+    if (sessionStorage.getItem(INTRO_KEY)) return true
+    sessionStorage.setItem(INTRO_KEY, '1')
+    return false
+  } catch {
+    return true // storage blocked: skip the intro rather than replay it every time
+  }
+}
+
+// decided once when the page loads (not inside the component, which React may run twice)
+const SHOW_INTRO = typeof window !== 'undefined' && !introAlreadySeen()
+
 function App() {
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(SHOW_INTRO)
 
   const handleFinish = useCallback(() => {
     setLoading(false)
@@ -143,7 +164,7 @@ function App() {
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
-            <Route path="/elite" element={<ProtectedRoute><EliteMembership /></ProtectedRoute>} />
+            <Route path="/elite" element={<EliteMembership />} />
             <Route path="/streams" element={<Streams />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
@@ -162,6 +183,11 @@ function App() {
             <Route path="/terms" element={<Terms />} />
             <Route path="/cookies" element={<Cookies />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/guardian-approve" element={<GuardianApprove />} />
+            <Route path="/try-these-records" element={<TryTheseRecords />} />
+            <Route path="/try-these-records/:id" element={<OpenRecordDetail />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>

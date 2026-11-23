@@ -304,6 +304,31 @@ const syncOrderRewards = async (orderId) => {
   }
 };
 
+/**
+ * What a product earns, for showing on the shop card, product page and cart.
+ * fixed: the admin set a number for this product; otherwise it's the per-dollar rate (rate = points per $1,
+ * promotions included) applied to the price paid. 0 when the program is off or the product earns nothing.
+ */
+const productPointsInfo = (product, settings) => {
+  const p = settings.purchase;
+  const line = { productId: product.id, category: product.category, unitPrice: num(product.price), qty: 1 };
+  if (!settings.enabled || isExcluded(p, line)) return { rewardPoints: 0, pointsPerDollar: null };
+  const multiplier = promotionActive(settings.promotion) ? settings.promotion.multiplier : 1;
+  if (p.productPoints[String(product.id)] !== undefined) return { rewardPoints: Math.floor(p.productPoints[String(product.id)] * multiplier), pointsPerDollar: null };
+  const rate = Object.entries(p.categoryRates).find(([k]) => lc(k) === lc(product.category));
+  const perDollar = (rate ? rate[1] : p.pointsPerDollar) * multiplier;
+  return { rewardPoints: Math.floor(num(product.price) * perDollar), pointsPerDollar: perDollar };
+};
+
+// Admin: set (or clear with null) the fixed points for one product
+const setProductPoints = async (productId, points, adminId) => {
+  const current = await getSettings({ fresh: true });
+  const productPoints = { ...current.purchase.productPoints };
+  if (points === null || points === undefined || points === '') delete productPoints[String(productId)];
+  else productPoints[String(productId)] = Math.max(0, int(points));
+  return saveSettings({ ...current, purchase: { ...current.purchase, productPoints } }, adminId);
+};
+
 const summaryFor = async (userId) => {
   const settings = await getSettings();
   const bal = await balanceFor(userId);
@@ -386,5 +411,5 @@ module.exports = {
   DEFAULT_SETTINGS, normalizeSettings, getSettings, saveSettings, levelInfo, balanceFor, addTransaction,
   ensureReferralCode, recordReferralAtSignup, qualifyReferral, onMemberVerified, rejectReferral,
   quoteDiscount, purchasePointsFor, syncOrderRewards, summaryFor, promotionActive,
-  quoteRedemption, spendPointsForOrder, syncRecordRewards, SPEND_TYPES,
+  quoteRedemption, spendPointsForOrder, syncRecordRewards, SPEND_TYPES, productPointsInfo, setProductPoints,
 };

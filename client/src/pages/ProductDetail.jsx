@@ -368,9 +368,18 @@ const ProductDetail = () => {
                   {product.title}
                 </h1>
 
-                <div style={{ fontSize: "28px", fontWeight: "950", color: "#FF6A00", marginBottom: "24px" }}>
+                <div style={{ fontSize: "28px", fontWeight: "950", color: "#FF6A00", marginBottom: dbProduct ? "8px" : "24px" }}>
                   ${getCalculatedPrice().toFixed(2)}
                 </div>
+                {(() => {
+                  if (!dbProduct) return null;
+                  const pts = dbProduct.pointsPerDollar != null ? Math.floor(getCalculatedPrice() * Number(dbProduct.pointsPerDollar)) : Number(dbProduct.rewardPoints) || 0;
+                  return pts > 0 ? (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,106,0,0.12)", color: "#FF6A00", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 900, marginBottom: "24px" }}>
+                      ★ Earn {pts.toLocaleString()} reward points with this purchase
+                    </div>
+                  ) : <div style={{ marginBottom: "16px" }} />;
+                })()}
 
                 <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "15px", lineHeight: "1.7", marginBottom: "32px", textTransform: "none", whiteSpace: "pre-line" }}>
                   {product.fullDesc}

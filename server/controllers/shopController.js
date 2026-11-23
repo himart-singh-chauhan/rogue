@@ -18,7 +18,9 @@ const getProducts = async (req, res) => {
   if (error) {
     return res.status(500).json({ message: error.message });
   }
-  res.json(products);
+  // each product says how many reward points buying it earns (set in Admin → Rewards)
+  const settings = await rewards.getSettings().catch(() => null);
+  res.json(settings ? (products || []).map((p) => ({ ...p, ...rewards.productPointsInfo(p, settings) })) : products);
 };
 
 // @desc    Get single product
@@ -32,6 +34,8 @@ const getProductById = async (req, res) => {
     .single();
 
   if (product) {
+    const settings = await rewards.getSettings().catch(() => null);
+    if (settings) Object.assign(product, rewards.productPointsInfo(product, settings));
     res.json(product);
   } else {
     return res.status(404).json({ message: 'Product not found' });
@@ -306,7 +310,15 @@ const checkout = async (req, res) => {
     const returnPoints = async () => {
       if (pointsRedeemed > 0) await rewards.addTransaction({ user_id: req.user.id, points: pointsRedeemed, type: 'redemption_reversal', reference_type: 'order', reference_id: order.id, reason: 'Checkout did not go through' });
     };
-    const breakdown = { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, pointsRedeemed, pointsDiscount, total, note: rewardNote };
+    let pointsToEarn = 0;
+    if (req.user) {
+      const s = await rewards.getSettings();
+      if (s.enabled) {
+        const earnLines = lines.map((l) => ({ productId: l.product?.id || null, category: l.product?.category || (l.event ? 'Tickets' : ''), isTicket: !!l.event, unitPrice: l.unitPrice, qty: l.qty }));
+        pointsToEarn = rewards.purchasePointsFor(earnLines, s, subtotal > 0 ? total / subtotal : 1);
+      }
+    }
+    const breakdown = { subtotal, couponDiscount: discountAmount, rewardDiscount, rewardLevel, pointsRedeemed, pointsDiscount, total, pointsToEarn, note: rewardNote };
 
     if (!needsPayment) {
       // Nothing to charge (fully discounted): use up the coupon now and deliver the order.
@@ -317,7 +329,10 @@ const checkout = async (req, res) => {
         return res.status(400).json({ message: COUPON_REASONS[redeem] || 'Coupon could not be applied.' });
       }
       await fulfilOrder(order.id);
-      return res.status(201).json({ message: 'Order placed successfully!', orderId: order.id, order: { ...order, payment_status: 'paid' }, breakdown });
+      const { data: earned } = await supabase.from('reward_transactions').select('points').eq('reference_type', 'order').eq('reference_id', String(order.id)).eq('type', 'purchase');
+      const pointsEarned = (earned || []).reduce((s, t) => s + (t.points || 0), 0);
+      const pointsBalance = req.user ? (await rewards.balanceFor(req.user.id)).points : null;
+      return res.status(201).json({ message: 'Order placed successfully!', orderId: order.id, order: { ...order, payment_status: 'paid' }, breakdown: { ...breakdown, pointsEarned, pointsBalance } });
     }
 
     // 4. Pay on Stripe's secure page. The order is delivered when Stripe confirms the payment.

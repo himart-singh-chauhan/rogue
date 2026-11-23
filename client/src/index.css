@@ -2424,3 +2424,26 @@ select option:checked, select option:hover, select option:focus {
   .footer { padding-bottom: 230px; }
   .footer .footer-hero-img { height: 210px !important; bottom: 54px !important; }
 }
+
+/* ── Menu never covers the logo (Curtis, tablet) ──
+   The logo and the account buttons keep their size; the links tighten on mid-size screens, and on tablets
+   (1280px and narrower) the links move into the ☰ menu. */
+.nav-logo-wrap { flex: 1 0 auto; }
+.nav-btns-wrap { flex: 1 0 auto; }
+@media (max-width: 1500px) {
+  .nav-pill { gap: 2px; }
+  .nav-pill-item { padding: 8px 12px !important; }
+}
+@media (max-width: 1280px) {
+  .nav-pill { display: none; }
+  .navbar .desktop-only { display: none !important; }
+  .hamburger-btn { display: flex; }
+}
+
+/* ── Homepage on tablets and phones: headline + "Submit a Record" first (no scrolling to find them),
+   then the video, then Explore Categories and the streams ── */
+@media (max-width: 1024px) {
+  .hero-v3-center { order: -1; }
+  .hero-v3-sidebar-left, .hero-v3-sidebar-right { margin-top: 8px !important; }
+  .hero-v3-inner { margin-top: 0 !important; padding-top: 12px; }
+}

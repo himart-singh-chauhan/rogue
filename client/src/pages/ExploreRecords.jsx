@@ -5,6 +5,7 @@ import { apiCall, formatProductImage } from '../utils/api';
 import Navbar from '../components/Navbar';
 import BackButton from '../components/BackButton';
 import Footer from '../components/Footer';
+import SponsorBanner from '../components/SponsorBanner';
 import { useCategories, namesWithChildren } from '../utils/categoryMeta';
 
 export default function ExploreRecords() {
@@ -393,6 +394,7 @@ export default function ExploreRecords() {
       </div>
 
       <style>{`\n        .play-overlay:hover { opacity: 1 !important; }\n      `}</style>
+      <SponsorBanner placements={["records"]} />
       <Footer />
     </div>
   );

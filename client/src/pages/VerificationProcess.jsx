@@ -20,6 +20,7 @@ import { motion } from "motion/react";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import AiReviewProcess from "../components/AiReviewProcess";
 import ScrollReveal from "../components/ScrollReveal";
 import GlowCard from "../components/GlowCard";
 
@@ -279,6 +280,7 @@ const VerificationProcess = () => {
           </div>
         </section>
 
+        <AiReviewProcess />
         <Footer />
       </div>
     </PageTransition>
