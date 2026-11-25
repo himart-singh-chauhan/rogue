@@ -1,11 +1,12 @@
 import { ALL_COUNTRIES } from "../utils/countries";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Zap, Globe, Calendar, MapPin, Loader2, Eye, EyeOff } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { ArrowRight, Zap, Globe, Calendar, MapPin, Loader2, Eye, EyeOff, Mail } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useEffect, useRef, useState } from "react";
 import { apiCall } from "../utils/api";
 import Captcha, { captchaOn, captchaMessage } from "../components/Captcha";
 import { useAuth } from "../context/AuthContext";
+import { useAuthPage, imageSrc } from "../utils/authPage";
 import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -56,6 +57,8 @@ const Signup = () => {
   const [stats, setStats] = useState(null); // real totals from the database
   useEffect(() => { apiCall("/stats/public", "GET").then(setStats).catch(() => {}); }, []);
   const navigate = useNavigate();
+  const location = useLocation();
+  const page = useAuthPage(); // picture and title from Admin → Homepage Control
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -97,7 +100,9 @@ const Signup = () => {
         captchaToken: token || undefined
       });
       if (result?.pendingGuardian) { setPendingMessage(result.message); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-      navigate("/profile");
+      // back to what they were doing (a record, a stream, the bag), otherwise their profile
+      const from = location.state?.from;
+      navigate(typeof from === "string" && from.startsWith("/") && !from.startsWith("//") ? from : "/profile");
     } catch (err) {
       setError(err.message || "Failed to create profile");
       captchaRef.current?.reset(); // each security check works once
@@ -125,7 +130,7 @@ const Signup = () => {
         <div style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: "url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80')",
+          backgroundImage: `url("${imageSrc(page.signupImage, "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80")}")`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           opacity: 0.15,
@@ -160,10 +165,10 @@ const Signup = () => {
               textTransform: "uppercase",
               lineHeight: "0.85",
               letterSpacing: "-0.04em",
-              marginBottom: "20px"
+              marginBottom: "20px",
+              whiteSpace: "pre-line"
             }}>
-              JOIN THE <br />
-              <span style={{ color: "white" }}>ELITE</span>
+              {page.signupTitle}
             </h1>
 
             <p style={{
@@ -638,6 +643,11 @@ const Signup = () => {
               </div>
 
               <Captcha ref={captchaRef} onToken={setCaptchaToken} />
+
+              <div role="note" style={{ display: "flex", gap: "10px", alignItems: "flex-start", background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.25)", borderRadius: "12px", padding: "12px 14px", fontSize: "12px", lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
+                <Mail size={16} color="#FF6A00" style={{ flexShrink: 0, marginTop: "1px" }} />
+                <span>After you sign up we'll email you a link to verify your account. <strong>If you don't see it in a few minutes, check your Spam or Promotions folder</strong>, and mark it "Not spam" so our emails reach your inbox.</span>
+              </div>
 
               <button
                 type="submit"

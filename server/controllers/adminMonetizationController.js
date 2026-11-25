@@ -27,6 +27,19 @@ const getSponsors = async (req, res) => {
 };
 
 // What the sponsor spot shows: the banner picture, the video commercial, or both side by side
+// Video ad length (10 / 30 / 60 seconds) and what the sponsor pays (prices set in Admin → Sponsors & Ads → Ad prices)
+const adFields = (b, partial = false) => {
+  const out = {};
+  if (!partial || b.ad_seconds !== undefined) out.ad_seconds = [10, 30, 60].includes(Number(b.ad_seconds)) ? Number(b.ad_seconds) : null;
+  if (!partial || b.price !== undefined) { const n = Math.round(Number(b.price) * 100) / 100; out.price = b.price !== '' && b.price !== null && Number.isFinite(n) && n >= 0 ? n : null; }
+  if (!partial || b.price_period !== undefined) out.price_period = ['one_time', 'day', 'week', 'month', 'year'].includes(b.price_period) ? b.price_period : null;
+  return out;
+};
+const AD_COLUMNS = ['ad_seconds', 'price', 'price_period'];
+const dbNotUpdated = (error) => error && (error.code === '42703' || AD_COLUMNS.some((c) => (error.message || '').includes(c)));
+const placementNotAllowed = (error) => error && (error.code === '23514' || /sponsors_placement_check/.test(error.message || ''));
+const withoutAdFields = (row) => Object.fromEntries(Object.entries(row).filter(([k]) => !AD_COLUMNS.includes(k)));
+const NEEDS_UPDATE = 'The "Video Ad Before Videos" spot needs the Nov 25 database update first (2026-11-25_ads_and_members.sql).';
 const contentTypeOf = (v) => (['banner', 'video', 'both'].includes(v) ? v : 'banner');
 
 // @desc    Create a new sponsor
@@ -61,9 +74,7 @@ const createSponsor = async (req, res) => {
       return res.status(400).json({ message: 'Sponsor name is required' });
     }
 
-    const { data: newSponsor, error } = await supabase
-      .from('sponsors')
-      .insert([{
+    const row = {
         company_name: companyName,
         banner_url: finalBannerUrl,
         logo_url: finalLogoUrl,
@@ -79,14 +90,16 @@ const createSponsor = async (req, res) => {
         image_position: position,
         video_url: cleanVideoUrl(req.body.videoUrl),
         content_type: contentTypeOf(req.body.contentType),
+        ...adFields(req.body),
         views_count: 0,
         clicks_count: 0,
         created_at: new Date(),
         updated_at: new Date()
-      }])
-      .select()
-      .single();
-
+    };
+    const insert = (r) => supabase.from('sponsors').insert([r]).select().single();
+    let { data: newSponsor, error } = await insert(row);
+    if (dbNotUpdated(error)) ({ data: newSponsor, error } = await insert(withoutAdFields(row)));
+    if (placementNotAllowed(error)) return res.status(400).json({ error: NEEDS_UPDATE, message: NEEDS_UPDATE });
     if (error) throw error;
     res.status(201).json({ message: 'Sponsor added successfully.', sponsor: newSponsor });
   } catch (error) {
@@ -124,6 +137,7 @@ const updateSponsor = async (req, res) => {
     if (imagePosition !== undefined) updateData.image_position = position;
     if (req.body.videoUrl !== undefined) updateData.video_url = cleanVideoUrl(req.body.videoUrl);
     if (req.body.contentType !== undefined) updateData.content_type = contentTypeOf(req.body.contentType);
+    Object.assign(updateData, adFields(req.body, true));
 
     if (req.files) {
       if (req.files.bannerImage && req.files.bannerImage[0]) {
@@ -139,13 +153,10 @@ const updateSponsor = async (req, res) => {
       if (logoUrl !== undefined)   updateData.logo_url = logoUrl || null;
     }
 
-    const { data: updatedSponsor, error } = await supabase
-      .from('sponsors')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
+    const save = (d) => supabase.from('sponsors').update(d).eq('id', id).select().single();
+    let { data: updatedSponsor, error } = await save(updateData);
+    if (dbNotUpdated(error)) ({ data: updatedSponsor, error } = await save(withoutAdFields(updateData)));
+    if (placementNotAllowed(error)) return res.status(400).json({ error: NEEDS_UPDATE, message: NEEDS_UPDATE });
     if (error) throw error;
     res.status(200).json({ message: 'Sponsor updated successfully.', sponsor: updatedSponsor });
   } catch (error) {

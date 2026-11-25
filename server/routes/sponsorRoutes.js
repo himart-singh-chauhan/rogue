@@ -4,7 +4,10 @@ const supabase = require('../config/supabase');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 const isUUID = (v) => /^[0-9a-f-]{36}$/i.test(String(v || ''));
-const PUBLIC_COLUMNS = 'id, company_name, logo_url, banner_url, link_url, placement, package_type, description, end_date, image_fit, image_position, video_url, content_type';
+const BASE_COLUMNS = 'id, company_name, logo_url, banner_url, link_url, placement, package_type, description, end_date, image_fit, image_position, video_url, content_type';
+const PUBLIC_COLUMNS = `${BASE_COLUMNS}, ad_seconds`;
+// Until the Nov 25 database update adds sponsors.ad_seconds, read without it instead of failing
+const missingColumn = (error) => error && (error.code === '42703' || /ad_seconds|price_period|column .* does not exist/i.test(error.message || ''));
 
 // @desc    Active sponsors for one or more placements (comma separated)
 // @route   GET /api/sponsors?placement=homepage_top_banner,homepage
@@ -13,15 +16,19 @@ router.get('/', async (req, res) => {
   try {
     const placements = String(req.query.placement || '').split(',').map((p) => p.trim()).filter(Boolean);
     const now = new Date().toISOString();
-    let query = supabase
-      .from('sponsors')
-      .select(PUBLIC_COLUMNS)
-      .eq('active_status', true)
-      .or(`start_date.is.null,start_date.lte.${now}`)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (placements.length) query = query.in('placement', placements);
-    const { data, error } = await query;
+    const build = (columns) => {
+      let query = supabase
+        .from('sponsors')
+        .select(columns)
+        .eq('active_status', true)
+        .or(`start_date.is.null,start_date.lte.${now}`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (placements.length) query = query.in('placement', placements);
+      return query;
+    };
+    let { data, error } = await build(PUBLIC_COLUMNS);
+    if (missingColumn(error)) ({ data, error } = await build(BASE_COLUMNS));
     if (error) throw error;
     // end_date counts through the whole of its day
     const now2 = new Date();
@@ -52,7 +59,8 @@ const bump = (column) => async (req, res) => {
 // Admin preview: a sponsor exactly as it will look, even before its start date or while switched off
 router.get('/preview/:id', protect, admin, async (req, res) => {
   if (!isUUID(req.params.id)) return res.status(404).json({ message: 'Sponsor not found' });
-  const { data, error } = await supabase.from('sponsors').select(PUBLIC_COLUMNS).eq('id', req.params.id).maybeSingle();
+  let { data, error } = await supabase.from('sponsors').select(PUBLIC_COLUMNS).eq('id', req.params.id).maybeSingle();
+  if (missingColumn(error)) ({ data, error } = await supabase.from('sponsors').select(BASE_COLUMNS).eq('id', req.params.id).maybeSingle());
   if (error || !data) return res.status(404).json({ message: 'Sponsor not found' });
   const { end_date, ...pub } = data;
   res.json(pub);

@@ -5,7 +5,9 @@ import { ArrowRight, Play, Check, ChevronRight, ChevronLeft, ChevronDown, Chevro
 import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
 import StreamPlayer from "../components/StreamPlayer";
-import { embedUrlFor } from "../components/EvidencePreview";
+import { embedUrlFor, videoThumbnailFor } from "../components/EvidencePreview";
+import PrerollAd from "../components/PrerollAd";
+import { MembersGateModal } from "../components/MembersOnly";
 import { isRealEventId, eventAccessOf } from "../utils/ticketCart";
 import { useAuth } from "../context/AuthContext";
 import { useCategories, categoryMeta } from "../utils/categoryMeta";
@@ -311,6 +313,7 @@ const Home = () => {
   const [recordSidebarVideos, setRecordSidebarVideos] = useState([]);
   const sidebarVideos = adminSidebarVideos.length ? adminSidebarVideos : recordSidebarVideos;
   const [playingVideo, setPlayingVideo] = useState(null);
+  const [gateTitle, setGateTitle] = useState(null); // visitors: "create a free account or sign in" pop-up
 
   useEffect(() => {
     // Fetch live homepage records from admin controls
@@ -461,6 +464,10 @@ const Home = () => {
     ? (heroSetting.linkUrl ? { to: heroSetting.linkUrl, label: heroSetting.linkText || "Learn more", external: /^https?:/i.test(heroSetting.linkUrl) } : null)
     : heroEvent ? { to: `/stream/${heroEvent.id || heroEvent._id}`, label: heroAccess.action === "pass" ? `${heroAccess.label} · ${heroAccess.priceText}` : heroAccess.label, muted: heroAccess.action === "none" } : { to: "/verify", label: "Submit a record" };
   const heroEventId = !heroIsVideo && heroEvent && isRealEventId(heroEvent.id) && heroEvent.isPaid ? heroEvent.id : null;
+  // Videos and streams are for members: visitors see the picture and are asked to sign up or sign in.
+  // Sponsor ads and commercials (Admin → Homepage Control) still play for everyone.
+  const heroIsAd = heroIsVideo && heroSetting.kind !== "live";
+  const heroGated = !user && !heroIsAd && !!(heroFile || heroEmbed) && !heroLive;
   useEffect(() => {
     if (!heroEventId || !user?.token) { setHeroHasPass(false); return undefined; }
     let cancelled = false;
@@ -476,6 +483,18 @@ const Home = () => {
     .slice(0, 3)
     // events without a picture get a stock sports photo (a different one per card) instead of a black box
     .map((e, i) => { const a = eventAccessOf(e); return { eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : STATIC_FEATURED[(i + 3) % STATIC_FEATURED.length].img, badge: a.phase === "live" ? "LIVE" : "UPCOMING", price: !a.isPaid ? "FREE" : a.onSale ? `PASS ${a.priceText}` : "" }; });
+
+  // Admin → Homepage Control → "Small videos": the admin's own picks win over the automatic list
+  const sideCustom = heroSetting?.side?.mode === "custom" ? (heroSetting.side.items || []).map((it, i) => {
+    if (it.type === "event") {
+      const e = allEvents.find((x) => x.id === it.eventId);
+      if (!e) return null;
+      const a = eventAccessOf(e);
+      return { eventId: e.id, title: e.title, img: e.imageUrl || e.image ? formatProductImage(e.imageUrl || e.image) : STATIC_FEATURED[(i + 3) % STATIC_FEATURED.length].img, badge: a.phase === "live" ? "LIVE" : a.phase === "ended" ? "REPLAY" : "UPCOMING", price: !a.isPaid ? "FREE" : a.onSale ? `PASS ${a.priceText}` : "" };
+    }
+    const yt = youtubeIdFrom(it.videoUrl);
+    return { isAdminVideo: true, slug: `side-${i}`, youtubeId: yt, videoUrl: yt ? it.videoUrl : formatProductImage(it.videoUrl), title: it.title, img: it.posterUrl ? formatProductImage(it.posterUrl) : (videoThumbnailFor(it.videoUrl) || STATIC_FEATURED[(i + 3) % STATIC_FEATURED.length].img) };
+  }).filter(Boolean) : [];
 
   // "Popular" search tags: the categories with the most verified records, so every tag shows records
   const popularTags = (() => {
@@ -648,6 +667,8 @@ const Home = () => {
             )}
           </aside>
 
+      <MembersGateModal open={gateTitle !== null} title={gateTitle || undefined} onClose={() => setGateTitle(null)} />
+
       {/* Pop-up player for admin featured videos (YouTube or uploaded file) */}
       {playingVideo && createPortal(
         <div
@@ -666,6 +687,7 @@ const Home = () => {
               ×
             </button>
             <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#000", borderRadius: "12px", overflow: "hidden" }}>
+              <PrerollAd fill contentKey={`home:${playingVideo.slug || playingVideo.videoUrl}`}>
               {playingVideo.youtubeId ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${playingVideo.youtubeId}?autoplay=1&rel=0&playsinline=1`}
@@ -674,9 +696,12 @@ const Home = () => {
                   allowFullScreen
                   style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
                 />
+              ) : embedUrlFor(playingVideo.videoUrl || "") ? (
+                <iframe src={embedUrlFor(playingVideo.videoUrl).replace("muted=1&", "muted=0&")} title={playingVideo.title || "Video"} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} />
               ) : (
                 <video src={playingVideo.videoUrl} controls autoPlay playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
               )}
+              </PrerollAd>
             </div>
             {playingVideo.title && <div style={{ color: "white", fontWeight: 800, fontSize: "16px", marginTop: "12px" }}>{playingVideo.title}</div>}
           </div>
@@ -725,7 +750,7 @@ const Home = () => {
 
             {/* Middle: Video Frame — admin's choice (Admin → Homepage Control → Big video) */}
             <article ref={videoContainerRef} style={{ width: "100%", height: "550px", marginBottom: "32px", position: "relative", borderRadius: "20px", overflow: "hidden", boxShadow: "0 32px 80px rgba(0,0,0,0.5)", background: "#000" }}>
-              {heroFile && (
+              {heroFile && !heroGated && (
                 <video preload="metadata"
                   ref={videoRef}
                   src={heroFile}
@@ -743,7 +768,7 @@ const Home = () => {
                   <StreamPlayer eventId={heroEvent.id} token={user?.token} title={heroEvent.title} poster={heroPoster} />
                 </div>
               )}
-              {heroEmbed && !heroLive && (
+              {heroEmbed && !heroLive && !heroGated && (
                 <>
                   <iframe key={heroSound ? "sound" : "muted"} title={heroTitle || "Featured video"} src={heroSound ? heroEmbed.replace("mute=1&", "mute=0&").replace("muted=1&", "muted=0&") : heroEmbed}
                     allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, zIndex: 1 }} />
@@ -755,16 +780,16 @@ const Home = () => {
                 </>
               )}
 
-              {!isPlaying && !heroEmbed && !heroLive && (
+              {((!isPlaying && !heroEmbed && !heroLive) || heroGated) && (
                 <img loading="lazy" decoding="async"
-                  src={heroPoster || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"}
+                  src={heroPoster || (heroEmbed && videoThumbnailFor(heroLink)) || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80"}
                   alt={heroTitle || "Featured"}
-                  onClick={heroFile ? togglePlay : undefined}
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", cursor: heroFile ? "pointer" : "default", zIndex: 1 }}
+                  onClick={heroGated ? () => setGateTitle(heroTitle || "") : heroFile ? togglePlay : undefined}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", cursor: heroFile || heroGated ? "pointer" : "default", zIndex: 1 }}
                 />
               )}
-              {heroFile && !isPlaying && (
-                <button type="button" onClick={togglePlay} aria-label="Play video" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 3, width: 64, height: 64, borderRadius: "50%", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              {((heroFile && !isPlaying) || heroGated) && (
+                <button type="button" onClick={heroGated ? () => setGateTitle(heroTitle || "") : togglePlay} aria-label="Play video" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 3, width: 64, height: 64, borderRadius: "50%", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                   <Play size={24} fill="white" color="white" style={{ marginLeft: 3 }} />
                 </button>
               )}
@@ -785,7 +810,7 @@ const Home = () => {
               </div>
 
               {/* Title — small, bottom left, never across the video */}
-              <div style={{ position: "absolute", left: 24, bottom: heroFile ? 64 : 24, maxWidth: "min(460px, 70%)", textAlign: "left", zIndex: 3 }}>
+              <div style={{ position: "absolute", left: 24, bottom: heroFile && !heroGated ? 64 : 24, maxWidth: "min(460px, 70%)", textAlign: "left", zIndex: 3 }}>
                 {heroTitle && <h2 style={{ fontSize: "clamp(16px, 1.7vw, 22px)", fontWeight: 900, lineHeight: 1.2, color: "white", margin: "0 0 6px", textTransform: "uppercase", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>{heroTitle}</h2>}
                 {heroSubtitle && <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 1.45, margin: "0 0 12px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{heroSubtitle}</p>}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -799,7 +824,7 @@ const Home = () => {
               </div>
 
               {/* Bottom Video Controls Bar (uploaded videos) */}
-              {heroFile && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 24px", display: "flex", alignItems: "center", gap: 20, color: "white", zIndex: 10 }}>
+              {heroFile && !heroGated && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 24px", display: "flex", alignItems: "center", gap: 20, color: "white", zIndex: 10 }}>
                 <div onClick={togglePlay} style={{ cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center" }}>
                   {isPlaying ? (
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
@@ -844,13 +869,17 @@ const Home = () => {
               </Link>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "15px", flex: 1 }}>
-              {(sidebarStreams.length ? sidebarStreams : sidebarVideos.slice(0, 3)).map((video, idx) => {
+              {(sideCustom.length ? sideCustom : sidebarStreams.length ? sidebarStreams : sidebarVideos.slice(0, 3)).map((video, idx) => {
                 const to = video.eventId ? `/stream/${video.eventId}` : `/record/${video.slug || ""}`;
                 return (
                   <Link
                     to={to}
                     key={video.eventId || video.slug || idx}
-                    onClick={(e) => { if (video.isAdminVideo) { e.preventDefault(); setPlayingVideo(video); } }}
+                    onClick={(e) => {
+                      if (!video.isAdminVideo) return; // events open their page (members only)
+                      e.preventDefault();
+                      if (!user) setGateTitle(video.title || ""); else setPlayingVideo(video);
+                    }}
                     style={{ textDecoration: "none" }}
                   >
                     <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", height: "96px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", cursor: "pointer", background: "#111" }}>

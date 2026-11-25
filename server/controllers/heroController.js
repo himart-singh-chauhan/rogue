@@ -7,11 +7,22 @@ const supabase = require('../config/supabase');
 const KINDS = ['advertisement', 'commercial', 'advertiser', 'live'];
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 const url = (v) => { const s = clean(v, 1000); return /^https?:\/\//i.test(s) || s.startsWith('/') ? s : ''; };
-const DEFAULT = { mode: 'auto', kind: 'live', title: '', subtitle: '', videoUrl: '', posterUrl: '', linkUrl: '', linkText: '', eventId: '' };
+const DEFAULT = { mode: 'auto', kind: 'live', title: '', subtitle: '', videoUrl: '', posterUrl: '', linkUrl: '', linkText: '', eventId: '', side: { mode: 'auto', items: [] } };
+const isId = (v) => /^[0-9a-f-]{36}$/i.test(String(v || ''));
+// The three small videos beside the big one: 'auto' = live and upcoming streams; 'custom' = the admin's picks
+// (an uploaded video / YouTube link, or an event), up to three
+const cleanSide = (b = {}) => {
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 3).map((it) => (
+    it?.type === 'event'
+      ? (isId(it.eventId) ? { type: 'event', eventId: it.eventId } : null)
+      : (url(it?.videoUrl) ? { type: 'video', videoUrl: url(it.videoUrl), posterUrl: url(it.posterUrl), title: clean(it.title, 120) } : null)
+  )).filter(Boolean);
+  return { mode: b.mode === 'custom' && items.length ? 'custom' : 'auto', items };
+};
 
 const read = async () => {
   const { data } = await supabase.from('system_settings').select('value').eq('key', 'homepage_hero').maybeSingle();
-  try { return { ...DEFAULT, ...(JSON.parse(data?.value || '{}') || {}) }; } catch { return DEFAULT; }
+  try { const v = { ...DEFAULT, ...(JSON.parse(data?.value || '{}') || {}) }; return { ...v, side: cleanSide(v.side) }; } catch { return DEFAULT; }
 };
 
 // GET /api/settings/homepage-hero  (public)
@@ -29,8 +40,10 @@ const saveHero = async (req, res) => {
     posterUrl: url(b.posterUrl),
     linkUrl: url(b.linkUrl),
     linkText: clean(b.linkText, 40),
-    eventId: /^[0-9a-f-]{36}$/i.test(String(b.eventId || '')) ? b.eventId : '',
+    eventId: isId(b.eventId) ? b.eventId : '',
+    side: cleanSide(b.side),
   };
+  if (b.side?.mode === 'custom' && !hero.side.items.length) return res.status(400).json({ message: 'Add at least one small video, or choose "Live and upcoming streams".' });
   if (hero.mode === 'video' && !hero.videoUrl) return res.status(400).json({ message: 'Upload the video or paste its link.' });
   if (hero.mode === 'event' && !hero.eventId) return res.status(400).json({ message: 'Choose the event to show.' });
   const { error } = await supabase.from('system_settings').upsert({ key: 'homepage_hero', value: JSON.stringify(hero) }, { onConflict: 'key' });

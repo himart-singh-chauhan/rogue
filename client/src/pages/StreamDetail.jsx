@@ -15,6 +15,7 @@ import StreamPlayer from "../components/StreamPlayer";
 import MuxStreamPanel from "../components/admin/MuxStreamPanel";
 import EventLiveControls from "../components/admin/EventLiveControls";
 import LiveChat from "../components/LiveChat";
+import PrerollAd from "../components/PrerollAd";
 
 const CountdownBox = ({ value, label }) => (
   <div style={{ textAlign: "center" }}>
@@ -681,6 +682,7 @@ const StreamDetail = () => {
                   </div>
                 </>
               ) : isPlaying && isRealEventId(event?.id || event?._id || id) ? (
+                <PrerollAd fill contentKey={`event:${event?.id || event?._id || id}`}>
                 <div style={{ width: "100%", height: "100%", position: "relative", background: "#000" }}>
                   <StreamPlayer
                     eventId={event?.id || event?._id || id}
@@ -691,6 +693,7 @@ const StreamDetail = () => {
                     onReady={(p) => { if (eventIsPaid && hasTicket) showToast(p?.isLive ? "✅ Your spectator pass is active. Enjoy the live stream!" : "✅ Your spectator pass is active. Enjoy the replay!"); }}
                   />
                 </div>
+                </PrerollAd>
               ) : isPlaying ? (
                 <div style={{ width: "100%", height: "100%", position: "relative", background: "#0c0c0c" }}>
                   <img loading="lazy" decoding="async"

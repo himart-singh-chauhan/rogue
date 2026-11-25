@@ -9,6 +9,8 @@ import SponsorBanner from "../components/SponsorBanner";
 import ScrollReveal from "../components/ScrollReveal";
 import { apiCall } from "../utils/api";
 import WatchToUnlockVideo from "../components/WatchToUnlockVideo";
+import PrerollAd from "../components/PrerollAd";
+import { MembersOnlyBox } from "../components/MembersOnly";
 import { embedUrlFor } from "../components/EvidencePreview";
 
 // Official score = the verified value and unit saved on the record
@@ -350,7 +352,9 @@ const Challenges = () => {
               <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
                 {/* Video Player Side */}
                 <div style={{ flex: "1.2", background: "black", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", overflow: "hidden" }}>
-                <WatchToUnlockVideo key={selectedChallenge.id} src={selectedChallenge.videoUrl || ''} onUnlock={() => setHasWatched(true)} />
+                <MembersOnlyBox title={selectedChallenge.title || selectedChallenge.name}>
+                  <WatchToUnlockVideo key={selectedChallenge.id} src={selectedChallenge.videoUrl || ''} onUnlock={() => setHasWatched(true)} />
+                </MembersOnlyBox>
               </div>
 
                 {/* Record Metadata Side */}
@@ -768,6 +772,8 @@ const Challenges = () => {
               >✕</button>
               <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
                 <div style={{ flex: "1.2", background: "black", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", overflow: "hidden" }}>
+                  <MembersOnlyBox title={selectedAttempt.name}>
+                  <PrerollAd fill contentKey={`attempt:${selectedAttempt.id}`}>
                   {embedUrlFor(selectedAttempt.videoUrl || "") ? (
                     <iframe key={selectedAttempt.id} title={selectedAttempt.name} src={embedUrlFor(selectedAttempt.videoUrl, { autoplay: false })} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} />
                   ) : (
@@ -779,6 +785,8 @@ const Challenges = () => {
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                   )}
+                  </PrerollAd>
+                  </MembersOnlyBox>
                 </div>
                 <div data-lenis-prevent="true" style={{ flex: "1", overflowY: "auto", height: "100%", background: "#161616" }}>
                   <div style={{ padding: "40px 50px", display: "flex", flexDirection: "column", gap: "28px", textAlign: "left" }}>

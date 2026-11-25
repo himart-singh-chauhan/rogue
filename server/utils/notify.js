@@ -34,7 +34,7 @@ const notifyAdmins = async ({ subject, body, link, linkText = 'Open in admin' })
     const text = link ? `${body}\n\n${linkText}: ${link}` : body;
     await Promise.all((admins || []).map((a) => notifyMember({ userId: a.id, subject, body: text })));
     const email = require('./email'); // loaded here: email.js itself needs siteUrl from this file
-    const to = String(process.env.ADMIN_NOTIFY_EMAIL || process.env.GMAIL_USER || '').trim();
+    const to = String(process.env.ADMIN_NOTIFY_EMAIL || process.env.GMAIL_USER || process.env.SMTP_USER || '').trim();
     if (to && email.emailEnabled()) {
       const msg = email.buildEmail({ subject, body, buttonText: link ? linkText : undefined, buttonUrl: link || undefined, member: { name: 'AMPEX Admin' }, kind: 'account' });
       await email.send({ to, subject: msg.subject, html: msg.html, text: msg.text });

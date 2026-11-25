@@ -535,6 +535,8 @@ const getPlayback = async (req, res) => {
   try {
     const event = await loadEvent(req.params.id);
     if (!event) return res.status(404).json({ message: 'Event not found' });
+    // Live streams and replays are for members: visitors are asked to create a free account or sign in
+    if (!req.user) return res.status(401).json({ message: 'Create a free account or sign in to watch live streams and replays.', locked: true, reason: 'login' });
     const tickets = await ticketedEventIds(req.user);
     const live = require('./eventLiveController');
     const access = live.accessFor(event, req.user, tickets.has(event.id));

@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, ArrowLeft, Trash2, ChevronRight, Plus, Minus, CheckCircle2, Shield, AlertCircle } from "lucide-react";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
@@ -31,6 +31,7 @@ const Cart = () => {
   }, [items]);
 
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [coupon, setCoupon] = React.useState("");
   const [couponMessage, setCouponMessage] = React.useState("");
   const [discount, setDiscount] = React.useState(0);
@@ -491,9 +492,16 @@ const Cart = () => {
                 )}
               </div>
 
+              {!user && items.length > 0 && (
+                <div style={{ background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.3)", borderRadius: "14px", padding: "12px 14px", fontSize: "13px", lineHeight: 1.5, color: "rgba(255,255,255,0.85)", marginBottom: "12px" }}>
+                  You need a free AMPEX account to check out. Your bag is saved while you sign in or sign up.
+                </div>
+              )}
               <button
                 onClick={() => {
                   if (items.length > 0) {
+                    // an account is needed to buy anything (the bag stays in this browser)
+                    if (!user) { navigate("/login", { state: { from: "/cart", message: "Please sign in or create a free account to check out. Your bag is saved." } }); return; }
                     if (!cardholderName && user?.name) setCardholderName(user.name);
                     setShowCheckout(true);
                   }
@@ -503,7 +511,7 @@ const Cart = () => {
                 onMouseEnter={e => { if(items.length > 0) { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 10px 30px rgba(255,106,0,0.3)"; } }}
                 onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
               >
-                CHECKOUT <ChevronRight size={18} />
+                {user ? "CHECKOUT" : "SIGN IN TO CHECK OUT"} <ChevronRight size={18} />
               </button>
 
               <Link to="/shop" style={{ textDecoration: "none" }}>

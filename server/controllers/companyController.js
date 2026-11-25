@@ -57,4 +57,4 @@ const saveCompany = async (req, res) => {
   }
 };
 
-module.exports = { getCompany, saveCompany };
+module.exports = { getCompany, saveCompany, readCompany: read };

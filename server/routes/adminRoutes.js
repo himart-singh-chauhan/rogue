@@ -222,6 +222,9 @@ router.post('/emails/:id/retry', emails.retryFailed);
 // Homepage big video
 router.put('/homepage-hero', require('../controllers/heroController').saveHero);
 router.put('/company-profile', require('../controllers/companyController').saveCompany);
+router.put('/auth-page', require('../controllers/siteSettingsController').saveAuthPage);
+router.get('/ad-pricing', require('../controllers/siteSettingsController').getAdPricingAdmin);
+router.put('/ad-pricing', require('../controllers/siteSettingsController').saveAdPricing);
 // Try These Records
 {
   const open = require('../controllers/openRecordController');

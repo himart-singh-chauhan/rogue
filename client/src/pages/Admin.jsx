@@ -37,6 +37,9 @@ import { Modal as AdminModal } from "../components/admin/adminUi";
 import BodyUnitsFields from "../components/admin/BodyUnitsFields";
 import ProductColorManager from "../components/admin/ProductColorManager";
 import AdminHomepageHero from "../components/admin/AdminHomepageHero";
+import AdminAuthPage from "../components/admin/AdminAuthPage";
+import AdminAdPricing from "../components/admin/AdminAdPricing";
+import SponsorAdFields from "../components/admin/SponsorAdFields";
 import { SHOP_CATEGORIES, AUTHORIZATION_CATEGORIES, normalizeShopCategory } from "../utils/shopCategories";
 
 // Recommended artwork size for each sponsor placement (shown in the sponsor form)
@@ -56,12 +59,14 @@ const SPONSOR_SIZES = {
   rankings: { w: 1920, h: 400, note: "Banner on the Rankings / leaderboard pages" },
   challenges: { w: 1920, h: 400, note: "Banner on the Challenge page" },
   profiles: { w: 1920, h: 400, note: "Banner on member profile pages" },
+  video_preroll: { w: 1920, h: 1080, note: "Video ad: the video is what plays (a banner is not needed)" },
 };
 // Where each placement appears (for "Preview on page")
 const SPONSOR_PAGE = {
   homepage_top_banner: "/", homepage_sidebar: "/", homepage: "/", featured: "/", footer: "/", footer_sponsor: "/",
   live_event: "/events", livestream: "/events", video_overlay: "/events", shop: "/shop",
   records: "/explore-records", record_page: "/explore-records", rankings: "/leaderboard", challenges: "/challenge", profiles: "/profile",
+  video_preroll: "/explore-records",
 };
 
 // Event status from the real event data (not from its position in the list)
@@ -6722,6 +6727,7 @@ const Admin = () => {
               { value: "live_event",          label: "Live Event Sponsor" },
               { value: "featured",            label: "Featured Sponsor" },
               { value: "footer_sponsor",      label: "Footer Sponsor" },
+              { value: "video_preroll",       label: "Video Ad Before Videos (10 sec / 30 sec / 1 min)" },
               { value: "video_overlay",       label: "Video Sponsor Overlay" },
               { value: "livestream",          label: "Livestream Banner" },
               { value: "shop",               label: "Shop Page" },
@@ -6853,7 +6859,7 @@ const Admin = () => {
                   <div>
                     <div style={{ color: "#FF5500", fontSize: "11px", fontWeight: "900", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "8px" }}>Sponsorship Management</div>
                     <h1 style={{ fontSize: "52px", fontWeight: "950", margin: "0 0 8px 0", color: "white", letterSpacing: "-2px", textTransform: "uppercase", lineHeight: 1 }}>SPONSORS<br/>&amp; ADS</h1>
-                    <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Manage partner banners, placements, logos, and click analytics.</p>
+                    <p style={{ color: "#888", margin: 0, fontSize: "14px" }}>Manage partner banners, video ads, placements, prices, logos, and click analytics.</p>
                   </div>
                   <div style={{ display: "flex", gap: "12px" }}>
                     <button onClick={() => { setSponsorFormMode(null); setSelectedSponsor(null); fetchData(); }}
@@ -6866,6 +6872,8 @@ const Admin = () => {
                     </button>
                   </div>
                 </div>
+
+                <AdminAdPricing />
 
                 {/* Status messages */}
                 {sponsorSaveStatus === "success"    && <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", color: "#22c55e", fontWeight: "700" }}>✅ Sponsor saved successfully.</div>}
@@ -6907,6 +6915,7 @@ const Admin = () => {
                           {["standard", "premium", "gold", "platinum", "title"].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                         </select>
                       </div>
+                      <SponsorAdFields form={sponsorForm} setForm={setSponsorForm} labelStyle={labelStyle} inputStyle={inputStyle} />
                       <div>
                         <label style={labelStyle}>Start Date</label>
                         <input type="date" value={sponsorForm.start_date || ""} onChange={e => setSponsorForm(p => ({ ...p, start_date: e.target.value }))} style={{ ...inputStyle, colorScheme: "dark" }} />
@@ -7035,6 +7044,8 @@ const Admin = () => {
                             <span style={{ background: selectedSponsor.active_status ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: selectedSponsor.active_status ? "#22c55e" : "#ef4444", padding: "3px 10px", borderRadius: "100px", fontSize: "10px", fontWeight: "800" }}>{selectedSponsor.active_status ? "ACTIVE" : "INACTIVE"}</span>
                             <span style={{ background: "rgba(255,85,0,0.1)", color: "#FF5500", padding: "3px 10px", borderRadius: "100px", fontSize: "10px", fontWeight: "800" }}>{PLACEMENTS.find(p => p.value === selectedSponsor.placement)?.label || selectedSponsor.placement}</span>
                             <span style={{ background: "rgba(255,255,255,0.05)", color: "#ccc", padding: "3px 10px", borderRadius: "100px", fontSize: "10px", fontWeight: "800" }}>{selectedSponsor.package_type?.toUpperCase() || "STANDARD"}</span>
+                            {selectedSponsor.ad_seconds && <span style={{ background: "rgba(255,193,7,0.12)", color: "#FFC107", padding: "3px 10px", borderRadius: "100px", fontSize: "10px", fontWeight: "800" }}>{selectedSponsor.ad_seconds === 60 ? "1 MIN" : `${selectedSponsor.ad_seconds} SEC`} VIDEO AD</span>}
+                            {selectedSponsor.price != null && <span style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", padding: "3px 10px", borderRadius: "100px", fontSize: "10px", fontWeight: "800" }}>${Number(selectedSponsor.price).toFixed(2)}{selectedSponsor.price_period ? ` ${({ one_time: "ONE TIME", day: "/ DAY", week: "/ WEEK", month: "/ MONTH", year: "/ YEAR" })[selectedSponsor.price_period] || ""}` : ""}</span>}
                           </div>
                         </div>
                       </div>
@@ -7240,6 +7251,7 @@ const Admin = () => {
           {activeTab === "homepageControl" && (
             <div>
               <AdminHomepageHero />
+              <AdminAuthPage />
               <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <h1 style={{ fontSize: "28px", fontWeight: "950", margin: "0 0 8px 0" }}>HOMEPAGE CONTROL</h1>

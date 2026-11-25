@@ -32,6 +32,8 @@ import { useAuth } from "../context/AuthContext";
 import { apiCall, formatProductImage } from "../utils/api";
 import SponsorBanner from "../components/SponsorBanner";
 import StreamPlayer from "../components/StreamPlayer";
+import PrerollAd from "../components/PrerollAd";
+import { MembersOnlyBox } from "../components/MembersOnly";
 import LiveChat from "../components/LiveChat";
 import { addTicketToCart, isTicketOnSale, isRealEventId, ticketPriceOf, eventAccessOf } from "../utils/ticketCart";
 
@@ -1066,6 +1068,7 @@ const Events = () => {
                       <Play size={12} fill="#FF6A00" /> EVENT TEASER & HIGHLIGHT TRAILER
                     </div>
                     <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255, 106, 0, 0.3)", background: "#000", boxShadow: "0 10px 30px rgba(0,0,0,0.6)" }}>
+                      <MembersOnlyBox poster={viewingEvent.img} title={viewingEvent.title}>
                       <video preload="metadata"
                         src={viewingEvent.videoUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"}
                         controls
@@ -1073,6 +1076,7 @@ const Events = () => {
                         webkit-playsinline="true"
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
+                      </MembersOnlyBox>
                     </div>
                   </div>
                 </div>
@@ -1431,7 +1435,9 @@ const Events = () => {
                 <div className="live-hero-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 2.2fr) minmax(260px, 1fr)", gap: "20px", alignItems: "stretch" }}>
                   <style>{`@media (max-width: 900px) { .live-hero-grid { grid-template-columns: 1fr !important; } }`}</style>
                   <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#000", borderRadius: "24px", overflow: "hidden", border: "1px solid rgba(255,106,0,0.35)" }}>
-                    <StreamPlayer eventId={featuredEvent.id} token={user?.token} title={featuredEvent.title} poster={featuredEvent.img} />
+                    <PrerollAd fill contentKey={`event:${featuredEvent.id}`}>
+                      <StreamPlayer eventId={featuredEvent.id} token={user?.token} title={featuredEvent.title} poster={featuredEvent.img} />
+                    </PrerollAd>
                     <div style={{ position: "absolute", top: 16, left: 16, zIndex: 3, background: "#ef4444", color: "white", padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 900, pointerEvents: "none" }}>● LIVE NOW</div>
                   </div>
                   <LiveChat eventId={featuredEvent.id} height="100%" />

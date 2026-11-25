@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import PageNav from '../components/PageNav';
 import RecordHistory from '../components/RecordHistory';
 import SponsorBanner from '../components/SponsorBanner';
+import PrerollAd from '../components/PrerollAd';
 
 export default function RecordDetailPage() {
   const { recordId } = useParams();
@@ -263,6 +264,7 @@ export default function RecordDetailPage() {
                 }
 
                 return (
+                  <PrerollAd contentKey={`record:${record.id}`}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     {videos.map((src, idx) => {
                       const isYouTube = src.includes('youtube') || src.includes('youtu.be');
@@ -298,6 +300,7 @@ export default function RecordDetailPage() {
                       }
                     })}
                   </div>
+                  </PrerollAd>
                 );
               })()}
 

@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ArrowRight, Shield, User, MessageSquare, Loader2, ChevronDown } from "lucide-react";
 import PageTransition from "../components/PageTransition";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ScrollReveal from "../components/ScrollReveal";
-import { apiCall } from "../utils/api";
+import { API_URL } from "../utils/api";
+import Captcha, { captchaOn, captchaMessage } from "../components/Captcha";
+import SocialIcons from "../components/SocialIcons";
+import { useCompany, SOCIALS } from "../utils/company";
 import CompanyInfo from "../components/CompanyInfo";
 import {
   DropdownMenu,
@@ -23,6 +26,21 @@ const Contact = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [files, setFiles] = useState([]);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const captchaRef = useRef(null);
+  const company = useCompany();
+  const hasSocial = SOCIALS.some(([k]) => company?.social?.[k]);
+  const MAX_BYTES = 4 * 1024 * 1024;
+  const pickFiles = (list) => {
+    const picked = [...(list || [])];
+    const bad = picked.find((f) => !/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(f.type));
+    if (bad) { setError(`"${bad.name}" can't be attached. Attach JPG, PNG or PDF files; for videos, paste a YouTube or Google Drive link in your message.`); return; }
+    if (picked.length > 3) { setError("Attach up to 3 files."); return; }
+    if (picked.reduce((n, f) => n + f.size, 0) > MAX_BYTES) { setError("Attach up to 4 MB in total. For bigger files or videos, paste a link in your message."); return; }
+    setError("");
+    setFiles(picked);
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,12 +50,26 @@ const Contact = () => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    // wait for the security check rather than asking the visitor to press twice
+    const token = captchaOn ? (captchaToken || await captchaRef.current?.getToken(15000)) : "";
+    if (captchaOn && !token) { setLoading(false); setError(captchaMessage(captchaRef.current?.status(), "press Send Message again")); return; }
     try {
-      await apiCall("/contact", "POST", formData);
+      const fd = new FormData();
+      fd.append("name", formData.name);
+      fd.append("email", formData.email);
+      fd.append("subject", formData.subject === "GENERAL INQUIRY" ? "General Question" : formData.subject);
+      fd.append("message", formData.message);
+      if (token) fd.append("captchaToken", token);
+      files.forEach((f) => fd.append("files", f));
+      const res = await fetch(`${API_URL}/contact`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Your message could not be sent. Please try again.");
       setSuccess(true);
+      setFiles([]);
       setFormData({ name: "", email: "", subject: "GENERAL INQUIRY", message: "" });
     } catch (err) {
       setError(err.message);
+      captchaRef.current?.reset(); // each security check works once
     } finally {
       setLoading(false);
     }
@@ -117,15 +149,14 @@ const Contact = () => {
                 </div>
               </div>
 
+              {/* Social links from Admin → System → Company & social links (hidden until at least one is filled in) */}
+              {hasSocial && (
               <div style={{ marginTop: "20px", background: "#161616", padding: "24px 32px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.03)" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "900", textTransform: "uppercase", marginBottom: "16px", color: "white" }}>FOLLOW US</h3>
                 <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginBottom: "16px" }}>Stay connected with AMPEX World Records for new world records, live competitions, featured athletes, and community highlights.</p>
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  {["Facebook", "Instagram", "TikTok", "YouTube", "X (Twitter)"].map((social, i) => (
-                    <span key={i} style={{ padding: "6px 12px", background: "rgba(255,255,255,0.05)", borderRadius: "100px", fontSize: "12px", fontWeight: "bold", color: "white", cursor: "pointer" }}>{social}</span>
-                  ))}
-                </div>
+                <SocialIcons />
               </div>
+              )}
             </div>
 
             {/* CONTACT FORM */}
@@ -133,7 +164,7 @@ const Contact = () => {
               {success ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <div style={{ color: "#FF6A00", fontSize: "24px", fontWeight: "950", marginBottom: "16px" }}>MESSAGE SENT</div>
-                  <p style={{ color: "rgba(255,255,255,0.6)" }}>Thank you for reaching out to AMPEX World Records. We will respond shortly.</p>
+                  <p style={{ color: "rgba(255,255,255,0.6)" }}>Thank you for reaching out to AMPEX World Records. We emailed you a copy of your message and will reply soon. If you don't see our email, check your Spam or Promotions folder.</p>
                   <button onClick={() => setSuccess(false)} style={{ marginTop: "32px", background: "transparent", border: "1px solid #FF6A00", color: "#FF6A00", padding: "12px 24px", borderRadius: "100px", cursor: "pointer", fontWeight: "800" }}>SEND ANOTHER</button>
                 </div>
               ) : (
@@ -225,16 +256,28 @@ const Contact = () => {
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: "12px" }}>UPLOAD FILES (JPG, PNG, PDF, MP4)</label>
+                    <label style={{ display: "block", fontSize: "11px", fontWeight: "900", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: "12px" }}>ATTACH FILES (JPG, PNG, PDF · UP TO 3 FILES, 4 MB)</label>
                     <div style={{ position: "relative" }}>
-                      <input type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.mp4" style={{ width: "100%", opacity: 0, position: "absolute", top: 0, left: 0, height: "100%", cursor: "pointer", zIndex: 10 }} />
+                      <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf" aria-label="Attach files" onChange={(e) => { pickFiles(e.target.files); e.target.value = ""; }} style={{ width: "100%", opacity: 0, position: "absolute", top: 0, left: 0, height: "100%", cursor: "pointer", zIndex: 10 }} />
                       <div style={{ width: "100%", background: "#0A0A0A", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: "12px", padding: "20px", color: "rgba(255,255,255,0.6)", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
                         <ArrowRight size={24} style={{ color: "#FF6A00", transform: "rotate(-90deg)" }} />
                         <span style={{ fontSize: "14px", fontWeight: "600" }}>CLICK OR DRAG FILES HERE</span>
-                        <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>ACCEPTED FILE TYPES: JPG, PNG, PDF, MP4</span>
+                        <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>JPG, PNG OR PDF. FOR VIDEOS, PASTE A YOUTUBE OR GOOGLE DRIVE LINK IN YOUR MESSAGE.</span>
                       </div>
                     </div>
+                    {files.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                        {files.map((f, i) => (
+                          <span key={f.name + i} style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(255,106,0,0.1)", border: "1px solid rgba(255,106,0,0.3)", borderRadius: "100px", padding: "6px 12px", fontSize: "12px", color: "white" }}>
+                            {f.name}
+                            <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: "#FF6A00", cursor: "pointer", fontWeight: 900, padding: 0 }}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  <Captcha ref={captchaRef} onToken={setCaptchaToken} />
 
                   <button type="submit" disabled={loading} style={{ background: "#FF6A00", color: "white", border: "none", borderRadius: "100px", padding: "20px 40px", fontSize: "14px", fontWeight: "900", textTransform: "uppercase", cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", transition: "all 0.3s ease", boxShadow: "0 10px 30px rgba(255, 106, 0, 0.2)", opacity: loading ? 0.7 : 1 }}>
                     {loading ? "TRANSMITTING..." : "SEND MESSAGE"} {loading ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}

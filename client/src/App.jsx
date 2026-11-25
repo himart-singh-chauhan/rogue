@@ -9,6 +9,7 @@ import FloatingBack from './components/FloatingBack'
 import ProtectedRoute from './components/ProtectedRoute'
 import { API_URL } from './utils/api'
 import './App.css'
+import { MembersOnlyPage } from './components/MembersOnly'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
@@ -41,6 +42,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const GuardianApprove = lazy(() => import('./pages/GuardianApprove'))
 const TryTheseRecords = lazy(() => import('./pages/TryTheseRecords'))
 const OpenRecordDetail = lazy(() => import('./pages/OpenRecordDetail'))
+const Advertise = lazy(() => import('./pages/Advertise'))
 const Appeals = lazy(() => import('./pages/Appeals'))
 const SubmitEvidenceLearnMore = lazy(() => import('./pages/SubmitEvidenceLearnMore'))
 const GlobalRecognitionLearnMore = lazy(() => import('./pages/GlobalRecognitionLearnMore'))
@@ -145,7 +147,7 @@ function App() {
             <Route path="/global-rankings" element={<GlobalRankingsPage />} />
             <Route path="/profile/:username" element={<MemberProfilePage />} />
         <Route path="/explore-records" element={<ExploreRecords />} />
-        <Route path="/record/:recordId" element={<RecordDetailPage />} />
+        <Route path="/record/:recordId" element={<MembersOnlyPage kind="record"><RecordDetailPage /></MembersOnlyPage>} />
             <Route path="/global-leaderboard" element={<GlobalLeaderboard />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
@@ -159,8 +161,8 @@ function App() {
             <Route path="/faq" element={<FAQ />} />
             <Route path="/events" element={<Events />} />
             <Route path="/privacy" element={<Privacy />} />
-            <Route path="/record/:id" element={<RecordDetail />} />
-            <Route path="/stream/:id" element={<StreamDetail />} />
+            <Route path="/record/:id" element={<MembersOnlyPage kind="record"><RecordDetail /></MembersOnlyPage>} />
+            <Route path="/stream/:id" element={<MembersOnlyPage kind="stream"><StreamDetail /></MembersOnlyPage>} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
@@ -186,6 +188,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/guardian-approve" element={<GuardianApprove />} />
+            <Route path="/advertise" element={<Advertise />} />
             <Route path="/try-these-records" element={<TryTheseRecords />} />
             <Route path="/try-these-records/:id" element={<OpenRecordDetail />} />
             <Route path="*" element={<NotFound />} />

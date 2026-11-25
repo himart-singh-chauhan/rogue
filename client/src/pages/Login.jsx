@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import { useRef, useState } from "react";
 import Captcha, { captchaOn, captchaMessage } from "../components/Captcha";
 import { useAuth } from "../context/AuthContext";
+import { useAuthPage, imageSrc } from "../utils/authPage";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -16,6 +17,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState(location.state?.message || "");
+  const page = useAuthPage(); // picture and title from Admin → Homepage Control
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,7 +64,7 @@ const Login = () => {
           padding: "60px 60px 120px 60px"
         }}>
           <img loading="lazy" decoding="async"
-            src="https://images.unsplash.com/photo-1594381898411-846e7d193883?auto=format&fit=crop&w=1200&q=80"
+            src={imageSrc(page.loginImage, "https://images.unsplash.com/photo-1594381898411-846e7d193883?auto=format&fit=crop&w=1200&q=80")}
             alt="Athlete"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.7)" }}
           />
@@ -83,7 +85,7 @@ const Login = () => {
               letterSpacing: "0.2em",
               marginBottom: "12px"
             }}>
-              AMPEX WORLD RECORDS
+              {page.loginKicker}
             </div>
             <h1 style={{
               fontSize: "clamp(40px, 6vw, 80px)",
@@ -91,11 +93,10 @@ const Login = () => {
               textTransform: "uppercase",
               lineHeight: "0.85",
               letterSpacing: "-0.04em",
-              color: "white"
+              color: "white",
+              whiteSpace: "pre-line"
             }}>
-              PUSH <br />
-              BEYOND <br />
-              LIMITS
+              {page.loginTitle}
             </h1>
           </div>
         </div>
@@ -220,7 +221,7 @@ const Login = () => {
                 <div style={{ fontSize: "10px", fontWeight: "900", color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>
                   NEW TO AMPEX WORLD RECORDS?
                 </div>
-                <Link to="/signup" style={{
+                <Link to="/signup" state={location.state?.from ? { from: location.state.from } : undefined} style={{
                   color: "white",
                   textDecoration: "none",
                   fontWeight: "800",

@@ -118,6 +118,13 @@ app.get('/api/awards/catalog', require('./controllers/awardController').catalog)
 // Public: the homepage big video (set in Admin → Homepage Control)
 app.get('/api/settings/homepage-hero', require('./controllers/heroController').getHero);
 app.get('/api/settings/company', require('./controllers/companyController').getCompany);
+// Login / Sign Up picture and title, ad prices and the "Advertise with us" form
+{
+  const site = require('./controllers/siteSettingsController');
+  app.get('/api/settings/auth-page', site.getAuthPage);
+  app.get('/api/settings/ad-pricing', site.getAdPricing);
+  app.post('/api/advertise', site.adRequest);
+}
 // Try These Records (public list and pages; admins see everything with ?all=1)
 {
   const open = require('./controllers/openRecordController');

@@ -32,7 +32,7 @@ const Footer = () => {
           <div className="footer-links-grid">
             {[
               { t: "PLATFORM", ls: ["Explore Records", "Try These Records", "Submit a Record", "Challenge a Record", "Leaderboard", "Membership & Pricing"] },
-              { t: "INFO", ls: ["About Us", "Contact Us", "Verification Process", "Support / FAQs", "Appeal a Decision"] },
+              { t: "INFO", ls: ["About Us", "Contact Us", "Advertise With Us", "Verification Process", "Support / FAQs", "Appeal a Decision"] },
               { t: "LEGAL", ls: ["Terms of Service", "Privacy Policy", "Cookie Policy", "Adjudication Rules"] },
             ].map(col => (
               <div key={col.t}>
@@ -42,6 +42,7 @@ const Footer = () => {
                     let path = "#";
                     if (l === "About Us") path = "/about";
                     if (l === "Contact Us") path = "/contact";
+                    if (l === "Advertise With Us") path = "/advertise";
                     if (l === "Explore Records") path = "/explore-records";
                     if (l === "Submit a Record") path = "/verify";
                     if (l === "Verification Process") path = "/process";

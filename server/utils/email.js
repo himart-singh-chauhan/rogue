@@ -1,33 +1,51 @@
-// Sending email to members from the AMPEX address (ampexworldrecords@gmail.com) through Gmail.
+// Sending email to members from the AMPEX address.
 //
-// Setup (Vercel → rogue-api → Environment Variables):
-//   GMAIL_USER          ampexworldrecords@gmail.com
-//   GMAIL_APP_PASSWORD  the 16-letter App Password made in that Google account
-//                       (Google Account → Security → 2-Step Verification → App passwords)
-//   EMAIL_FROM_NAME     optional, defaults to "AMPEX World Records"
-// RESEND_API_KEY still works as an alternative service. EMAIL_TRANSPORT=json is for tests only:
-// nothing leaves the machine.
+// Setup (Vercel → rogue-api → Environment Variables). Use ONE of these:
+//  A) The domain mailbox (recommended: mail comes from teamampex@ampexworldrecords.com and lands in the inbox)
+//     SMTP_HOST           e.g. smtp.office365.com (GoDaddy / Microsoft 365), smtp.gmail.com (Google Workspace),
+//                         smtp.zoho.com, smtpout.secureserver.net (GoDaddy Workspace Email)
+//     SMTP_PORT           587 (default) or 465
+//     SMTP_USER           teamampex@ampexworldrecords.com
+//     SMTP_PASS           that mailbox's password (or app password)
+//  B) Gmail: GMAIL_USER + GMAIL_APP_PASSWORD (the 16-letter App Password of that Google account)
+//  C) RESEND_API_KEY (Resend, with the domain verified there)
+// EMAIL_FROM_ADDRESS   the address people see (defaults to SMTP_USER / GMAIL_USER). With Gmail it must be
+//                      added under Gmail → Settings → Accounts → "Send mail as", or Gmail shows the Gmail address.
+// EMAIL_FROM_NAME      optional, defaults to "AMPEX World Records"
+// EMAIL_TRANSPORT=json is for tests only: nothing leaves the machine.
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { siteUrl } = require('./notify');
 
+const env = (k) => String(process.env[k] || '').trim();
 const mode = () => {
   if (process.env.EMAIL_TRANSPORT === 'json') return 'test';
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) return 'gmail';
-  if (process.env.RESEND_API_KEY) return 'resend';
+  if (env('SMTP_HOST') && env('SMTP_USER') && env('SMTP_PASS')) return 'smtp';
+  if (env('GMAIL_USER') && env('GMAIL_APP_PASSWORD')) return 'gmail';
+  if (env('RESEND_API_KEY')) return 'resend';
   return null;
 };
 const emailEnabled = () => !!mode();
-const senderAddress = () => process.env.GMAIL_USER || process.env.EMAIL_FROM_ADDRESS || 'ampexworldrecords@gmail.com';
+const senderAddress = () => env('EMAIL_FROM_ADDRESS') || (mode() === 'smtp' ? env('SMTP_USER') : '') || env('GMAIL_USER') || 'teamampex@ampexworldrecords.com';
 const fromHeader = () => `"${(process.env.EMAIL_FROM_NAME || 'AMPEX World Records').replace(/"/g, '')}" <${senderAddress()}>`;
 
 let transport = null;
+let transportMode = null;
 const getTransport = () => {
-  if (transport) return transport;
-  if (mode() === 'test') transport = nodemailer.createTransport({ jsonTransport: true });
-  else transport = nodemailer.createTransport({
+  const m = mode();
+  if (transport && transportMode === m) return transport;
+  transportMode = m;
+  if (m === 'test') transport = nodemailer.createTransport({ jsonTransport: true });
+  else if (m === 'smtp') {
+    const port = Number(env('SMTP_PORT')) || 587;
+    transport = nodemailer.createTransport({
+      host: env('SMTP_HOST'), port, secure: port === 465, requireTLS: port !== 465,
+      auth: { user: env('SMTP_USER'), pass: env('SMTP_PASS') },
+      pool: true, maxConnections: 2,
+    });
+  } else transport = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: String(process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '') },
+    auth: { user: env('GMAIL_USER'), pass: env('GMAIL_APP_PASSWORD').replace(/\s+/g, '') },
     pool: true,
     maxConnections: 2,
   });
@@ -37,20 +55,24 @@ const getTransport = () => {
 // Test mode keeps what would have been sent, so tests can read it
 const outbox = [];
 
-const send = async ({ to, subject, html, text, headers = {} }) => {
+const send = async ({ to, subject, html, text, headers = {}, replyTo, attachments }) => {
   const m = mode();
-  if (!m) { const e = new Error('Email is not set up on the server (GMAIL_USER / GMAIL_APP_PASSWORD missing).'); e.status = 501; throw e; }
+  if (!m) { const e = new Error('Email is not set up on the server (SMTP or Gmail settings missing).'); e.status = 501; throw e; }
   if (m === 'resend') {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: process.env.EMAIL_FROM || fromHeader(), to: [to], subject, html, text, headers }),
+      body: JSON.stringify({
+        from: process.env.EMAIL_FROM || fromHeader(), to: [to], subject, html, text, headers,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content).toString('base64') })) } : {}),
+      }),
     });
     if (!r.ok) throw new Error(`The email service refused the message (${r.status})`);
     return { id: (await r.json().catch(() => ({}))).id };
   }
-  const info = await getTransport().sendMail({ from: fromHeader(), to, subject, html, text, headers, replyTo: senderAddress() });
-  if (m === 'test') outbox.push({ to, subject, html, text, headers });
+  const info = await getTransport().sendMail({ from: fromHeader(), to, subject, html, text, headers, replyTo: replyTo || senderAddress(), ...(attachments?.length ? { attachments } : {}) });
+  if (m === 'test') outbox.push({ to, subject, html, text, headers, replyTo, attachments: (attachments || []).map((a) => a.filename) });
   return { id: info.messageId };
 };
 

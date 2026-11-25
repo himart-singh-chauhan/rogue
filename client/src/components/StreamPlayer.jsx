@@ -6,6 +6,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Volume2 } from "lucide-react";
 import { apiCall } from "../utils/api";
 import { embedUrlFor } from "./EvidencePreview";
+import { MembersOnlyBox } from "./MembersOnly";
 
 const MuxPlayer = lazy(() => import("@mux/mux-player-react"));
 
@@ -22,7 +23,12 @@ function SoundButton({ onClick }) {
 
 const withSound = (embed) => embed.replace("mute=1&", "mute=0&").replace("muted=1&", "muted=0&");
 
-export default function StreamPlayer({ eventId, token, title, poster, onLocked, onReady }) {
+// Visitors are asked to create a free account or sign in; members get the stream
+export default function StreamPlayer(props) {
+  return <MembersOnlyBox poster={props.poster} title={props.title}><StreamPlayerInner {...props} /></MembersOnlyBox>;
+}
+
+function StreamPlayerInner({ eventId, token, title, poster, onLocked, onReady }) {
   const [state, setState] = useState({ loading: true });
   const readySent = useRef(false);
   const [soundOn, setSoundOn] = useState(false);
