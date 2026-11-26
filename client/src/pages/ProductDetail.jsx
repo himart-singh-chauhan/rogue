@@ -216,7 +216,7 @@ const ProductDetail = () => {
     }
     // Required size guard — block if sizes exist but none selected
     if (product.sizes.length > 0 && !selectedSize) {
-      setSizeError("Please select a size before adding to cart.");
+      setSizeError("Please select your correct size before adding to cart.");
       document.getElementById("size-selector-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
