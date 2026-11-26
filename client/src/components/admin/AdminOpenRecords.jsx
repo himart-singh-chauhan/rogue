@@ -56,7 +56,7 @@ export default function AdminOpenRecords() {
     try { await api(`/admin/open-records/${o.id}`, "PUT", { ...toForm(o), status, divisions: o.divisions }); load(); }
     catch (e) { setNotice({ type: "error", text: e.message }); }
   };
-  const toForm = (o) => ({ id: o.id, number: o.number ?? "", section: o.section || "", scoring: o.scoring || "most", timeLimit: o.timeLimit || "", title: o.title, category: o.category || "", subcategory: o.subcategory || "", description: o.description || "", rules: o.rules || "", measurement: o.measurement, measurementUnit: o.measurementUnit || "", evidence: o.evidence || "", divisions: (o.divisions || []).join(", "), eligibility: o.eligibility || "Worldwide", difficulty: o.difficulty, safety: o.safety || "", points: o.points || 0, deadline: o.deadline ? o.deadline.slice(0, 10) : "", status: o.status });
+  const toForm = (o) => ({ id: o.id, sectionNumber: o.sectionNumber || null, number: o.number ?? "", section: o.section || "", scoring: o.scoring || "most", timeLimit: o.timeLimit || "", title: o.title, category: o.category || "", subcategory: o.subcategory || "", description: o.description || "", rules: o.rules || "", measurement: o.measurement, measurementUnit: o.measurementUnit || "", evidence: o.evidence || "", divisions: (o.divisions || []).join(", "), eligibility: o.eligibility || "Worldwide", difficulty: o.difficulty, safety: o.safety || "", points: o.points || 0, deadline: o.deadline ? o.deadline.slice(0, 10) : "", status: o.status });
   const openAttempts = async (o) => {
     setAttemptsFor(o); setAttempts([]);
     try { setAttempts(await api(`/admin/open-records/${o.id}/attempts`)); } catch (e) { setNotice({ type: "error", text: e.message }); }
@@ -86,7 +86,7 @@ export default function AdminOpenRecords() {
             <button type="button" style={ui.iconBtn} onClick={() => setForm(null)} aria-label="Close"><X size={16} /></button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            <Field label="Challenge number"><input type="number" min="1" style={ui.input} value={form.number} onChange={set("number")} placeholder="e.g. 41" /></Field>
+            <Field label="Challenge number"><div style={{ ...ui.input, color: "#aaa" }}>{form.id && form.sectionNumber ? `${String(form.sectionNumber).padStart(2, "0")} in ${form.section || "its section"}` : "Given automatically"}</div><div style={{ ...ui.muted, fontSize: 11, marginTop: 4 }}>Each section is numbered from 1 in page order. Use the arrows in the list to change the order.</div></Field>
             <Field label="Group on the page">
               <select style={ui.input} value={form.section} onChange={set("section")}>
                 {["Record Challenges", "Funny Talent Challenges"].map((s) => <option key={s}>{s}</option>)}
@@ -177,7 +177,7 @@ export default function AdminOpenRecords() {
           {shown.map((o) => (
             <div key={o.id} style={{ ...ui.card, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-                <div style={{ color: "white", fontWeight: 900 }}>{o.number ? `${String(o.number).padStart(2, "0")} · ` : ""}{o.title}</div>
+                <div style={{ color: "white", fontWeight: 900 }}>{o.sectionNumber ? `${String(o.sectionNumber).padStart(2, "0")} · ` : ""}{o.title}</div>
                 <div style={{ color: "#888", fontSize: 12 }}>{o.section || "No group"} · {[o.category, o.subcategory].filter(Boolean).join(" · ") || "No category"} · {o.attempts} attempts{o.deadline ? ` · deadline ${new Date(o.deadline).toLocaleDateString()}` : ""}</div>
                 {o.status === "set" && o.holder && <div style={{ color: "#3b82f6", fontSize: 12, fontWeight: 800 }}>Holder: {o.holder.name} · {o.holder.value} {o.holder.unit}</div>}
               </div>

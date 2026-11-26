@@ -12,10 +12,21 @@ const SCORINGS = ['most', 'longest', 'fastest'];
 const RULES_KEY = 'open_records_general_rules';
 const RECENT_DAYS = 60; // "recently set" records stay on the page this long
 const text = (v, max) => String(v ?? '').trim().slice(0, max);
-const codeOf = (o) => (o.number ? `Challenge ${String(o.number).padStart(2, '0')}` : `AMPEX-OR-${String(o.id).slice(0, 8).toUpperCase()}`);
+// Each section is numbered on its own, from 1, in page order (Curtis, Nov 26): "Record Challenge 05",
+// "Funny Talent Challenge 05". Drafts and archived challenges have no number until they are published.
+const NUMBERED = ['open', 'paused', 'set'];
+const sectionLabel = (section) => (section ? String(section).replace(/s$/i, '') : 'Challenge');
+const codeOf = (o, n = o.sectionNumber) => (n ? `${sectionLabel(o.section)} ${String(n).padStart(2, '0')}` : `AMPEX-OR-${String(o.id).slice(0, 8).toUpperCase()}`);
+const pageOrder = (a, b) => ((a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)) || ((a.number ?? Infinity) - (b.number ?? Infinity)) || (new Date(b.created_at) - new Date(a.created_at));
+const sectionNumbers = async () => {
+  const { data } = await supabase.from('open_records').select('id, section, sort_order, number, created_at, status').in('status', NUMBERED).limit(1000);
+  const next = {}; const map = {};
+  (data || []).sort(pageOrder).forEach((o) => { const k = o.section || ''; next[k] = (next[k] || 0) + 1; map[o.id] = next[k]; });
+  return map;
+};
 
-const shape = (o, { attempts = 0, holder = null } = {}) => ({
-  id: o.id, code: codeOf(o), number: o.number ?? null, section: o.section || null, scoring: o.scoring || null, timeLimit: o.time_limit || null, sortOrder: o.sort_order ?? null,
+const shape = (o, { attempts = 0, holder = null, sectionNumber = null } = {}) => ({
+  id: o.id, code: codeOf(o, sectionNumber), sectionNumber, number: o.number ?? null, section: o.section || null, scoring: o.scoring || null, timeLimit: o.time_limit || null, sortOrder: o.sort_order ?? null,
   title: o.title, category: o.category, subcategory: o.subcategory,
   description: o.description, rules: o.rules, measurement: o.measurement, measurementUnit: o.measurement_unit,
   evidence: o.evidence, divisions: o.divisions || [], eligibility: o.eligibility || 'Worldwide', difficulty: o.difficulty,
@@ -27,9 +38,10 @@ const shape = (o, { attempts = 0, holder = null } = {}) => ({
 const enrich = async (rows) => {
   const ids = rows.map((o) => o.id);
   const recIds = rows.map((o) => o.record_id).filter(Boolean);
-  const [{ data: tries }, { data: holders }] = await Promise.all([
+  const [{ data: tries }, { data: holders }, numbers] = await Promise.all([
     ids.length ? supabase.from('records').select('open_record_id').in('open_record_id', ids) : { data: [] },
     recIds.length ? supabase.from('records').select('id, value, unit, verified_at, country, user:user_id(name, username, country)').in('id', recIds) : { data: [] },
+    sectionNumbers(),
   ]);
   const count = {};
   (tries || []).forEach((t) => { count[t.open_record_id] = (count[t.open_record_id] || 0) + 1; });
@@ -37,6 +49,7 @@ const enrich = async (rows) => {
   return rows.map((o) => {
     const h = o.record_id ? byId[o.record_id] : null;
     return shape(o, {
+      sectionNumber: numbers[o.id] || null,
       attempts: count[o.id] || 0,
       holder: h ? { name: h.user?.name || 'Athlete', username: h.user?.username || null, country: h.country || h.user?.country || null, value: h.value, unit: h.unit, verifiedAt: h.verified_at } : null,
     });
@@ -85,11 +98,11 @@ const readBody = (b = {}) => {
     safety: text(b.safety, 4000) || null,
     points: Math.max(0, Math.min(1000000, parseInt(b.points, 10) || 0)),
     deadline: b.deadline ? new Date(b.deadline).toISOString() : null,
-    number: b.number === '' || b.number == null ? null : Math.max(1, Math.min(9999, parseInt(b.number, 10) || 0)) || null,
     section: text(b.section, 80) || null,
     scoring: SCORINGS.includes(b.scoring) ? b.scoring : null,
     time_limit: text(b.timeLimit, 60) || null,
   };
+  if (b.number !== undefined) out.number = b.number === '' || b.number == null ? null : Math.max(1, Math.min(9999, parseInt(b.number, 10) || 0)) || null;
   if (b.status !== undefined && STATUSES.includes(b.status) && b.status !== 'set') out.status = b.status;
   return out;
 };

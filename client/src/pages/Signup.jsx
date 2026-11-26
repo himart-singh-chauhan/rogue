@@ -208,11 +208,19 @@ const Signup = () => {
                 <div style={{ fontSize: "40px" }}>📧</div>
                 <div style={{ fontSize: "20px", fontWeight: "950", color: "white" }}>Waiting for your parent or guardian</div>
                 <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>{pendingMessage}</div>
-                <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>We also sent you an email to confirm your own address. Once your parent or guardian approves, you can log in.</div>
+                <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>We also sent you an email to confirm your own address. If you or your parent or guardian can't find our emails, check the Junk, Spam or Promotions folder. Once they approve, you can log in.</div>
                 <Link to="/login" style={{ color: "#FF6A00", fontWeight: 900, fontSize: "13px" }}>Go to Login</Link>
               </div>
             ) : (
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Curtis, Nov 26: until our emails always reach the inbox, tell people where to look */}
+              <div role="note" data-testid="junk-mail-note" style={{ display: "flex", gap: "12px", alignItems: "flex-start", background: "rgba(255,106,0,0.12)", border: "1px solid rgba(255,106,0,0.45)", borderRadius: "14px", padding: "14px 16px", color: "white" }}>
+                <Mail size={20} color="#FF6A00" style={{ flexShrink: 0, marginTop: "2px" }} />
+                <div style={{ fontSize: "13px", lineHeight: 1.55 }}>
+                  <strong style={{ display: "block", fontSize: "14px", marginBottom: "2px" }}>Watch for our email</strong>
+                  After you sign up, we email you a link to verify your account. If it isn't in your inbox, <strong>check your Junk, Spam or Promotions folder</strong> and mark it "Not junk" so our emails reach your inbox.
+                </div>
+              </div>
               {error && <div style={{ color: "#ff4444", fontSize: "12px", fontWeight: "600", textAlign: "center" }}>{error}</div>}
               
               {/* Row 1: Name & Username */}
@@ -646,7 +654,7 @@ const Signup = () => {
 
               <div role="note" style={{ display: "flex", gap: "10px", alignItems: "flex-start", background: "rgba(255,106,0,0.08)", border: "1px solid rgba(255,106,0,0.25)", borderRadius: "12px", padding: "12px 14px", fontSize: "12px", lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
                 <Mail size={16} color="#FF6A00" style={{ flexShrink: 0, marginTop: "1px" }} />
-                <span>After you sign up we'll email you a link to verify your account. <strong>If you don't see it in a few minutes, check your Spam or Promotions folder</strong>, and mark it "Not spam" so our emails reach your inbox.</span>
+                <span>After you sign up we'll email you a link to verify your account. <strong>If you don't see it in a few minutes, check your Junk, Spam or Promotions folder</strong>, and mark it "Not junk" so our emails reach your inbox.</span>
               </div>
 
               <button

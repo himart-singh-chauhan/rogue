@@ -48,7 +48,7 @@ function ChallengeCard({ o }) {
   return (
     <Link to={`/try-these-records/${o.id}`} style={{ textDecoration: "none", color: "white", background: "#111", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        {o.number && <span style={{ fontSize: 12, fontWeight: 950, color: "rgba(255,255,255,0.45)" }}>{String(o.number).padStart(2, "0")}</span>}
+        {o.sectionNumber && <span style={{ fontSize: 12, fontWeight: 950, color: "rgba(255,255,255,0.45)" }}>{String(o.sectionNumber).padStart(2, "0")}</span>}
         <span style={{ fontSize: 10, fontWeight: 900, color: st.color, border: `1px solid ${st.color}66`, borderRadius: 6, padding: "3px 8px" }}>{st.text.toUpperCase()}</span>
       </div>
       <div style={{ fontSize: 19, fontWeight: 950, lineHeight: 1.2 }}>{o.title}</div>
@@ -74,7 +74,7 @@ export default function TryTheseRecords() {
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     let r = (list || []).filter((o) =>
-      (!s || [o.title, o.category, o.subcategory, o.description, o.number && String(o.number).padStart(2, "0")].some((v) => String(v || "").toLowerCase().includes(s)))
+      (!s || [o.title, o.category, o.subcategory, o.description, o.sectionNumber && String(o.sectionNumber).padStart(2, "0"), o.code].some((v) => String(v || "").toLowerCase().includes(s)))
       && (!f.section || o.section === f.section)
       && (!f.scoring || o.scoring === f.scoring)
       && (!f.difficulty || o.difficulty === f.difficulty)

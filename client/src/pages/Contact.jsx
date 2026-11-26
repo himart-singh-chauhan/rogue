@@ -164,7 +164,7 @@ const Contact = () => {
               {success ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <div style={{ color: "#FF6A00", fontSize: "24px", fontWeight: "950", marginBottom: "16px" }}>MESSAGE SENT</div>
-                  <p style={{ color: "rgba(255,255,255,0.6)" }}>Thank you for reaching out to AMPEX World Records. We emailed you a copy of your message and will reply soon. If you don't see our email, check your Spam or Promotions folder.</p>
+                  <p style={{ color: "rgba(255,255,255,0.6)" }}>Thank you for reaching out to AMPEX World Records. We emailed you a copy of your message and will reply soon. If you don't see our email, check your Junk, Spam or Promotions folder.</p>
                   <button onClick={() => setSuccess(false)} style={{ marginTop: "32px", background: "transparent", border: "1px solid #FF6A00", color: "#FF6A00", padding: "12px 24px", borderRadius: "100px", cursor: "pointer", fontWeight: "800" }}>SEND ANOTHER</button>
                 </div>
               ) : (

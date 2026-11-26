@@ -24,7 +24,7 @@ export default function VerifyEmailBanner({ style }) {
       <MailCheck size={22} color="#FF6A00" style={{ flexShrink: 0 }} />
       <div style={{ flex: "1 1 260px", minWidth: 0, fontSize: 14, lineHeight: 1.5 }}>
         <strong>Please verify your email address.</strong>{" "}
-        We sent a link to <strong>{user.email}</strong>. Open it to confirm this is your address. Can't find it? Check your Spam or Promotions folder, and mark our email "Not spam".
+        We sent a link to <strong>{user.email}</strong>. Open it to confirm this is your address. Can't find it? Check your Junk, Spam or Promotions folder, and mark our email "Not junk".
         {state.text && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: state.ok ? "#22c55e" : "#f87171" }}>{state.text}</div>}
       </div>
       <button type="button" onClick={resend} disabled={state.busy}

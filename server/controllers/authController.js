@@ -277,7 +277,7 @@ const registerUser = async (req, res) => {
       const guardianEmail = await links.sendGuardianApproval({ ...user, ...guardian }, { force: true });
       return res.status(201).json({
         pendingGuardian: true, guardianEmail, verificationEmail,
-        message: `Almost done! We emailed your parent or guardian at ${guardian.guardian_email}. Your account opens as soon as they approve it.`,
+        message: `Almost done! We emailed your parent or guardian at ${guardian.guardian_email}. Your account opens as soon as they approve it. Ask them to check their Junk, Spam or Promotions folder if they can't find it.`,
       });
     }
     return res.status(201).json({ ...serializeUser(user, true), verificationEmail });
@@ -552,7 +552,7 @@ const forgotPassword = async (req, res) => {
       const r = await links.sendPasswordReset(user);
       if (r === 'off') return res.status(503).json({ message: 'Email is not available right now. Please try again later.' });
     }
-    return res.json({ ok: true, message: `If an account uses ${address}, we've sent it a link to reset the password. Check your inbox (and spam folder).` });
+    return res.json({ ok: true, message: `If an account uses ${address}, we've sent it a link to reset the password. Check your inbox, and your Junk, Spam or Promotions folder.` });
   } catch (err) {
     console.error('Forgot password error:', err);
     return res.status(500).json({ message: 'Could not send the email. Please try again.' });
@@ -622,7 +622,7 @@ const resendVerification = async (req, res) => {
     if (result === 'wait') return res.status(429).json({ message: 'We just sent you an email. Please wait a minute before asking for another one.' });
     if (result === 'off') return res.status(503).json({ message: 'Email is not available right now. Please try again later.' });
     if (result !== 'sent') return res.status(502).json({ message: 'We could not send the email. Please try again in a moment.' });
-    return res.json({ ok: true, message: `We sent a new verification link to ${user.email}.` });
+    return res.json({ ok: true, message: `We sent a new verification link to ${user.email}. If it isn't in your inbox, check your Junk, Spam or Promotions folder.` });
   } catch (err) {
     console.error('Resend verification error:', err);
     return res.status(500).json({ message: 'Could not send the email. Please try again.' });
